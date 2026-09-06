@@ -13,6 +13,8 @@
 | 07 | `07-memory-tooling-repairs.md` | any agent | only for dropping collections |
 | 08 | **DONE 2026-09-06** — sibling naming sweeps via `scripts/rename_siblings_2026_09_06.py`: advocatio commit `5c62b38` pushed to `Cursedpotential/Legal-Workspace` master; vestigia commit `5013583` pushed to `Cursedpotential/TraceIQ` main. Code identifiers (`legal_workspace` package, dist name) and GitHub repo names NOT renamed — those need their own rulings. | — | GitHub repo renames unruled |
 
+**Read `BRIEFING-open-items-2026-09-06.md` first** — live state, risk, and the exact decision needed for 02, 03, 04, 05, 07 (2026-09-06 17:45).
+
 ## Standing rules every file assumes (from AGENTS.md / CLAUDE.md)
 
 - Never hard-delete; quarantine under the repo's holding directory (`.review_hold/`). Confirm before live-infra changes. Verify before claiming done: load the real thing, read the real log. Byline every artifact.
