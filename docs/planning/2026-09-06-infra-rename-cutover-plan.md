@@ -168,3 +168,43 @@ Register §10 rows per phase; `docs/NAMING.md` §2 identifier table updated; DEC
 1. N-1 … N-10 (§3). N-1/N-2 decide the wording of 146 lines; the rest are one-line each.
 2. Phase order confirmed as written, or reordered.
 3. Go for Phase 4.0 + 4.1 (database) as the first executed pair.
+
+## 7. Amendment 18:55 — no migration, no rehearsal; the snapshot is the database (owner 18:51)
+
+Owner: "Why does it have to be a migration? Why a rehearsal? … build the motherfucker." and "reference stays. period."
+Phase 4.1 is REPLACED by a rebuild: edit `sql/bootstrap/schema_baseline*.sql` directly (uiw→proffer,
+no `agno_app`), recreate `platform` from it, restore the precious set. Migration 0073 and the
+rehearsal script are withdrawn to the holding directory. Numbered migrations pause until first real ingest.
+
+**Where the precious set actually is (read live 18:53–18:56):** NOT in `platform`. `platform.reference.*`
+is an empty shell (only `claim_type`, 11 rows) and no ontology table exists there. The content is in the
+`casebible` database (117 MB) on the same instance, with column-identical tables:
+
+| casebible table | rows | platform has it? |
+|---|---|---|
+| `reference.custody_factor` (MCL 722.23 best-interest factors) | 12 | yes, empty, identical columns |
+| `reference.behavior_category` | 164 | yes, empty, identical |
+| `reference.behavior_category_mcl` (category→factor map) | 225 | yes, empty, identical |
+| `reference.detection_pattern` / `detection_pattern_set` | 527 / 1 | yes, empty, identical |
+| `reference.pattern_lexicon` | 51 | yes, empty, identical |
+| `reference.topic_code` | 10 | yes, empty, identical |
+| `analysis.human_label` / `human_label_gold` | 1,918 / 1,918 | yes, empty, identical |
+| `media.photos/faces/faces_scanned/screenshots/enrichment` (the media catalog) | 7,121 / 6,911 / 7,121 / 3,113 / 15,252 | no |
+| `knowledge.*` (4 tables) | 28 | no |
+| `llm_eval.*` (probe history) | 916 | no |
+| `working.*`, `evidence.raw_sms` etc. in casebible | 445-row 2026-07 test ingest | fixture (D-142), not carried |
+
+`platform`-only reference tables (`claim_type`, `format_resolver`, `knowledge_tag`, `legal_issue`,
+`legal_issue_factor`, `lexicon_sync`, `relative_rule`, `score_band_config`) are empty shells kept by
+the snapshot. `sql/0006_behavior_seed.sql` no longer exists in `sql/`; `scripts/dump_live_ontology.py`
+still points at the retired ovh-data host. The `casebible` database is therefore the seed source of
+record for the ontology/factor/lexicon set until the owner rules otherwise.
+
+**Rebuild shape (replaces 4.1):**
+1. `pg_dump --data-only` from `casebible`: all of `reference.*`, `analysis.human_label*`, `media.*`,
+   `knowledge.*` (plus `llm_eval.*` if wanted) → `/data/<N-2>/backups/precious-<date>.sql` (host, not git).
+   Also `pg_dump --data-only` of `platform.reference.claim_type`, `canon.*`, `registry.matter/court_case`.
+2. Edit the snapshot file to the ruled shape; commit.
+3. Recreate `platform` (its contents are fixture) from the snapshot, then restore step 1.
+4. Verify counts equal the table above; redeploy the Go apps; one proffer preview end to end.
+5. `casebible` is NOT touched; it is the source until its role is ruled (consignatio, D-141).
