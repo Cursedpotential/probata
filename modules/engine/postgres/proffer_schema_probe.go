@@ -39,18 +39,18 @@ var requiredProfferTables = []string{
 	"context.raw_format_registry", "context.raw_generation", "context.raw_record_identity",
 	"context.reconciliation_receipt", "context.retained_object", "context.source",
 	"context.source_metadata", "context.source_version", "context.source_version_object",
-	"context.uiw_preview_binding", "context.uiw_preview_snapshot", "context.uiw_preview_receipt",
-	"context.uiw_preview_participant", "context.uiw_preview_message", "context.uiw_preview_attachment",
-	"context.uiw_preview_event", "context.uiw_preview_decision", "context.repair_assessment",
-	"context.repair_decision", "context.repair_resolution", "context.uiw_source_context_revision",
+	"context.proffer_preview_binding", "context.proffer_preview_snapshot", "context.proffer_preview_receipt",
+	"context.proffer_preview_participant", "context.proffer_preview_message", "context.proffer_preview_attachment",
+	"context.proffer_preview_event", "context.proffer_preview_decision", "context.repair_assessment",
+	"context.repair_decision", "context.repair_resolution", "context.proffer_source_context_revision",
 }
 
 var requiredProfferColumns = []string{
 	"context.source_version.matter_id", "context.source_version.court_case_id",
 	"context.source_version.source_context_ref",
-	"context.uiw_source_context_revision.matter_id",
-	"context.uiw_source_context_revision.court_case_id",
-	"context.uiw_source_context_revision.source_context_ref",
+	"context.proffer_source_context_revision.matter_id",
+	"context.proffer_source_context_revision.court_case_id",
+	"context.proffer_source_context_revision.source_context_ref",
 	"analysis.case_registry_import_receipt.source_migration_uri",
 	"analysis.case_registry_import_receipt.source_migration_sha256",
 	"analysis.case_registry_import_receipt.source_git_commit",
@@ -97,7 +97,7 @@ const platformDevAuthBypassEnv = "PLATFORM_DEV_AUTH_BYPASS"
 //
 // registry.matter.id / registry.court_case.id are Postgres `uuid`-typed
 // columns with live FK referrers across sql/0043, 0047, 0053 and 0054
-// (context.source_version, context.uiw_source_context_revision,
+// (context.source_version, context.proffer_source_context_revision,
 // working.first_party_context_thread/third_party_context_thread,
 // analysis.matter_knowledge_partition, analysis.case_registry_import_receipt
 // all carry `matter_id UUID`/`court_case_id UUID` FKs) -- a non-UUID-shaped
@@ -191,9 +191,9 @@ func ProbeProfferSchema(ctx context.Context, db SchemaProbeDB) error {
 		         SELECT 1 FROM (VALUES
 		           ('context.source_version','source_version_matter_fk','registry.matter',ARRAY['matter_id'],ARRAY['id']),
 		           ('context.source_version','source_version_court_case_scope_fk','registry.court_case',ARRAY['court_case_id','matter_id'],ARRAY['id','matter_id']),
-		           ('context.source_version','source_version_source_context_scope_fk','context.uiw_source_context_revision',ARRAY['source_context_ref','matter_id','court_case_id'],ARRAY['source_context_ref','matter_id','court_case_id']),
-		           ('context.uiw_source_context_revision','uiw_source_context_matter_fk','registry.matter',ARRAY['matter_id'],ARRAY['id']),
-		           ('context.uiw_source_context_revision','uiw_source_context_court_case_scope_fk','registry.court_case',ARRAY['court_case_id','matter_id'],ARRAY['id','matter_id'])
+		           ('context.source_version','source_version_source_context_scope_fk','context.proffer_source_context_revision',ARRAY['source_context_ref','matter_id','court_case_id'],ARRAY['source_context_ref','matter_id','court_case_id']),
+		           ('context.proffer_source_context_revision','proffer_source_context_matter_fk','registry.matter',ARRAY['matter_id'],ARRAY['id']),
+		           ('context.proffer_source_context_revision','proffer_source_context_court_case_scope_fk','registry.court_case',ARRAY['court_case_id','matter_id'],ARRAY['id','matter_id'])
 		         ) AS required(relation_name,constraint_name,referenced_name,columns,referenced_columns)
 		         WHERE NOT EXISTS (
 		           SELECT 1 FROM pg_constraint c
@@ -211,8 +211,8 @@ func ProbeProfferSchema(ctx context.Context, db SchemaProbeDB) error {
 		           WHERE c.conrelid='context.source_version'::regclass
 		             AND c.conname='source_version_source_context_scope_check' AND c.contype='c' AND c.convalidated)
 		         AND EXISTS (SELECT 1 FROM pg_constraint c
-		           WHERE c.conrelid='context.uiw_source_context_revision'::regclass
-		             AND c.conname='uiw_source_context_scope_key' AND c.contype='u' AND c.convalidated
+		           WHERE c.conrelid='context.proffer_source_context_revision'::regclass
+		             AND c.conname='proffer_source_context_scope_key' AND c.contype='u' AND c.convalidated
 		             AND ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord)
 		                       JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum ORDER BY k.ord)
 		                 =ARRAY['source_context_ref','matter_id','court_case_id'])),

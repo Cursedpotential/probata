@@ -54,7 +54,7 @@ func (s *SourceContextStore) PersistSourceContext(ctx context.Context, spec sour
 		var priorAssertions []byte
 		err = tx.QueryRow(ctx, `
 			SELECT revision, assertions
-			FROM context.uiw_source_context_revision
+			FROM context.proffer_source_context_revision
 			WHERE source_context_ref=$1::uuid AND request_id=$2
 			  AND matter_id=$3::uuid AND court_case_id=$4::uuid
 			  AND source_ref=$5 AND observed_source=$6::jsonb
@@ -73,7 +73,7 @@ func (s *SourceContextStore) PersistSourceContext(ctx context.Context, spec sour
 		previousAssertions = priorAssertions
 	}
 	result, err := tx.Exec(ctx, `
-		INSERT INTO context.uiw_source_context_revision
+		INSERT INTO context.proffer_source_context_revision
 		    (source_context_ref, request_id, revision, supersedes_ref, matter_id, court_case_id,
 		     source_ref, observed_source, previous_assertions, assertions, change_reason,
 		     actor_subject_uid, actor_username, idempotency_key, content_digest,
@@ -99,7 +99,7 @@ func (s *SourceContextStore) PersistSourceContext(ctx context.Context, spec sour
 	var digest []byte
 	err = tx.QueryRow(ctx, `
 		SELECT source_context_ref::text, receipt_ref, content_digest, revision, recorded_at
-		FROM context.uiw_source_context_revision WHERE idempotency_key=$1`, spec.IdempotencyKey).Scan(
+		FROM context.proffer_source_context_revision WHERE idempotency_key=$1`, spec.IdempotencyKey).Scan(
 		&existing.SourceContextRef, &existing.ReceiptRef, &digest, &existing.Revision, &existing.RecordedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		rollback()
@@ -123,7 +123,7 @@ func (s *SourceContextStore) ValidateSourceContext(
 	var valid bool
 	err := s.db.QueryRow(ctx, `
 		SELECT EXISTS (
-			SELECT 1 FROM context.uiw_source_context_revision
+			SELECT 1 FROM context.proffer_source_context_revision
 			WHERE source_context_ref=$1::uuid AND request_id=$2
 			  AND matter_id=$3::uuid AND court_case_id=$4::uuid AND source_ref=$5
 		)`, ref, requestID, matterID, courtCaseID, sourceRef).Scan(&valid)

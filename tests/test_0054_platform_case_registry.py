@@ -29,7 +29,7 @@ def test_0054_enforces_both_uiw_scope_boundaries() -> None:
     for marker in (
         "source_version_matter_case_pair_check",
         "source_version_court_case_scope_fk",
-        "uiw_source_context_court_case_scope_fk",
+        "proffer_source_context_court_case_scope_fk",
         "FOREIGN KEY (court_case_id, matter_id)",
         "REFERENCES analysis.court_case(id, matter_id)",
     ):

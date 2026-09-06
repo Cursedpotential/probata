@@ -81,7 +81,7 @@ func (r *SourceLifecycleRepository) RegisterSource(ctx context.Context, spec act
 		var valid bool
 		if err := tx.QueryRow(ctx, `
 			SELECT EXISTS (
-				SELECT 1 FROM context.uiw_source_context_revision
+				SELECT 1 FROM context.proffer_source_context_revision
 				WHERE source_context_ref=$1::uuid AND request_id=$2
 				  AND matter_id=$3::uuid AND court_case_id=$4::uuid AND source_ref=$5
 			)`, spec.SourceContextRef, spec.RequestID, spec.MatterID, spec.CourtCaseID, spec.AcquisitionRef).Scan(&valid); err != nil {

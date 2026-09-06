@@ -70,20 +70,20 @@ SCOPE_FKS: Final[tuple[tuple[str, str, str, tuple[str, ...], tuple[str, ...]], .
     (
         "context.source_version",
         "source_version_source_context_scope_fk",
-        "context.uiw_source_context_revision",
+        "context.proffer_source_context_revision",
         ("source_context_ref", "matter_id", "court_case_id"),
         ("source_context_ref", "matter_id", "court_case_id"),
     ),
     (
-        "context.uiw_source_context_revision",
-        "uiw_source_context_matter_fk",
+        "context.proffer_source_context_revision",
+        "proffer_source_context_matter_fk",
         "registry.matter",
         ("matter_id",),
         ("id",),
     ),
     (
-        "context.uiw_source_context_revision",
-        "uiw_source_context_court_case_scope_fk",
+        "context.proffer_source_context_revision",
+        "proffer_source_context_court_case_scope_fk",
         "registry.court_case",
         ("court_case_id", "matter_id"),
         ("id", "matter_id"),
@@ -205,8 +205,8 @@ def assert_constraint_identity(cursor: psycopg.Cursor[object], *, validated: boo
                   ARRAY(SELECT a.attname FROM unnest(c.conkey) WITH ORDINALITY k(attnum,ord)
                         JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=k.attnum ORDER BY k.ord)
            FROM pg_constraint c
-           WHERE c.conrelid='context.uiw_source_context_revision'::regclass
-             AND c.conname='uiw_source_context_scope_key'"""
+           WHERE c.conrelid='context.proffer_source_context_revision'::regclass
+             AND c.conname='proffer_source_context_scope_key'"""
     )
     if cursor.fetchall() != [("u", True, ["source_context_ref", "matter_id", "court_case_id"])]:
         raise RuntimeError("UIW source-context composite identity is missing or malformed")
@@ -222,7 +222,7 @@ def validate_scope_constraints(cursor: psycopg.Cursor[object]) -> None:
 def assert_scope_consistency(cursor: psycopg.Cursor[object]) -> None:
     cursor.execute(
         """SELECT count(*) FROM context.source_version sv
-           LEFT JOIN context.uiw_source_context_revision scr
+           LEFT JOIN context.proffer_source_context_revision scr
              ON scr.source_context_ref=sv.source_context_ref
             AND scr.matter_id=sv.matter_id AND scr.court_case_id=sv.court_case_id
            WHERE (sv.matter_id IS NULL) <> (sv.court_case_id IS NULL)
@@ -260,14 +260,14 @@ def assert_schema(cursor: psycopg.Cursor[object]) -> None:
     required_columns = {
         ("source_version", "matter_id"),
         ("source_version", "court_case_id"),
-        ("uiw_source_context_revision", "matter_id"),
-        ("uiw_source_context_revision", "court_case_id"),
+        ("proffer_source_context_revision", "matter_id"),
+        ("proffer_source_context_revision", "court_case_id"),
     }
     cursor.execute(
         """SELECT table_name, column_name FROM information_schema.columns
            WHERE table_schema='context'
              AND table_name = ANY(%s) AND column_name = ANY(%s)""",
-        (["source_version", "uiw_source_context_revision"], ["matter_id", "court_case_id"]),
+        (["source_version", "proffer_source_context_revision"], ["matter_id", "court_case_id"]),
     )
     if {(str(a), str(b)) for a, b in cursor.fetchall()} != required_columns:
         raise RuntimeError("0054 context matter/case columns are incomplete")
@@ -594,7 +594,7 @@ def backfill_source_version_scope(cursor: psycopg.Cursor[object]) -> None:
     cursor.execute("SET LOCAL ROLE platform_admin")
     cursor.execute(
         """SELECT count(*) FROM context.source_version sv
-           JOIN context.uiw_source_context_revision scr ON scr.source_context_ref=sv.source_context_ref
+           JOIN context.proffer_source_context_revision scr ON scr.source_context_ref=sv.source_context_ref
            WHERE sv.source_context_ref IS NOT NULL
              AND (sv.matter_id IS NOT NULL OR sv.court_case_id IS NOT NULL)
              AND (sv.matter_id IS DISTINCT FROM scr.matter_id OR sv.court_case_id IS DISTINCT FROM scr.court_case_id)"""
@@ -603,7 +603,7 @@ def backfill_source_version_scope(cursor: psycopg.Cursor[object]) -> None:
         raise RuntimeError("pre-existing source_version scope conflicts with its source-context revision")
     cursor.execute(
         """UPDATE context.source_version sv SET matter_id=scr.matter_id,court_case_id=scr.court_case_id
-           FROM context.uiw_source_context_revision scr
+           FROM context.proffer_source_context_revision scr
            WHERE sv.source_context_ref=scr.source_context_ref
              AND sv.matter_id IS NULL AND sv.court_case_id IS NULL"""
     )

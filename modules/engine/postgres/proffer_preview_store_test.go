@@ -98,10 +98,10 @@ func TestMigration0050RollbackOnlyOnPostgreSQL18(t *testing.T) {
 		t.Fatalf("apply migration 0050 in rollback-only transaction: %v", err)
 	}
 	var relation string
-	if err := tx.QueryRow(ctx, `SELECT to_regclass('context.uiw_preview_binding')::text`).Scan(&relation); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT to_regclass('context.proffer_preview_binding')::text`).Scan(&relation); err != nil {
 		t.Fatal(err)
 	}
-	if relation != "context.uiw_preview_binding" && relation != "uiw_preview_binding" {
+	if relation != "context.proffer_preview_binding" && relation != "proffer_preview_binding" {
 		t.Fatalf("migration relation = %q", relation)
 	}
 	store, err := NewProfferPreviewStore(nestedPreviewTestDB{tx: tx}, strings.NewReader(strings.Repeat("abcdefghijklmnopqrstuvwx", 8)))
@@ -133,36 +133,36 @@ func TestMigration0050RollbackOnlyOnPostgreSQL18(t *testing.T) {
 			t.Fatalf("decision without projection error = %v, want ErrNotReady", err)
 		}
 		var decisions int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM context.uiw_preview_decision WHERE preview_handle=$1`, binding.Handle).Scan(&decisions); err != nil || decisions != 0 {
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM context.proffer_preview_decision WHERE preview_handle=$1`, binding.Handle).Scan(&decisions); err != nil || decisions != 0 {
 			t.Fatalf("rolled-back premature decisions = %d, %v", decisions, err)
 		}
 	} else if err != nil {
 		t.Fatal(err)
 	} else {
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_snapshot
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_snapshot
 			(preview_handle,snapshot_seq,phase,source_version_id,raw_generation_id,normalized_generation_id,
 			 parser_id,parser_version,parser_config_digest,preview_digest)
 			VALUES ($1,0,'awaiting_decision',$2,$3,$4,'sbv','1.2.3',decode(repeat('b',64),'hex'),decode(repeat('a',64),'hex'))`,
 			binding.Handle, sourceID, rawID, normalizedID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_receipt
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_receipt
 			(preview_handle,snapshot_seq,receipt_type,receipt_ref,status,recorded_at)
 			SELECT $1,0,receipt_type,'receipt-'||receipt_type,'completed',now()
 			FROM unnest(ARRAY['custody','parser_selection','parser_execution','normalization','storage','completeness']) receipt_type`, binding.Handle); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_participant
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_participant
 			(preview_handle,snapshot_seq,participant_id,display_name,canonical_address)
 			VALUES ($1,0,'p-1','Person One','person@example.test')`, binding.Handle); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_message
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_message
 			(preview_handle,snapshot_seq,message_id,ordinal,sender_participant_id,body,participant_ids,source_locator_ref)
 			VALUES ($1,0,'m-1',0,'p-1','body',ARRAY['p-1'],'locator-1')`, binding.Handle); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_attachment
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_attachment
 			(preview_handle,snapshot_seq,message_id,attachment_id,filename,source_locator_ref)
 			VALUES ($1,0,'m-1','a-1','file.txt','attachment-locator')`, binding.Handle); err != nil {
 			t.Fatal(err)
@@ -178,7 +178,7 @@ func TestMigration0050RollbackOnlyOnPostgreSQL18(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		rows, err := tx.Query(ctx, `SELECT snapshot_seq, phase, reason FROM context.uiw_preview_snapshot
+		rows, err := tx.Query(ctx, `SELECT snapshot_seq, phase, reason FROM context.proffer_preview_snapshot
 			WHERE preview_handle=$1 ORDER BY snapshot_seq`, binding.Handle)
 		if err != nil {
 			t.Fatal(err)
@@ -206,7 +206,7 @@ func TestMigration0050RollbackOnlyOnPostgreSQL18(t *testing.T) {
 		if len(snapshots) != 3 || snapshots[0].seq != 0 || snapshots[0].phase != "awaiting_decision" || snapshots[0].reason != "" || snapshots[1].seq != 1 || snapshots[1].phase != "rejected" || snapshots[2].seq != 2 || snapshots[2].phase != "approved" {
 			t.Fatalf("append-only decision snapshots = %+v", snapshots)
 		}
-		for _, table := range []string{"uiw_preview_receipt", "uiw_preview_participant", "uiw_preview_message", "uiw_preview_attachment"} {
+		for _, table := range []string{"proffer_preview_receipt", "proffer_preview_participant", "proffer_preview_message", "proffer_preview_attachment"} {
 			var initial, rejected, approved int
 			query := fmt.Sprintf(`SELECT count(*) FILTER (WHERE snapshot_seq=0), count(*) FILTER (WHERE snapshot_seq=1), count(*) FILTER (WHERE snapshot_seq=2) FROM context.%s WHERE preview_handle=$1`, table)
 			if err := tx.QueryRow(ctx, query, binding.Handle).Scan(&initial, &rejected, &approved); err != nil {
@@ -236,15 +236,15 @@ func TestRecordDecisionContainsNoSnapshotMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(body)
-	if strings.Contains(source, "UPDATE context.uiw_preview_snapshot") {
+	if strings.Contains(source, "UPDATE context.proffer_preview_snapshot") {
 		t.Fatal("RecordDecision contains a forbidden snapshot UPDATE")
 	}
 	for _, table := range []string{
-		"INSERT INTO context.uiw_preview_snapshot",
-		"INSERT INTO context.uiw_preview_receipt",
-		"INSERT INTO context.uiw_preview_participant",
-		"INSERT INTO context.uiw_preview_message",
-		"INSERT INTO context.uiw_preview_attachment",
+		"INSERT INTO context.proffer_preview_snapshot",
+		"INSERT INTO context.proffer_preview_receipt",
+		"INSERT INTO context.proffer_preview_participant",
+		"INSERT INTO context.proffer_preview_message",
+		"INSERT INTO context.proffer_preview_attachment",
 	} {
 		if !strings.Contains(source, table) {
 			t.Fatalf("append-only decision path is missing %q", table)

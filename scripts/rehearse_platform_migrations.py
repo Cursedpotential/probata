@@ -82,7 +82,7 @@ def _seed_preexisting_uiw_scope(cursor: psycopg.Cursor[object], manifest: dict[s
         (source_id, f"0054-rehearsal-{source_id}"),
     )
     cursor.execute(
-        """INSERT INTO context.uiw_source_context_revision
+        """INSERT INTO context.proffer_source_context_revision
            (source_context_ref,request_id,revision,matter_id,court_case_id,source_ref,observed_source,
             assertions,change_reason,actor_subject_uid,actor_username,idempotency_key,content_digest,receipt_ref)
            VALUES(%s,%s,1,%s,%s,%s,'{}','{}','rehearsal','rehearsal','rehearsal',%s,decode(%s,'hex'),%s)""",

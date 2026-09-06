@@ -203,7 +203,7 @@ func (s *ProfferPreviewStore) PublishWorkflowPreview(ctx context.Context, reques
 
 func (s *ProfferPreviewStore) bindingByRequest(ctx context.Context, requestID string) (previewmodel.Binding, error) {
 	var handle string
-	if err := s.db.QueryRow(ctx, `SELECT preview_handle FROM context.uiw_preview_binding WHERE request_id=$1`, requestID).Scan(&handle); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT preview_handle FROM context.proffer_preview_binding WHERE request_id=$1`, requestID).Scan(&handle); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return previewmodel.Binding{}, previewmodel.ErrNotFound
 		}
@@ -238,7 +238,7 @@ func (s *ProfferPreviewStore) Create(ctx context.Context, binding previewmodel.B
 		}
 		rollback := func() { cleanup, cancel := boundedCleanup(ctx); defer cancel(); _ = tx.Rollback(cleanup) }
 		result, err := tx.Exec(ctx, `
-			INSERT INTO context.uiw_preview_binding
+			INSERT INTO context.proffer_preview_binding
 			    (preview_handle, request_id, source_ref, workflow_id, run_id, parser_options_ref)
 			VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT DO NOTHING`, binding.Handle, binding.RequestID, binding.SourceRef,
@@ -249,7 +249,7 @@ func (s *ProfferPreviewStore) Create(ctx context.Context, binding previewmodel.B
 		}
 		if result.RowsAffected() == 1 {
 			_, err = tx.Exec(ctx, `
-				INSERT INTO context.uiw_preview_event
+				INSERT INTO context.proffer_preview_event
 				    (preview_handle, event_id, event_type, occurred_at, phase)
 				VALUES ($1, 0, 'phase_changed', $2, 'starting')`, binding.Handle, s.clock())
 			if err != nil {
@@ -266,7 +266,7 @@ func (s *ProfferPreviewStore) Create(ctx context.Context, binding previewmodel.B
 		var existing previewmodel.Binding
 		err = tx.QueryRow(ctx, `
 			SELECT preview_handle, request_id, source_ref, workflow_id, run_id, parser_options_ref
-			FROM context.uiw_preview_binding WHERE request_id = $1`, binding.RequestID).Scan(
+			FROM context.proffer_preview_binding WHERE request_id = $1`, binding.RequestID).Scan(
 			&existing.Handle, &existing.RequestID, &existing.SourceRef, &existing.WorkflowID,
 			&existing.RunID, &existing.ParserOptionsRef)
 		rollback()
@@ -293,16 +293,16 @@ func (s *ProfferPreviewStore) Binding(ctx context.Context, handle string) (previ
 		       COALESCE(decision.parser_options_ref, binding.parser_options_ref),
 		       snapshot.source_version_id, snapshot.raw_generation_id,
 		       snapshot.normalized_generation_id
-		FROM context.uiw_preview_binding binding
+		FROM context.proffer_preview_binding binding
 		LEFT JOIN LATERAL (
 		    SELECT selection_ref, parser_options_ref
-		    FROM context.uiw_preview_decision
+		    FROM context.proffer_preview_decision
 		    WHERE preview_handle = binding.preview_handle
 		    ORDER BY recorded_at DESC, id DESC LIMIT 1
 		) decision ON true
 		LEFT JOIN LATERAL (
 		    SELECT source_version_id, raw_generation_id, normalized_generation_id
-		    FROM context.uiw_preview_snapshot
+		    FROM context.proffer_preview_snapshot
 		    WHERE preview_handle = binding.preview_handle
 		    ORDER BY snapshot_seq DESC LIMIT 1
 		) snapshot ON true
@@ -338,8 +338,8 @@ func (s *ProfferPreviewStore) Snapshot(ctx context.Context, handle string) (prev
 		       COALESCE(snapshot.parser_id, ''), COALESCE(snapshot.parser_version, ''),
 		       COALESCE(encode(snapshot.parser_config_digest, 'hex'), ''),
 		       encode(snapshot.preview_digest, 'hex'), snapshot.reason
-		FROM context.uiw_preview_snapshot snapshot
-		JOIN context.uiw_preview_binding binding USING (preview_handle)
+		FROM context.proffer_preview_snapshot snapshot
+		JOIN context.proffer_preview_binding binding USING (preview_handle)
 		WHERE snapshot.preview_handle = $1
 		ORDER BY snapshot.snapshot_seq DESC LIMIT 1`, handle).Scan(
 		&seq, &snapshot.Phase, &snapshot.Correlation.RequestID,
@@ -361,7 +361,7 @@ func (s *ProfferPreviewStore) Snapshot(ctx context.Context, handle string) (prev
 	}
 	rows, err := s.db.Query(ctx, `
 		SELECT receipt_type, receipt_ref, status, COALESCE(encode(digest, 'hex'), ''), recorded_at
-		FROM context.uiw_preview_receipt
+		FROM context.proffer_preview_receipt
 		WHERE preview_handle = $1 AND snapshot_seq = $2
 		ORDER BY receipt_type`, handle, seq)
 	if err != nil {
@@ -386,7 +386,7 @@ func (s *ProfferPreviewStore) Page(ctx context.Context, handle string, offset, l
 		return previewmodel.Page{}, errors.New("preview page bounds are invalid")
 	}
 	var seq int64
-	if err := s.db.QueryRow(ctx, `SELECT snapshot_seq FROM context.uiw_preview_snapshot WHERE preview_handle = $1 ORDER BY snapshot_seq DESC LIMIT 1`, handle).Scan(&seq); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT snapshot_seq FROM context.proffer_preview_snapshot WHERE preview_handle = $1 ORDER BY snapshot_seq DESC LIMIT 1`, handle).Scan(&seq); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			if _, bindingErr := s.Binding(ctx, handle); errors.Is(bindingErr, previewmodel.ErrNotFound) {
 				return previewmodel.Page{}, bindingErr
@@ -396,7 +396,7 @@ func (s *ProfferPreviewStore) Page(ctx context.Context, handle string, offset, l
 		return previewmodel.Page{}, err
 	}
 	page := previewmodel.Page{}
-	participantRows, err := s.db.Query(ctx, `SELECT participant_id, display_name, canonical_address FROM context.uiw_preview_participant WHERE preview_handle = $1 AND snapshot_seq = $2 ORDER BY participant_id`, handle, seq)
+	participantRows, err := s.db.Query(ctx, `SELECT participant_id, display_name, canonical_address FROM context.proffer_preview_participant WHERE preview_handle = $1 AND snapshot_seq = $2 ORDER BY participant_id`, handle, seq)
 	if err != nil {
 		return page, err
 	}
@@ -417,7 +417,7 @@ func (s *ProfferPreviewStore) Page(ctx context.Context, handle string, offset, l
 	messageRows, err := s.db.Query(ctx, `
 		SELECT message_id, ordinal, sent_at, sender_participant_id, body,
 		       participant_ids, source_locator_ref
-		FROM context.uiw_preview_message
+		FROM context.proffer_preview_message
 		WHERE preview_handle = $1 AND snapshot_seq = $2
 		ORDER BY ordinal, message_id OFFSET $3 LIMIT $4`, handle, seq, offset, limit+1)
 	if err != nil {
@@ -456,7 +456,7 @@ func (s *ProfferPreviewStore) Page(ctx context.Context, handle string, offset, l
 		SELECT message_id, attachment_id, filename, media_type, byte_length,
 		       CASE WHEN sha256 IS NULL THEN NULL ELSE encode(sha256, 'hex') END,
 		       source_locator_ref
-		FROM context.uiw_preview_attachment
+		FROM context.proffer_preview_attachment
 		WHERE preview_handle = $1 AND snapshot_seq = $2 AND message_id = ANY($3::text[])
 		ORDER BY message_id, attachment_id`, handle, seq, messageIDs)
 	if err != nil {
@@ -480,7 +480,7 @@ func (s *ProfferPreviewStore) Page(ctx context.Context, handle string, offset, l
 
 func (s *ProfferPreviewStore) EventsAfter(ctx context.Context, handle string, after int64) ([]previewmodel.Event, error) {
 	var first, latest *int64
-	if err := s.db.QueryRow(ctx, `SELECT min(event_id), max(event_id) FROM context.uiw_preview_event WHERE preview_handle = $1`, handle).Scan(&first, &latest); err != nil {
+	if err := s.db.QueryRow(ctx, `SELECT min(event_id), max(event_id) FROM context.proffer_preview_event WHERE preview_handle = $1`, handle).Scan(&first, &latest); err != nil {
 		return nil, err
 	}
 	if latest == nil {
@@ -495,7 +495,7 @@ func (s *ProfferPreviewStore) EventsAfter(ctx context.Context, handle string, af
 	rows, err := s.db.Query(ctx, `
 		SELECT event_id, event_type, occurred_at, preview_handle, phase,
 		       receipt_ref, message_count, detail
-		FROM context.uiw_preview_event
+		FROM context.proffer_preview_event
 		WHERE preview_handle = $1 AND event_id > $2 ORDER BY event_id`, handle, after)
 	if err != nil {
 		return nil, err
@@ -524,7 +524,7 @@ func (s *ProfferPreviewStore) RecordDecision(ctx context.Context, handle string,
 		return err
 	}
 	rollback := func() { cleanup, cancel := boundedCleanup(ctx); defer cancel(); _ = tx.Rollback(cleanup) }
-	if err := tx.QueryRow(ctx, `SELECT 1 FROM context.uiw_preview_binding WHERE preview_handle = $1 FOR UPDATE`, handle).Scan(new(int)); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM context.proffer_preview_binding WHERE preview_handle = $1 FOR UPDATE`, handle).Scan(new(int)); err != nil {
 		rollback()
 		if errors.Is(err, pgx.ErrNoRows) {
 			return previewmodel.ErrNotFound
@@ -538,7 +538,7 @@ func (s *ProfferPreviewStore) RecordDecision(ctx context.Context, handle string,
 	}
 	recordedAt := s.clock()
 	result, err := tx.Exec(ctx, `
-		INSERT INTO context.uiw_preview_decision
+		INSERT INTO context.proffer_preview_decision
 		    (id, preview_handle, decision_key, approved, reason, actor_subject_uid,
 		     selection_ref, parser_options_ref, recorded_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -550,7 +550,7 @@ func (s *ProfferPreviewStore) RecordDecision(ctx context.Context, handle string,
 	}
 	if result.RowsAffected() == 1 {
 		var eventID, successorSeq int64
-		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(event_id) + 1, 0) FROM context.uiw_preview_event WHERE preview_handle = $1`, handle).Scan(&eventID); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT COALESCE(max(event_id) + 1, 0) FROM context.proffer_preview_event WHERE preview_handle = $1`, handle).Scan(&eventID); err != nil {
 			rollback()
 			return err
 		}
@@ -559,14 +559,14 @@ func (s *ProfferPreviewStore) RecordDecision(ctx context.Context, handle string,
 			phase = "approved"
 		}
 		if err := tx.QueryRow(ctx, `
-			INSERT INTO context.uiw_preview_snapshot
+			INSERT INTO context.proffer_preview_snapshot
 			    (preview_handle, snapshot_seq, phase, source_version_id, raw_generation_id,
 			     normalized_generation_id, parser_id, parser_version, parser_config_digest,
 			     preview_digest, reason, recorded_at)
 			SELECT preview_handle, snapshot_seq + 1, $2, source_version_id, raw_generation_id,
 			       normalized_generation_id, parser_id, parser_version, parser_config_digest,
 			       preview_digest, $3, $4
-			FROM context.uiw_preview_snapshot
+			FROM context.proffer_preview_snapshot
 			WHERE preview_handle = $1
 			ORDER BY snapshot_seq DESC LIMIT 1
 			RETURNING snapshot_seq`, handle, phase, strings.TrimSpace(reason), recordedAt).Scan(&successorSeq); err != nil {
@@ -577,47 +577,47 @@ func (s *ProfferPreviewStore) RecordDecision(ctx context.Context, handle string,
 			return fmt.Errorf("append preview decision snapshot: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO context.uiw_preview_receipt
+			INSERT INTO context.proffer_preview_receipt
 			    (preview_handle, snapshot_seq, receipt_type, receipt_ref, status, digest, recorded_at)
 			SELECT preview_handle, $2, receipt_type, receipt_ref, status, digest, recorded_at
-			FROM context.uiw_preview_receipt
+			FROM context.proffer_preview_receipt
 			WHERE preview_handle = $1 AND snapshot_seq = $2 - 1`, handle, successorSeq); err != nil {
 			rollback()
 			return fmt.Errorf("copy preview decision receipts: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO context.uiw_preview_participant
+			INSERT INTO context.proffer_preview_participant
 			    (preview_handle, snapshot_seq, participant_id, display_name, canonical_address)
 			SELECT preview_handle, $2, participant_id, display_name, canonical_address
-			FROM context.uiw_preview_participant
+			FROM context.proffer_preview_participant
 			WHERE preview_handle = $1 AND snapshot_seq = $2 - 1`, handle, successorSeq); err != nil {
 			rollback()
 			return fmt.Errorf("copy preview decision participants: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO context.uiw_preview_message
+			INSERT INTO context.proffer_preview_message
 			    (preview_handle, snapshot_seq, message_id, ordinal, sent_at,
 			     sender_participant_id, body, participant_ids, source_locator_ref)
 			SELECT preview_handle, $2, message_id, ordinal, sent_at,
 			       sender_participant_id, body, participant_ids, source_locator_ref
-			FROM context.uiw_preview_message
+			FROM context.proffer_preview_message
 			WHERE preview_handle = $1 AND snapshot_seq = $2 - 1`, handle, successorSeq); err != nil {
 			rollback()
 			return fmt.Errorf("copy preview decision messages: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO context.uiw_preview_attachment
+			INSERT INTO context.proffer_preview_attachment
 			    (preview_handle, snapshot_seq, message_id, attachment_id, filename,
 			     media_type, byte_length, sha256, source_locator_ref)
 			SELECT preview_handle, $2, message_id, attachment_id, filename,
 			       media_type, byte_length, sha256, source_locator_ref
-			FROM context.uiw_preview_attachment
+			FROM context.proffer_preview_attachment
 			WHERE preview_handle = $1 AND snapshot_seq = $2 - 1`, handle, successorSeq); err != nil {
 			rollback()
 			return fmt.Errorf("copy preview decision attachments: %w", err)
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO context.uiw_preview_event
+			INSERT INTO context.proffer_preview_event
 			    (preview_handle, event_id, event_type, occurred_at, phase, detail)
 			VALUES ($1, $2, 'decision_recorded', $3, $4, $5)`,
 			handle, eventID, recordedAt, phase, strings.TrimSpace(actor+": "+reason)); err != nil {
@@ -646,7 +646,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 	rollback := func() { cleanup, cancel := boundedCleanup(ctx); defer cancel(); _ = tx.Rollback(cleanup) }
 	var requestID string
 	var seq int64
-	if err := tx.QueryRow(ctx, `SELECT request_id FROM context.uiw_preview_binding WHERE preview_handle = $1 FOR UPDATE`, handle).Scan(&requestID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT request_id FROM context.proffer_preview_binding WHERE preview_handle = $1 FOR UPDATE`, handle).Scan(&requestID); err != nil {
 		rollback()
 		if errors.Is(err, pgx.ErrNoRows) {
 			return previewmodel.ErrNotFound
@@ -660,7 +660,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 	var existingNormalizedID uuid.UUID
 	var existingDigest []byte
 	existingErr := tx.QueryRow(ctx, `SELECT normalized_generation_id, preview_digest
-		FROM context.uiw_preview_snapshot WHERE preview_handle=$1
+		FROM context.proffer_preview_snapshot WHERE preview_handle=$1
 		ORDER BY snapshot_seq DESC LIMIT 1`, handle).Scan(&existingNormalizedID, &existingDigest)
 	if existingErr == nil && existingNormalizedID == snapshot.Correlation.NormalizedGenerationID {
 		wanted, _ := hex.DecodeString(snapshot.PreviewDigest)
@@ -674,7 +674,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 		rollback()
 		return existingErr
 	}
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(snapshot_seq) + 1, 0) FROM context.uiw_preview_snapshot WHERE preview_handle = $1`, handle).Scan(&seq); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(snapshot_seq) + 1, 0) FROM context.proffer_preview_snapshot WHERE preview_handle = $1`, handle).Scan(&seq); err != nil {
 		rollback()
 		return err
 	}
@@ -685,7 +685,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 		parserID, parserVersion = snapshot.Parser.ParserID, snapshot.Parser.ParserVersion
 		parserDigest, _ = hex.DecodeString(snapshot.Parser.ConfigDigest)
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_snapshot
+	if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_snapshot
 		(preview_handle, snapshot_seq, phase, source_version_id, raw_generation_id,
 		 normalized_generation_id, parser_id, parser_version, parser_config_digest,
 		 preview_digest, reason) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
@@ -700,7 +700,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 		if receipt.Digest != "" {
 			digest, _ = hex.DecodeString(receipt.Digest)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_receipt
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_receipt
 			(preview_handle,snapshot_seq,receipt_type,receipt_ref,status,digest,recorded_at)
 			VALUES ($1,$2,$3,$4,$5,$6,$7)`, handle, seq, receipt.ReceiptType,
 			receipt.ReceiptRef, receipt.Status, digest, receipt.RecordedAt); err != nil {
@@ -709,7 +709,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 		}
 	}
 	for _, participant := range participants {
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_participant
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_participant
 			(preview_handle,snapshot_seq,participant_id,display_name,canonical_address)
 			VALUES ($1,$2,$3,$4,$5)`, handle, seq, participant.ParticipantID,
 			participant.DisplayName, participant.CanonicalAddress); err != nil {
@@ -719,7 +719,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 	}
 	sort.SliceStable(messages, func(i, j int) bool { return messages[i].Ordinal < messages[j].Ordinal })
 	for _, message := range messages {
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_message
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_message
 			(preview_handle,snapshot_seq,message_id,ordinal,sent_at,sender_participant_id,
 			 body,participant_ids,source_locator_ref) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
 			handle, seq, message.MessageID, message.Ordinal, message.SentAt,
@@ -733,7 +733,7 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 			if attachment.SHA256 != nil {
 				digest, _ = hex.DecodeString(*attachment.SHA256)
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_attachment
+			if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_attachment
 				(preview_handle,snapshot_seq,message_id,attachment_id,filename,media_type,
 				 byte_length,sha256,source_locator_ref) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
 				handle, seq, message.MessageID, attachment.AttachmentID, attachment.Filename,
@@ -745,13 +745,13 @@ func (s *ProfferPreviewStore) PublishProjection(ctx context.Context, handle stri
 		}
 	}
 	var nextEventID int64
-	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(event_id) + 1, 0) FROM context.uiw_preview_event WHERE preview_handle=$1`, handle).Scan(&nextEventID); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT COALESCE(max(event_id) + 1, 0) FROM context.proffer_preview_event WHERE preview_handle=$1`, handle).Scan(&nextEventID); err != nil {
 		rollback()
 		return err
 	}
 	for index, event := range events {
 		eventID := nextEventID + int64(index)
-		if _, err := tx.Exec(ctx, `INSERT INTO context.uiw_preview_event
+		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_event
 			(preview_handle,event_id,event_type,occurred_at,phase,receipt_ref,message_count,detail)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, handle, eventID, event.EventType,
 			event.OccurredAt, event.Phase, event.ReceiptRef, event.MessageCount,
