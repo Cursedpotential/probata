@@ -29,9 +29,7 @@ KEEP_TABLES="-t analysis.human_label -t analysis.human_label_gold -t public.cano
 case "${1:-}" in
 dump)
   "${SSH[@]}" "set -e; mkdir -p $B
-    docker exec $C sh -c 'pg_dump -U ai -d platform -Fc -f /tmp/platform-pre-rebuild-$STAMP.dump
-      && pg_dump -U ai -d platform --schema-only --no-owner > /tmp/schema_snapshot_$STAMP.sql
-      && pg_dump -U ai -d platform --data-only --no-owner --no-privileges $KEEP_SCHEMAS $KEEP_TABLES > /tmp/keep_data_$STAMP.sql'
+    docker exec $C sh -c 'pg_dump -U ai -d platform -Fc -f /tmp/platform-pre-rebuild-$STAMP.dump && pg_dump -U ai -d platform --schema-only --no-owner > /tmp/schema_snapshot_$STAMP.sql && pg_dump -U ai -d platform --data-only --no-owner --no-privileges $KEEP_SCHEMAS $KEEP_TABLES > /tmp/keep_data_$STAMP.sql'
     for f in platform-pre-rebuild-$STAMP.dump schema_snapshot_$STAMP.sql keep_data_$STAMP.sql; do docker cp $C:/tmp/\$f $B/\$f; done
     ls -la $B | grep $STAMP
     echo \"agno_app refs in snapshot: \$(grep -c agno_app $B/schema_snapshot_$STAMP.sql || true)\"
