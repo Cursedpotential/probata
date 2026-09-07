@@ -218,3 +218,15 @@ INCIDENT (open, owner researching): data-vector Milvus crash-loops on embedded-e
 - Cause 1: the Serve bypass allowlist `WORKBENCH_TAILSCALE_SERVE_PROXY_CIDRS` still held the old `agno` bridge gateway `172.26.0.1/32`; after the rename the container sees the `probata` gateway `192.168.112.1`. Fixed in Coolify env → `192.168.112.1/32`.
 - Cause 2: `deploy/workbench.yaml` used `${TRAEFIK_PROXY_CIDR:?exact Traefik proxy CIDR required}`; Coolify renders the `:?` message as the literal value, so `TRUSTED_AUTH_PROXY_CIDRS` parsed empty and the fall-through path failed closed. Compose line changed to `${TRAEFIK_PROXY_CIDR}`; Coolify env set to the proxy's `probata` address `192.168.112.2/32`. Rule: never use `:?`/`:-` message syntax in Coolify-rendered compose; fail-closed lives in code.
 - Default-OFF for the bypass is D-125 (fail-closed; ON only in the deployment env) and stays.
+
+### 14a. Follow-on breakage from the 2026-09-07 rebuild, fixed live 2026-09-07 15:00–15:35 EDT
+
+> _Byline: Claude Code · Fable 5.1 · 2026-09-07._
+
+| Symptom | Cause | Fix (all reversible) |
+|---|---|---|
+| Workbench `/api/matters` 500 | `platform-api` (Coolify app `exec-tier`, uuid `rz41…`) still logged in as `agno_app`, dropped by §13 | `GRANT platform_app TO platform_api`; `ALTER ROLE platform_api PASSWORD` (fresh; the old one was unknown and unused; stored as `PLATFORM_API_DB_PASS` in `~/.secrets/probata.env`); Coolify env `DB_USER=platform_api`, `DB_PASS`; redeploy → `GET /v1/matters` 200 |
+| `proffer-starter` / `proffer-worker` `exited:unhealthy` since the rebuild | admission probe (`proffer_schema_probe.go:274`) requires `platform` owned by `platform_admin`; rebuild left owner `ai`. Then `receipt=false`: the DEV receipt row (0069) was not in the keep-set | `ALTER DATABASE platform OWNER TO platform_admin`; `SELECT registry.reseed_dev_case_identity()` (function survived in the snapshot) — codified as `sql/bootstrap/seed_dev_case_registry.sql`, to run after every rebuild |
+| memsearch "MEMSEARCH_MILVUS_TOKEN not set" | the Zilliz migration wrote `env:MEMSEARCH_MILVUS_TOKEN` into `~/.memsearch/config.toml` but never persisted the variable | value from `~/.secrets/memsearch.env` persisted as a User-level environment variable (new shells only) |
+
+Still open from this section: `analysis.evidence_item` referenced by `server/case_management/repository.py` does not exist in the snapshot (evidence lane; out of scope per D-151) — any case-management route beyond `list_matters` will 500 until that repository is re-pointed or the table returns.
