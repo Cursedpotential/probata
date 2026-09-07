@@ -1,0 +1,14 @@
+# Byline: Claude Code · Fable 5.1 · 2026-09-07 — re-applies deploy/host/docker-user-firewall.sh after docker starts.
+[Unit]
+Description=Tailnet-only forwarding for published container ports (DOCKER-USER)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/docker-user-firewall.sh
+
+[Install]
+WantedBy=multi-user.target
