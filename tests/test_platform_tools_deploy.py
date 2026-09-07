@@ -34,7 +34,7 @@ def test_sbv_image_is_immutable_and_state_uses_the_mounted_path() -> None:
 
     assert "FROM ghcr.io/cursedpotential/sbv-forensic@sha256:" in dockerfile
     assert 'DB_PATH_PREFIX="/opt/sbv/data"' in supervisor
-    assert "/data/agno/volumes/sbv_data:/opt/sbv/data" in deployment
+    assert "/data/probata/volumes/sbv_data:/opt/sbv/data" in deployment
 
 
 def test_platform_tools_image_pins_every_repair_runtime_dependency() -> None:

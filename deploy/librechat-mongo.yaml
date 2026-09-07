@@ -7,11 +7,11 @@
 # query patterns hit FerretDB compatibility gaps). Do not copy this precedent.
 #
 # NO host port — internal docker-network access only (librechat reaches it as
-# mongodb://librechat-mongo:27017 over the shared external `agno` net).
+# mongodb://librechat-mongo:27017 over the shared external `probata` net).
 #
 # HOST-PREP (once, before first deploy):
-#   mkdir -p /data/agno/volumes/librechat/mongo && chown -R 999:999 /data/agno/volumes/librechat/mongo
-#   docker network inspect agno >/dev/null 2>&1 || docker network create agno
+#   mkdir -p /data/probata/volumes/librechat/mongo && chown -R 999:999 /data/probata/volumes/librechat/mongo
+#   docker network inspect probata >/dev/null 2>&1 || docker network create probata
 # =============================================================================
 # Byline: Claude Code · Fable 5 · 2026-07-20
 # Byline: Claude Code · Opus 5 · 2026-08-05 (digest pin)
@@ -26,7 +26,7 @@ services:
     command: mongod --quiet
     volumes:
       # Bind mounts only — owner backs up host dirs (no named volumes).
-      - /data/agno/volumes/librechat/mongo:/data/db
+      - /data/probata/volumes/librechat/mongo:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 30s
@@ -34,8 +34,8 @@ services:
       retries: 3
       start_period: 20s
     networks:
-      - agno
+      - probata
 
 networks:
-  agno:
+  probata:
     external: true

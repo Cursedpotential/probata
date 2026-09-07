@@ -33,7 +33,7 @@
 #     only once data is WRITTEN in V3. This store is empty, so turning it off
 #     costs nothing and removes an exotic code path from an already-failing boot.
 #     Pre-V3 rollback snapshot of the OLD volume (unrelated to this fresh one):
-#       /data/agno/backups/milvus-volume-pre-storagev3-20260805.tar.gz
+#       /data/probata/backups/milvus-volume-pre-storagev3-20260805.tar.gz
 #
 # NOTE: `common:` must appear EXACTLY ONCE. A second top-level `common:` key
 # silently overrides the first in YAML, which would drop authorizationEnabled
@@ -48,7 +48,7 @@ common:
   storageType: local
 
 # Segment / binlog store. Lives on the same fresh volume as etcd + the WAL,
-# i.e. /data/agno/volumes/milvus-memsearch on the host. Back that path up —
+# i.e. /data/probata/volumes/milvus-memsearch on the host. Back that path up —
 # since 2026-08-23 it is the ONLY copy of the memsearch vectors.
 localStorage:
   path: /var/lib/milvus/data

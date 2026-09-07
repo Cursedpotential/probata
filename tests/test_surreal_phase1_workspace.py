@@ -12,10 +12,10 @@ ROOT = Path(__file__).parents[1]
 def test_new_compose_is_isolated_and_legacy_compose_is_not_reused() -> None:
     compose = (ROOT / "deploy/compose.surreal-phase1.yaml").read_text(encoding="utf-8")
     assert "data-surreal-phase1-t0-r1" in compose
-    assert "/data/agno/experiments/phase1-surreal-t0-r1" in compose
+    assert "/data/probata/experiments/phase1-surreal-t0-r1" in compose
     assert "phase1-surreal-t0-r1" in compose
     assert "compose.data-surreal.yaml" not in compose
-    assert "/data/agno/volumes/surrealdb" not in compose
+    assert "/data/probata/volumes/surrealdb" not in compose
     assert "100.119.96.29" not in compose
     assert "external: true" not in compose
     assert "--allow-rpc=attach,detach,version,signin,use,query,authenticate,info,invalidate" in compose
@@ -49,4 +49,4 @@ def test_runner_wires_resume_rewalk_and_restore_parity_without_legacy_target() -
     assert "export_import_exact_parity" in runner
     assert "restored_retrieval_equal" in runner
     assert "compose.data-surreal.yaml" not in runner
-    assert "/data/agno/volumes/surrealdb" not in runner
+    assert "/data/probata/volumes/surrealdb" not in runner

@@ -12,7 +12,7 @@
 #   DB_USER / DB_PASS / DB_DATABASE   (must match existing — data on disk)
 #
 # Same absolute bind mounts as the original (already staged on host) — NO data
-# migration: agentos-db reattaches /data/agno/volumes/pgdata. Init SQL mounts
+# migration: agentos-db reattaches /data/probata/volumes/pgdata. Init SQL mounts
 # only fire on an EMPTY data dir; existing datadir is populated → skipped.
 #
 # CUTOVER (one pass, after this lands on main + new app created + healthy):
@@ -35,11 +35,10 @@ services:
       # raw TCP, tailnet-only (reached by agentos-api on OVH-1); never proxied
       - "${BIND_IP:-127.0.0.1}:5432:5432"
     volumes:
-      - /data/agno/volumes/pgdata:/var/lib/postgresql
+      - /data/probata/volumes/pgdata:/var/lib/postgresql
       # init SQL — ABSOLUTE host binds (gotcha #5); run once on an EMPTY data dir
-      - /data/agno/config/sql/0001_init_extensions.sql:/docker-entrypoint-initdb.d/01_extensions.sql:ro
-      - /data/agno/config/sql/0002_schema.sql:/docker-entrypoint-initdb.d/02_schema.sql:ro
-      - /data/agno/config/sql/0003_normalized_records.sql:/docker-entrypoint-initdb.d/03_normalized_records.sql:ro
+      # THE database: fresh volumes bootstrap from the snapshot (migrations retired 2026-09-07, D-153); file lives on the host
+      - /data/probata/config/sql/schema_snapshot_20260907.sql:/docker-entrypoint-initdb.d/01_schema_snapshot.sql:ro
     environment:
       POSTGRES_USER: ${DB_USER:-ai}
       POSTGRES_PASSWORD: ${DB_PASS:-ai}
@@ -51,12 +50,12 @@ services:
       retries: 10
     networks:
       - pg
-      - agno                # shared external net — reachable as `agentos-db` by other OVH-3 apps
+      - probata                # shared external net — reachable as `agentos-db` by other OVH-3 apps
 
 networks:
   pg:
-  agno:
-    external: true          # pre-created on OVH-3 (`docker network create agno`)
+  probata:
+    external: true          # pre-created on OVH-3 (`docker network create probata`)
 
 # No named volumes — absolute host binds (declared inline above).
 # Byline: Claude Code · Fable 5 · 2026-07-05

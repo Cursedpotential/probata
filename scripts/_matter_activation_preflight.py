@@ -196,7 +196,7 @@ def static_checks(root: Path = PROJECT_ROOT) -> list[Check]:
 
     deploy = (root / "deploy" / "workbench.yaml").read_text(encoding="utf-8")
     auth = (root / "modules" / "workbench" / "api" / "app" / "runtime" / "auth.py").read_text(encoding="utf-8")
-    platform_bearer_mount = "/data/agno/secrets/platform/api-bearer:/run/secrets/platform-api-bearer:ro"
+    platform_bearer_mount = "/data/probata/secrets/platform/api-bearer:/run/secrets/platform-api-bearer:ro"
     checks.extend(
         [
             _check(

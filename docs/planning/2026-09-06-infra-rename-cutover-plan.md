@@ -23,7 +23,7 @@
 | Ruling | Effect |
 |---|---|
 | "AGNO_APP IS DEAD" | PG role `agno_app` is retired and dropped, not renamed (supersedes R-8's rename recommendation). |
-| "supposed to be doing clean snapshots now" / "there is no reason we need to go through months of changes and migration to rebuild a DB" | The golden template is built from a **fresh schema snapshot** of the live database, never by replaying `sql/0001..N`. The `0044–0046` hole is irrelevant to rebuilds. Numbered migrations remain the change record for the LIVE database only. |
+| "supposed to be doing clean snapshots now" / "there is no reason we need to go through months of changes and migration to rebuild a DB" | The golden template is built from a **fresh schema snapshot** of the live database, never by replaying `sql/0001..N`. The `0044–0046` hole is irrelevant to rebuilds. ~~Numbered migrations remain the change record for the LIVE database only.~~ **Struck 2026-09-07 07:24 (owner, D-153): no migrations at all; the snapshot is the only DDL source; the chain is retired to `sql/_stale/`.** |
 | "Eleven context.uiw_* tables … FIX IT" | Migration `0073` renames every `uiw_*` object in `context` to `proffer_*`; Go store, tests, scripts follow. Written and rehearsed (§2.3). |
 | "first-real-runs … stupid and unneeded … the agent just moved it to a sub folder" | The `first-real-runs/` copies (R2 and the proffer volume) are quarantined. The originals stay at the ruled tier `/data/test_data/<source_type>/<export-folder>/`. |
 | "FIX ALL THIS" on R-1, R-2, R-7, R-10, R-12 | The "keep" recommendations are overruled. Docker network, host root, Tailscale service names and `platform-api` all take the product name. `platform` (R-7) already carries no old name; see §4.6 for whether it changes at all. |

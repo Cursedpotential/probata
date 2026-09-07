@@ -6,7 +6,7 @@
 # modules/forks/sbv/** is deliberately NOT a watch path anymore — see
 # deploy/WATCH-PATHS.md for why.
 # Host prep (root-owned, before deployment):
-# install -d -m 0700 /data/agno/volumes/proffer/parser-artifacts
+# install -d -m 0700 /data/probata/volumes/proffer/parser-artifacts
 #
 # Byline: Claude Code · Sonnet 5 · 2026-09-02 (BUILD LANE D1: hermetic vendored
 # build post-restructure — build context set to repo root so
@@ -34,10 +34,10 @@ services:
       # "open retained object file …/source-objects/objects/sha256/…: no such
       # file or directory" because this service never mounted the store the
       # worker retains into. Same host, same path convention as the worker.
-      - /data/agno/volumes/proffer/source-objects:/data/proffer/source-objects:ro
-      - /data/agno/volumes/proffer/parser-bundles:/data/proffer/parser-bundles
+      - /data/probata/volumes/proffer/source-objects:/data/proffer/source-objects:ro
+      - /data/probata/volumes/proffer/parser-bundles:/data/proffer/parser-bundles
       - type: bind
-        source: /data/agno/volumes/proffer/parser-artifacts
+        source: /data/probata/volumes/proffer/parser-artifacts
         target: /data/proffer/parser-artifacts
         bind:
           create_host_path: false

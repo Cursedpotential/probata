@@ -9,7 +9,7 @@
 # KASM_VNC_PW (copy from the exec-tier bundle's env).
 #
 # No cross-app docker-DNS dependency (nothing else calls `desktop` by docker
-# name), so this app does NOT join the shared `agno` network.
+# name), so this app does NOT join the shared `probata` network.
 #
 # Same absolute bind mounts as the bundle (kasm_profile persistent home +
 # agent_workspace shared with sandbox) — reattaches as-is, no migration.
@@ -33,8 +33,8 @@ services:
     shm_size: "1gb"
     mem_limit: 2g
     volumes:
-      - /data/agno/volumes/kasm_profile:/home/kasm-user   # persistent home — SAME bind as the bundle
-      - /data/agno/volumes/agent_workspace:/workspace     # shared with sandbox — SAME bind as the bundle
+      - /data/probata/volumes/kasm_profile:/home/kasm-user   # persistent home — SAME bind as the bundle
+      - /data/probata/volumes/agent_workspace:/workspace     # shared with sandbox — SAME bind as the bundle
     networks:
       - default
 

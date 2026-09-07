@@ -22,9 +22,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql
       # init SQL runs once at first boot (empty data dir only)
-      - ./sql/0001_init_extensions.sql:/docker-entrypoint-initdb.d/01_extensions.sql:ro
-      - ./sql/0002_schema.sql:/docker-entrypoint-initdb.d/02_schema.sql:ro
-      - ./sql/0003_normalized_records.sql:/docker-entrypoint-initdb.d/03_normalized_records.sql:ro
+      # THE database: fresh volumes bootstrap from the snapshot (migrations retired 2026-09-07, D-153)
+      - ./sql/bootstrap/schema_snapshot_20260907.sql:/docker-entrypoint-initdb.d/01_schema_snapshot.sql:ro
     environment:
       POSTGRES_USER: ${DB_USER:-ai}
       POSTGRES_PASSWORD: ${DB_PASS:-ai}
@@ -69,7 +68,7 @@ services:
       DB_DATABASE: ${DB_DATABASE:-platform}
       # Native evidence reads are enabled only after alias/schema activation.
       # Agent reads use exact walk-transition capabilities; Workbench uses a
-      # separate owner-only credential. Never reuse OS_SECURITY_KEY here.
+      # separate owner-only credential (OS_SECURITY_KEY retired 2026-09-07, R-6).
       NATIVE_EVIDENCE_ENABLED: ${NATIVE_EVIDENCE_ENABLED:-false}
       NATIVE_EVIDENCE_DRAIN_BATCH_LIMIT: ${NATIVE_EVIDENCE_DRAIN_BATCH_LIMIT:-100}
       NATIVE_EVIDENCE_DRAIN_INTERVAL_SECONDS: ${NATIVE_EVIDENCE_DRAIN_INTERVAL_SECONDS:-5}
@@ -207,7 +206,7 @@ services:
   # using the exact model IDs prod selects. NB: this compose file is NOT dev-only —
   # it is the stack definition that gets mirrored to the VPS, so this is the
   # deployed-elsewhere lane, not a laptop-local one. Verified against the live prod chain
-  # (ovh-files /data/agno/config/graphiti-case/portkeyfix.conf): prod's portkeyfix
+  # (ovh-files /data/probata/config/graphiti-case/portkeyfix.conf): prod's portkeyfix
   # sidecar injects x-portkey-config whose targets are custom_host=integrate.api.nvidia.
   # com with override_params models — Portkey is a pass-through there, so direct
   # NIM locally is equivalent, and Portkey is bypassed temporarily by design.

@@ -18,8 +18,8 @@
 # so a Git-backed Coolify deploy cannot keep running a stale host-staged copy.
 #
 # HOST-PREP (once, before first deploy):
-#   mkdir -p /data/agno/volumes/librechat/{images,uploads,logs}
-#   docker network inspect agno >/dev/null 2>&1 || docker network create agno
+#   mkdir -p /data/probata/volumes/librechat/{images,uploads,logs}
+#   docker network inspect probata >/dev/null 2>&1 || docker network create probata
 #
 # Coolify gotcha: env values are baked at deploy — set ALL envs before first
 # deploy; changes need a redeploy. After the owner registers their account,
@@ -64,14 +64,14 @@ services:
       NO_INDEX: "true"
     volumes:
       # Bind mounts only — owner backs up host dirs (no named volumes).
-      - /data/agno/volumes/librechat/images:/app/client/public/images
-      - /data/agno/volumes/librechat/uploads:/app/uploads
-      - /data/agno/volumes/librechat/logs:/app/api/logs
+      - /data/probata/volumes/librechat/images:/app/client/public/images
+      - /data/probata/volumes/librechat/uploads:/app/uploads
+      - /data/probata/volumes/librechat/logs:/app/api/logs
     networks:
       - librechat
-      - agno
+      - probata
 
 networks:
   librechat:
-  agno:
+  probata:
     external: true

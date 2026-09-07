@@ -6,7 +6,7 @@
 #
 # Byline: Claude Code · Sonnet (agent) · 2026-08-01
 #
-# Deliberately excludes /data/agno/volumes/milvus.corrupt-* and *.bak-*
+# Deliberately excludes /data/probata/volumes/milvus.corrupt-* and *.bak-*
 # (owner instruction: those die with the box, never copied, never rm'd).
 #
 # Run LOCALLY (dev box with tailnet + Coolify API access + the ~/.ssh/ovh key).
@@ -34,9 +34,9 @@ declare -A APP_UUID=(
   [nocodb]=a9z6r2b0p6ky2kpxhnc1xzh2
 )
 declare -A APP_PATHS=(
-  [data-neo4j]="/data/agno/volumes/neo4j_data"
-  [data-vector]="/data/agno/volumes/milvus /data/agno/volumes/attu"
-  [nocodb]="/data/agno/volumes/nocodb"
+  [data-neo4j]="/data/probata/volumes/neo4j_data"
+  [data-vector]="/data/probata/volumes/milvus /data/probata/volumes/attu"
+  [nocodb]="/data/probata/volumes/nocodb"
 )
 declare -A APP_HEALTHCHECK=(
   [data-neo4j]="http://100.119.96.29:7474"

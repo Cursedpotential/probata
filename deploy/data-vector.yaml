@@ -23,9 +23,9 @@
 #    updating config = edit this file + push + Coolify redeploy. No SSH needed.
 #    docker/milvus/{embedEtcd,user}.yaml are kept as the human-readable SOURCE of
 #    truth; the `configs:` blocks below MUST mirror them (update both together).
-#  - Data volume = /data/agno/volumes/milvus-memsearch (FRESH path). Docker
+#  - Data volume = /data/probata/volumes/milvus-memsearch (FRESH path). Docker
 #    auto-creates it on first up -> starts with clean etcd/WAL, no need to clear
-#    the old corrupt /data/agno/volumes/milvus (retired in place, not deleted).
+#    the old corrupt /data/probata/volumes/milvus (retired in place, not deleted).
 #  - BIND_IP is a Coolify app env var, substituted into the rendered compose at
 #    deploy. NOT in git. R2 creds (MINIO_*) remain set as Coolify envs but are
 #    UNUSED since 2026-08-23 (storageType=local) — kept only for a fast revert.
@@ -45,7 +45,7 @@ services:
     platform: linux/amd64
     container_name: milvus
     # ROOT CAUSE FIX 2026-08-23 (Opus 5): the container could not write its own
-    # bind-mounted volume. Docker auto-creates /data/agno/volumes/milvus-memsearch
+    # bind-mounted volume. Docker auto-creates /data/probata/volumes/milvus-memsearch
     # as root:root, but this image runs Milvus as a NON-root user, so boot died at
     #   [FATAL] "failed to mkdir" [localStoragePath=/var/lib/milvus/data]
     #   [error="mkdir /var/lib/milvus/data: permission denied"] -> panic -> rc=134
@@ -83,9 +83,9 @@ services:
     volumes:
       # FRESH data volume — embedded etcd + Woodpecker WAL + (since 2026-08-23) the
       # segment/binlog store all live here. Auto-created by Docker on first up. Old
-      # /data/agno/volumes/milvus (corrupt etcd from 08-10) is retired in place —
+      # /data/probata/volumes/milvus (corrupt etcd from 08-10) is retired in place —
       # NOT mounted, NOT deleted. Back this path up; it is now the only copy.
-      - /data/agno/volumes/milvus-memsearch:/var/lib/milvus
+      - /data/probata/volumes/milvus-memsearch:/var/lib/milvus
     configs:
       # LONG FORM required: short `- <name>` mounts at `/<name>`, but Milvus reads
       # these from /milvus/configs/. Without explicit targets Milvus loads NEITHER
@@ -105,19 +105,19 @@ services:
       retries: 3
     networks:
       - vector
-      - agno                # shared external net — cross-app docker DNS on ovh-files
+      - probata                # shared external net — cross-app docker DNS on ovh-files
 
   attu:
     image: zilliz/attu:v3.0.0-beta.6
     platform: linux/amd64
     container_name: attu
-    user: "0:0"          # same bind-mount ownership issue as milvus (/data/agno/volumes/attu)
+    user: "0:0"          # same bind-mount ownership issue as milvus (/data/probata/volumes/attu)
     restart: unless-stopped
     environment:
       MILVUS_ADDRESS: milvus:19530
       ATTU_DB_PATH: /data/attu.db
     volumes:
-      - /data/agno/volumes/attu:/data
+      - /data/probata/volumes/attu:/data
     ports:
       - "${BIND_IP:-127.0.0.1}:3001:3000"     # Attu UI — tailnet-only
     depends_on:
@@ -125,7 +125,7 @@ services:
         condition: service_healthy   # restored 2026-08-23: Milvus now boots clean
     networks:
       - vector
-      - agno                # shared external net — so other ovh-files containers can
+      - probata                # shared external net — so other ovh-files containers can
                             # reach milvus:19530 via docker DNS (cross-app)
 
 # Milvus config, embedded as compose configs (no host bind-mount -> no SSH to edit).
@@ -179,8 +179,8 @@ configs:
 
 networks:
   vector:
-  agno:
-    external: true          # pre-created on ovh-files (`docker network create agno`);
+  probata:
+    external: true          # pre-created on ovh-files (`docker network create probata`);
 
 # 2026-08-12: rebuilt for memsearch-only — segment store on R2 (no MinIO server; the
 # `minio:` config namespace is Milvus's S3-client block, repointed at Cloudflare R2).

@@ -7,7 +7,7 @@
 #
 # Joins Temporal task queue `evidence-pipeline`. Connects to the Temporal
 # frontend via TEMPORAL_ADDRESS (default temporal-server:7233 on the shared
-# `agno` docker network — see deploy/temporal/compose.temporal.yaml).
+# `probata` docker network — see deploy/temporal/compose.temporal.yaml).
 #
 # Needs the SAME application env as agentos-api (DB_*, WEAVIATE_*, PORTKEY_*,
 # etc.) because Activities call the EXISTING pipeline code unchanged

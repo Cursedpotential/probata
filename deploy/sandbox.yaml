@@ -10,7 +10,7 @@
 # ./docker/sandbox. NO published ports, NO env secrets, NO repo mounts by
 # design (isolation boundary) — nothing in server/ currently calls
 # `http://sandbox:8070` by docker name (grepped 2026-07-19: no hits), so this
-# app does NOT need the shared `agno` network today. If a future caller needs
+# app does NOT need the shared `probata` network today. If a future caller needs
 # it, add `agno` then.
 #
 # Same absolute bind mount as the bundle (agent_workspace, shared with
@@ -32,7 +32,7 @@ services:
     cpus: 2
     mem_limit: 1g
     volumes:
-      - /data/agno/volumes/agent_workspace:/workspace   # SAME bind as the bundle — shared with desktop
+      - /data/probata/volumes/agent_workspace:/workspace   # SAME bind as the bundle — shared with desktop
     networks:
       - default
 

@@ -69,9 +69,9 @@ for app in "${APPS[@]}"; do
 
   if [ "$app" = "data-vector" ]; then
     echo "-- carrying Milvus config (embedEtcd.yaml, user.yaml — the boot-race fix) --"
-    "${SSH[@]}" "$OVHFILES_HOST" "mkdir -p /data/agno/config/milvus"
-    "${SCP[@]}" "$MILVUS_CONFIG_SRC/embedEtcd.yaml" "$OVHFILES_HOST:/data/agno/config/milvus/embedEtcd.yaml"
-    "${SCP[@]}" "$MILVUS_CONFIG_SRC/user.yaml" "$OVHFILES_HOST:/data/agno/config/milvus/user.yaml"
+    "${SSH[@]}" "$OVHFILES_HOST" "mkdir -p /data/probata/config/milvus"
+    "${SCP[@]}" "$MILVUS_CONFIG_SRC/embedEtcd.yaml" "$OVHFILES_HOST:/data/probata/config/milvus/embedEtcd.yaml"
+    "${SCP[@]}" "$MILVUS_CONFIG_SRC/user.yaml" "$OVHFILES_HOST:/data/probata/config/milvus/user.yaml"
   fi
 
   echo "-- checking for an existing Coolify app named $app on ovh-files --"

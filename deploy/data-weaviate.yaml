@@ -17,7 +17,7 @@
 # (tailnet-only exposure); API-key hardening tracked in OPEN-TASKS.
 # Requires Coolify app env: BIND_IP=100.119.96.29.
 # HOST-PREP (once, before deploying the bind-mount change):
-#   sudo mkdir -p /data/agno/volumes/weaviate
+#   sudo mkdir -p /data/probata/volumes/weaviate
 services:
   weaviate:
     image: semitechnologies/weaviate:1.38.7  # pinned 2026-07-29 to latest STABLE (was 1.39.0-rc.0; store empty, no downgrade risk)
@@ -40,7 +40,7 @@ services:
       # Bind mount only (owner rule — host dirs are what gets backed up, never named
       # volumes). Switched from the named volume `weaviate-data` on 2026-07-29 while the
       # store was verified EMPTY, so no data migration was required.
-      - /data/agno/volumes/weaviate:/var/lib/weaviate
+      - /data/probata/volumes/weaviate:/var/lib/weaviate
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/v1/.well-known/ready || exit 1"]

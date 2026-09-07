@@ -15,15 +15,15 @@
 #   tool; if the two sides disagree the service fails closed with 404s, which is
 #   precisely the defect it was built to remove. Deploy this app on the SAME
 #   HOST as platform-tools and share
-#   /data/agno/volumes/tool-gateway/materialize into both.
+#   /data/probata/volumes/tool-gateway/materialize into both.
 #
 # Host preparation (once, on the platform-tools host):
 #   install -d -o 10001 -g 10001 -m 0750 \
-#     /data/agno/volumes/tool-gateway/materialize \
-#     /data/agno/volumes/tool-gateway/seal \
-#     /data/agno/volumes/tool-gateway/tsnet
+#     /data/probata/volumes/tool-gateway/materialize \
+#     /data/probata/volumes/tool-gateway/seal \
+#     /data/probata/volumes/tool-gateway/tsnet
 #   # then add this to the platform-tools app's volumes:
-#   #   /data/agno/volumes/tool-gateway/materialize:/data/toolgw/materialize:ro
+#   #   /data/probata/volumes/tool-gateway/materialize:/data/toolgw/materialize:ro
 #
 # Coolify watch paths for this app:
 #   modules/engine/**
@@ -77,9 +77,9 @@ services:
       # Cross-host source bytes travel via object storage, never a shared disk.
       CASEBIBLE_R2_CONFIG_PATH: /run/secrets/casebible-r2.json
     volumes:
-      - /data/agno/volumes/tool-gateway/materialize:/data/toolgw/materialize
-      - /data/agno/volumes/tool-gateway/seal:/data/toolgw/seal
-      - /data/agno/volumes/tool-gateway/tsnet:/data/toolgw/tsnet
-      - /data/agno/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro
-      - /data/agno/secrets/tool-gateway/ts-authkey:/run/secrets/tool-gateway-ts-authkey:ro
-      - /data/agno/secrets/tool-gateway/service-token:/run/secrets/tool-gateway-service-token:ro
+      - /data/probata/volumes/tool-gateway/materialize:/data/toolgw/materialize
+      - /data/probata/volumes/tool-gateway/seal:/data/toolgw/seal
+      - /data/probata/volumes/tool-gateway/tsnet:/data/toolgw/tsnet
+      - /data/probata/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro
+      - /data/probata/secrets/tool-gateway/ts-authkey:/run/secrets/tool-gateway-ts-authkey:ro
+      - /data/probata/secrets/tool-gateway/service-token:/run/secrets/tool-gateway-service-token:ro

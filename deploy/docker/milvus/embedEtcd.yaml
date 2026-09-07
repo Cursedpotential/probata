@@ -13,6 +13,6 @@ auto-compaction-retention: "1000"
 # changed") -> exit 134 crash loop (observed 3x). One-member cluster = no real
 # elections; these only govern self-leadership stability under I/O stall.
 # DRIFT-FIX 2026-08-12: repo copy was missing these two lines (host copy at
-# /data/agno/config/milvus/embedEtcd.yaml had them) — synced repo -> host.
+# /data/probata/config/milvus/embedEtcd.yaml had them) — synced repo -> host.
 heartbeat-interval: 1000
 election-timeout: 10000

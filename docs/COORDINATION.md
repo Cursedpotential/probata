@@ -125,7 +125,7 @@ listed here so Lane A can carry it through the repack:
 - **Milvus (`data-vector`) — REBUILD IN PROGRESS (memsearch-only), 2026-08-12:** owner
   reframed the 08-10 "leave it down" ruling — Milvus is memsearch-ONLY (Agno stays on
   Weaviate, ADR-0040). Fresh Milvus v3 + Cloudflare R2 object store, image
-  3.0-20260811-7169df25-amd64, fresh volume /data/agno/volumes/milvus-memsearch on ovh-files
+  3.0-20260811-7169df25-amd64, fresh volume /data/agno/volumes/milvus-memsearch (now `/data/probata/volumes/milvus-memsearch` since the 2026-09-07 host-root rename) on ovh-files
   (ovh2). Do NOT restart the OLD app/config — it will crash-loop (6th etcd corruption,
   08-10); the rebuild uses a fresh volume + R2. See Lane C ledger entry (2026-08-12).
   Old volume /data/agno/volumes/milvus retired in place, NOT deleted. memsearch lane

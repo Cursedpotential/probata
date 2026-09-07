@@ -25,7 +25,7 @@
 # Redis is replaced by Dragonfly per the platform DB-substitution rule.
 #
 # HOST-PREP on ovh-files before first deploy:
-#   sudo install -d -m 0700 /data/agno/volumes/infisical-dragonfly
+#   sudo install -d -m 0700 /data/probata/volumes/infisical-dragonfly
 # =============================================================================
 
 services:
@@ -53,7 +53,7 @@ services:
       timeout: 10s
       retries: 5
     networks:
-      - agno
+      - probata
 
   dragonfly:
     image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.30.0
@@ -74,15 +74,15 @@ services:
       memlock: -1
     volumes:
       - type: bind
-        source: /data/agno/volumes/infisical-dragonfly
+        source: /data/probata/volumes/infisical-dragonfly
         target: /data
         bind:
           create_host_path: false
     networks:
-      - agno
+      - probata
 
 networks:
-  agno:
+  probata:
     external: true   # shared local bridge on ovh-files (data-tier split, 2026-07-19)
 
 # Byline: Claude Code · Fable 5.1 · 2026-09-01 (D-122 secrets broker — option 1: dynamic DB credentials)

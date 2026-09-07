@@ -37,7 +37,7 @@ and P3 (observability).
      committed to git, never appears in this file or any tracked file.**
 2. **`temporal-ui`** — same compose file, service `temporal-ui`. No secrets
    of its own; it only talks to `temporal-server:7233` over the shared
-   `agno` docker network.
+   `probata` docker network.
 3. **`temporal-worker`** — Coolify "Dockerfile" app, build context repo
    root, dockerfile `docker/temporal-worker/Dockerfile`. Watch paths:
    `docker/temporal-worker/**`, `server/**`, `scripts/**`, `sql/**`,
@@ -49,13 +49,13 @@ and P3 (observability).
      `deploy/exec.yaml` and `deploy/workbench.yaml` for the exact names in
      use), **plus**:
      - `TEMPORAL_ADDRESS` — defaults to `temporal-server:7233` (resolves
-       over the shared `agno` network; only override if the worker ever
+       over the shared `probata` network; only override if the worker ever
        runs off-box).
 
 Host prep before first deploy of any of the three apps:
 
 ```
-docker network inspect agno >/dev/null 2>&1 || docker network create agno
+docker network inspect probata >/dev/null 2>&1 || docker network create probata
 ```
 
 The `temporal` / `temporal_visibility` databases and the `temporal` role

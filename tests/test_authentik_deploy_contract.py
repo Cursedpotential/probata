@@ -130,19 +130,19 @@ class TestAuthentikProvider:
 
 class TestWorkbenchConsumer:
     def test_private_tailscale_door_is_loopback_only_and_port_translated(self) -> None:
-        service = _load(WORKBENCH_PATH)["services"]["knowledge-workbench"]
+        service = _load(WORKBENCH_PATH)["services"]["workbench"]
         assert service.get("ports") == ["127.0.0.1:18080:8020"]
         assert all("0.0.0.0" not in binding for binding in service["ports"])
 
     def test_exact_proxy_boundary_is_required_in_manifest(self) -> None:
-        service = _load(WORKBENCH_PATH)["services"]["knowledge-workbench"]
+        service = _load(WORKBENCH_PATH)["services"]["workbench"]
         assert service["environment"]["TRUSTED_AUTH_PROXY_CIDRS"] == EXACT_PROXY_SETTING
         text = WORKBENCH_PATH.read_text(encoding="utf-8")
         assert 'TRUSTED_AUTH_PROXY_CIDRS: "10.0.0.0/8' not in text
         assert 'TRUSTED_AUTH_PROXY_CIDRS: "172.16.0.0/12' not in text
 
     def test_forward_auth_is_defined_and_attached(self) -> None:
-        service = _load(WORKBENCH_PATH)["services"]["knowledge-workbench"]
+        service = _load(WORKBENCH_PATH)["services"]["workbench"]
         labels = _labels(service)
         assert (f"traefik.http.middlewares.workbench-authentik.forwardauth.address={FORWARD_AUTH_ADDRESS}") in labels
         assert ("traefik.http.middlewares.workbench-authentik.forwardauth.trustForwardHeader=true") in labels
@@ -152,13 +152,13 @@ class TestWorkbenchConsumer:
         assert "coolify.traefik.middlewares=workbench-authentik" in labels
 
     def test_https_router_targets_workbench(self) -> None:
-        labels = _labels(_load(WORKBENCH_PATH)["services"]["knowledge-workbench"])
+        labels = _labels(_load(WORKBENCH_PATH)["services"]["workbench"])
         assert "Host(`workbench.int.mitechconsult.com`)" in labels
         assert "entrypoints=https" in labels
         assert "loadbalancer.server.port=8020" in labels
 
     def test_no_basic_auth_or_password_ingress_contract(self) -> None:
-        service = _load(WORKBENCH_PATH)["services"]["knowledge-workbench"]
+        service = _load(WORKBENCH_PATH)["services"]["workbench"]
         labels = _labels(service).lower()
         assert "basicauth" not in labels
         assert "OPENCODE_PASSWORD" not in service["environment"]
@@ -168,7 +168,7 @@ class TestSharedBoundary:
     def test_both_manifests_use_external_agno_network(self) -> None:
         for path in (AUTHENTIK_PATH, WORKBENCH_PATH):
             compose = _load(path)
-            assert compose["networks"]["agno"]["external"] is True
+            assert compose["networks"]["probata"]["external"] is True
 
     def test_no_literal_credentials_in_authentik_manifest(self) -> None:
         services = _load(AUTHENTIK_PATH)["services"]

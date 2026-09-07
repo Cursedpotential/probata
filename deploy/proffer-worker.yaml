@@ -17,13 +17,13 @@
 #
 # Host preparation (once):
 #   install -d -o 10001 -g 10001 -m 0750 \
-#     /data/agno/volumes/proffer/source-objects \
-#     /data/agno/volumes/proffer/parser-bundles \
-#     /data/agno/volumes/proffer/normalized-bundles \
-#     /data/agno/volumes/proffer/inventory-manifests
+#     /data/probata/volumes/proffer/source-objects \
+#     /data/probata/volumes/proffer/parser-bundles \
+#     /data/probata/volumes/proffer/normalized-bundles \
+#     /data/probata/volumes/proffer/inventory-manifests
 #
 # The parser-activity-runtime Coolify app must mount the same host
-# /data/agno/volumes/proffer/parser-bundles directory at
+# /data/probata/volumes/proffer/parser-bundles directory at
 # /data/proffer/parser-bundles.
 # Stored file:// paths are container-visible authority locators, so changing
 # only one side's mount path will fail closed.
@@ -63,14 +63,14 @@ services:
       PLATFORM_TOOLS_BASE_URL: ${PLATFORM_TOOLS_BASE_URL:?set}
       CASEBIBLE_R2_CONFIG_PATH: /run/secrets/casebible-r2.json
     volumes:
-      - /data/agno/volumes/proffer/source-objects:/data/proffer/source-objects
-      - /data/agno/volumes/proffer/parser-bundles:/data/proffer/parser-bundles
-      - /data/agno/volumes/proffer/normalized-bundles:/data/proffer/normalized-bundles
-      - /data/agno/volumes/proffer/inventory-manifests:/data/proffer/inventory-manifests
-      - /data/agno/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro
-      - /data/agno/secrets/n8n/proffer-auth:/run/secrets/n8n-proffer-auth:ro
-      - /data/agno/secrets/platform/database-url:/run/secrets/platform-database-url:ro
+      - /data/probata/volumes/proffer/source-objects:/data/proffer/source-objects
+      - /data/probata/volumes/proffer/parser-bundles:/data/proffer/parser-bundles
+      - /data/probata/volumes/proffer/normalized-bundles:/data/proffer/normalized-bundles
+      - /data/probata/volumes/proffer/inventory-manifests:/data/proffer/inventory-manifests
+      - /data/probata/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro
+      - /data/probata/secrets/n8n/proffer-auth:/run/secrets/n8n-proffer-auth:ro
+      - /data/probata/secrets/platform/database-url:/run/secrets/platform-database-url:ro
       # Tool gateway service token (D-132): the worker calls platform-tools ONLY through
       # the gateway and fails closed at startup without this file. Copied from ovh-app
-      # /data/agno/secrets/tool-gateway/service-token on 2026-09-05.
-      - /data/agno/secrets/tool-gateway/service-token:/run/secrets/tool-gateway-service-token:ro
+      # /data/probata/secrets/tool-gateway/service-token on 2026-09-05.
+      - /data/probata/secrets/tool-gateway/service-token:/run/secrets/tool-gateway-service-token:ro

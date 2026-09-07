@@ -3,7 +3,7 @@
 # facade), split out of the exec-tier bundle (compose.exec.yaml), owner order
 # 2026-07-19: "separate anything that can be separated." Mirrors the proven
 # data-tier split (commit 18c42d2): one compose file per Coolify app, shared
-# external `agno` docker network for cross-app DNS, reattach the EXISTING
+# external `probata` docker network for cross-app DNS, reattach the EXISTING
 # bind mount — zero data migration.
 #
 # DEPLOY AS its own Coolify "Docker Compose" app on OVH-1 (server
@@ -15,14 +15,14 @@
 # needed in the build context (see deploy/docker/tools/Dockerfile).
 #
 # agentos-api / agentos-mcp (the rump exec-tier bundle) reach this over the
-# shared `agno` network via SBV_BASE_URL=http://platform-tools:8085 — SAME
+# shared `probata` network via SBV_BASE_URL=http://platform-tools:8085 — SAME
 # value as before the split; it now resolves via `agno` docker DNS instead
 # of the old single-app "agentos" local network.
 #
 # CUTOVER (doors policy): old bundle's platform-tools container stays up
 # until this is deployed + verified (per its healthcheck/port), THEN the
 # platform-tools: block is removed from compose.exec.yaml AND agentos-api/mcp
-# join the `agno` network too (batched into the final cutover commit).
+# join the `probata` network too (batched into the final cutover commit).
 # Reversible: revert compose.exec.yaml + delete the exec-platform-tools app.
 # =============================================================================
 
@@ -45,13 +45,13 @@ services:
       - "${BIND_IP:-127.0.0.1}:8085:8085"   # SBV GUI — tailnet-only
       - "${BIND_IP:-127.0.0.1}:8090:8090"   # parsers/extractors facade — tailnet-only
     volumes:
-      - /data/agno/volumes/sbv_data:/opt/sbv/data   # SAME bind as the bundle
+      - /data/probata/volumes/sbv_data:/opt/sbv/data   # SAME bind as the bundle
       - r2-nexus:/r2
       # tool-gateway materialization share (D-132). The gateway resolves a
       # locator, materializes the bytes here, and hands this container THE SAME
       # ABSOLUTE PATH. Read-only on this side: the tool reads, never writes.
       # Both containers must run on the same host; see deploy/tool-gateway.yaml.
-      - /data/agno/volumes/tool-gateway/materialize:/data/toolgw/materialize:ro
+      - /data/probata/volumes/tool-gateway/materialize:/data/toolgw/materialize:ro
     healthcheck:
       test:
         - CMD-SHELL
@@ -69,10 +69,10 @@ services:
       retries: 3
       start_period: 20s
     networks:
-      - agno
+      - probata
 
 networks:
-  agno:
+  probata:
     external: true   # shared cross-app network on OVH-1 — agentos-api/mcp reach platform-tools:8085 here
 
 volumes:

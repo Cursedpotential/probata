@@ -50,4 +50,4 @@ def test_exec_manifest_requires_native_activation_inputs_and_blue_ports() -> Non
     assert "WEAVIATE_GRPC_PORT: ${WEAVIATE_GRPC_PORT:-50052}" in manifest
     assert "EVIDENCE_OPERATOR_SECURITY_KEY:" not in manifest
     assert "target: /run/secrets/evidence-operator-security-key" in manifest
-    assert "source: /data/agno/secrets/platform/evidence-operator-security-key" in manifest
+    assert "source: /data/probata/secrets/platform/evidence-operator-security-key" in manifest

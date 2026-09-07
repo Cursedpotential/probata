@@ -21,7 +21,7 @@
 #   SURREALDB_NS / SURREALDB_DB        (consumed by exec-tier, unchanged)
 #
 # Same absolute bind mount as the original — NO data migration: surrealdb
-# reattaches /data/agno/volumes/surrealdb (rocksdb at /data/surreal.db).
+# reattaches /data/probata/volumes/surrealdb (rocksdb at /data/surreal.db).
 #
 # CUTOVER (one pass, after this lands on main + new app created + healthy):
 #   1. Edit compose.data.yaml on main: DELETE the `surrealdb:` service block.
@@ -40,7 +40,7 @@ services:
   # app connects here any more: get_surrealdb_legacy() exists purely so a
   # parity check can read the container without resurrecting the dependency,
   # and it has no callers. The durable copy is the sha256-manifested export at
-  # _stale/surreal-export-20260804 plus /data/agno/backups/.
+  # _stale/surreal-export-20260804 plus /data/probata/backups/.
   # ⚠ DO NOT DELETE — ADR-0043 makes the retirement reversible and reserves
   # deletion to the owner. Still running on ovh-data (100.119.96.29), healthy.
   # Persistent rocksdb on an absolute host bind.
@@ -62,7 +62,7 @@ services:
       # raw TCP, tailnet-only (reached by agentos-api on OVH-1 over salem); never proxied
       - "${BIND_IP:-127.0.0.1}:8000:8000"
     volumes:
-      - /data/agno/volumes/surrealdb:/data
+      - /data/probata/volumes/surrealdb:/data
     healthcheck:
       # The minimal SurrealDB image ships NO sh/curl, so the old CMD-SHELL curl
       # check always failed (-> Docker "unhealthy" while the DB served 200 fine).
@@ -76,12 +76,12 @@ services:
     # Deliberately NO Traefik labels (raw TCP / internal service, like neo4j bolt).
     networks:
       - surreal
-      - agno                # shared external net — reachable as `surrealdb` by other OVH-3 apps
+      - probata                # shared external net — reachable as `surrealdb` by other OVH-3 apps
 
 networks:
   surreal:
-  agno:
-    external: true          # pre-created on OVH-3 (`docker network create agno`)
+  probata:
+    external: true          # pre-created on OVH-3 (`docker network create probata`)
 
 # No named volumes — absolute host binds (declared inline above).
 # Byline: Claude Code · Fable 5 · 2026-07-05

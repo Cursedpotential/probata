@@ -38,8 +38,8 @@ services:
       PROFFER_PREVIEW_CURSOR_KEY_FILE: /run/secrets/proffer-preview-cursor-key
       PROFFER_SERVICE_TOKEN_FILE: /run/secrets/proffer-service-token
     volumes:
-      - /data/agno/volumes/proffer/source-objects:/data/proffer/source-objects
-      - /data/agno/secrets/proffer/preview-cursor-key:/run/secrets/proffer-preview-cursor-key:ro
-      - /data/agno/secrets/proffer/service-token:/run/secrets/proffer-service-token:ro
-      - /data/agno/secrets/n8n/proffer-auth:/run/secrets/n8n-proffer-auth:ro
-      - /data/agno/secrets/platform/database-url:/run/secrets/platform-database-url:ro
+      - /data/probata/volumes/proffer/source-objects:/data/proffer/source-objects
+      - /data/probata/secrets/proffer/preview-cursor-key:/run/secrets/proffer-preview-cursor-key:ro
+      - /data/probata/secrets/proffer/service-token:/run/secrets/proffer-service-token:ro
+      - /data/probata/secrets/n8n/proffer-auth:/run/secrets/n8n-proffer-auth:ro
+      - /data/probata/secrets/platform/database-url:/run/secrets/platform-database-url:ro

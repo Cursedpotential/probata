@@ -2,7 +2,7 @@
 # CONTEXTFORGE — split out of the exec-tier bundle (compose.exec.yaml), owner
 # order 2026-07-19: "separate anything that can be separated." Mirrors the
 # proven data-tier split (commit 18c42d2, compose.data-vector.yaml pattern):
-# one compose file per Coolify app, shared external `agno` docker network for
+# one compose file per Coolify app, shared external `probata` docker network for
 # cross-app DNS, reattach the EXISTING bind mount — zero data migration.
 #
 # DEPLOY AS its own Coolify "Docker Compose" app on OVH-1 (server
@@ -13,18 +13,18 @@
 # from the exec-tier bundle's env (see exec-tier-split-result.md for parity
 # verification).
 #
-# Same absolute bind mount as the bundle (/data/agno/volumes/contextforge) —
+# Same absolute bind mount as the bundle (/data/probata/volumes/contextforge) —
 # already exists on the host, holds the live mcp.db. Reattaches as-is.
 #
 # CUTOVER (doors policy — old bundle service stays up until this is verified):
 #   1. This file lands on main (enabling commit, no compose.exec.yaml change).
-#   2. `docker network create agno` on OVH-1 if not present (cross-app DNS).
+#   2. `docker network create probata` on OVH-1 if not present (cross-app DNS).
 #   3. Set envs on exec-contextforge (uuid k272znxpa4gh6drmolut723w), deploy.
 #   4. Briefly `docker stop contextforge-rz41w...` (frees host port 4444),
 #      deploy exec-contextforge, verify /health + a real vserver tools/list.
 #   5. Only then: remove the contextforge: block from compose.exec.yaml
 #      (batched into the final cutover commit) and update agentos-api/mcp's
-#      CF_GATEWAY_URL to resolve via the shared `agno` network (same value,
+#      CF_GATEWAY_URL to resolve via the shared `probata` network (same value,
 #      http://contextforge:4444 — works once both sides join `agno`).
 #   Reversible: `docker start` the old container + revert compose.exec.yaml +
 #   delete the exec-contextforge app.
@@ -73,7 +73,7 @@ services:
     volumes:
       # Preserve the former SQLite registry as migration/rollback source.
       # ContextForge no longer authors state here after the PG cutover.
-      - /data/agno/volumes/contextforge:/data
+      - /data/probata/volumes/contextforge:/data
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:4444/health').status==200 else 1)\""]
       interval: 30s
@@ -81,7 +81,7 @@ services:
       retries: 5
       start_period: 40s
     networks:
-      - agno
+      - probata
     extra_hosts:
       - "host.docker.internal:host-gateway"
     # PUBLIC FRONT DOOR — ContextForge is THE MCP gateway (ADR-0025).
@@ -96,8 +96,8 @@ services:
       - traefik.http.services.contextforge.loadbalancer.server.port=4444
 
 networks:
-  agno:
-    external: true   # shared cross-app network on OVH-1, mirrors OVH-3's `agno` net (data-vector precedent)
+  probata:
+    external: true   # shared cross-app network on OVH-1, mirrors OVH-3's `probata` net (data-vector precedent)
 
 # Byline: Claude Code · Sonnet · 2026-07-19 (split out of compose.exec.yaml, exec-tier split, owner order 2026-07-19)
 # Byline: Claude Code · Fable 5 · 2026-08-03 (password-policy relax: PASSWORD_POLICY_ENABLED=false + MIN_LENGTH_PRIVILEGED=10 + MAX_AGE_DAYS=36500, so the owner-chosen admin password can be set via /auth/email/change-password)

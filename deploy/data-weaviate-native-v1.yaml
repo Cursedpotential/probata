@@ -21,7 +21,7 @@ services:
       CLUSTER_ADVERTISE_PORT: "7946"
       DISK_USE_READONLY_PERCENTAGE: "95"
     volumes:
-      - /data/agno/volumes/weaviate-native-v1:/var/lib/weaviate
+      - /data/probata/volumes/weaviate-native-v1:/var/lib/weaviate
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/v1/.well-known/ready || exit 1"]

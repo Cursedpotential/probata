@@ -10,9 +10,9 @@ ROOT = Path(__file__).parents[1]
 PARSER_DEPLOY = ROOT / "deploy/parser-activity-runtime.yaml"
 WORKER_DEPLOY = ROOT / "deploy/proffer-worker.yaml"
 STARTER_DEPLOY = ROOT / "deploy/proffer-starter.yaml"
-SHARED_PARSER_HOST = "/data/agno/volumes/proffer/parser-bundles"
+SHARED_PARSER_HOST = "/data/probata/volumes/proffer/parser-bundles"
 SHARED_PARSER_CONTAINER = "/data/proffer/parser-bundles"
-PARSER_ARTIFACT_HOST = "/data/agno/volumes/proffer/parser-artifacts"
+PARSER_ARTIFACT_HOST = "/data/probata/volumes/proffer/parser-artifacts"
 PARSER_ARTIFACT_CONTAINER = "/data/proffer/parser-artifacts"
 
 
@@ -95,12 +95,12 @@ def test_starter_and_parser_mount_only_their_required_shared_storage() -> None:
     parser = _compose(PARSER_DEPLOY)["services"]["parser-activity-runtime"]
     # The starter mounts exactly one data volume; everything else is a read-only secret file.
     data_mounts = [m for m in starter["volumes"] if not m.endswith(":ro")]
-    assert data_mounts == ["/data/agno/volumes/proffer/source-objects:/data/proffer/source-objects"]
+    assert data_mounts == ["/data/probata/volumes/proffer/source-objects:/data/proffer/source-objects"]
     assert all(":/run/secrets/" in m for m in starter["volumes"] if m.endswith(":ro"))
     assert parser["volumes"] == [
         # read-only view of the retained originals (7feea1f, 2026-09-05): the runtime
         # materializes from the same host root the worker writes, never a copy.
-        "/data/agno/volumes/proffer/source-objects:/data/proffer/source-objects:ro",
+        "/data/probata/volumes/proffer/source-objects:/data/proffer/source-objects:ro",
         f"{SHARED_PARSER_HOST}:{SHARED_PARSER_CONTAINER}",
         {
             "type": "bind",
@@ -133,7 +133,7 @@ def test_existing_python_worker_is_not_referenced_or_replaced() -> None:
 def test_r2_is_api_access_via_runtime_json_secret_not_a_bucket_mount() -> None:
     worker = _compose(WORKER_DEPLOY)["services"]["proffer-worker"]
     assert worker["environment"]["CASEBIBLE_R2_CONFIG_PATH"] == "/run/secrets/casebible-r2.json"
-    assert "/data/agno/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro" in worker["volumes"]
+    assert "/data/probata/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro" in worker["volumes"]
     assert all("r2" not in mount.casefold() or "casebible-r2.json" in mount for mount in worker["volumes"])
     assert not any(name.startswith("R2_") for name in worker["environment"])
 
@@ -142,7 +142,7 @@ def test_workbench_uses_same_runtime_json_contract_without_credential_envs() -> 
     workbench_compose = _compose(ROOT / "deploy/workbench.yaml")
     workbench = next(iter(workbench_compose["services"].values()))
     assert workbench["environment"]["CASEBIBLE_R2_CONFIG_PATH"] == "/run/secrets/casebible-r2.json"
-    assert "/data/agno/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro" in workbench["volumes"]
+    assert "/data/probata/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro" in workbench["volumes"]
     forbidden = {
         "OBJECT_STORE_ACCESS_KEY_ID",
         "OBJECT_STORE_SECRET_ACCESS_KEY",

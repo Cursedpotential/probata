@@ -18,7 +18,7 @@ RECEIPT_PATH = ROOT / "docs" / "reviews" / "2026-08-29-framework-neutral-ingest-
 DEPLOY_TEXT = DEPLOY_PATH.read_text(encoding="utf-8")
 RECEIPT_TEXT = RECEIPT_PATH.read_text(encoding="utf-8")
 
-HOST_STAGING_ROOT = "/data/agno/volumes/ingest-staging"
+HOST_STAGING_ROOT = "/data/probata/volumes/ingest-staging"
 CONTAINER_STAGING_ROOT = "/data/ingest-staging"
 
 

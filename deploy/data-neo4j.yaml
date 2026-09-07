@@ -13,7 +13,7 @@
 #                               at /data/dbms/auth; mismatch = login fail)
 #
 # Same absolute bind mount as the original — NO data migration: neo4j reattaches
-# /data/agno/volumes/neo4j_data. Auth/credentials persist on disk; the NEO4J_AUTH
+# /data/probata/volumes/neo4j_data. Auth/credentials persist on disk; the NEO4J_AUTH
 # env is only consulted on a fresh (empty) data dir.
 #
 # CUTOVER (one pass, after this lands on main + new app created + healthy):
@@ -41,8 +41,8 @@ services:
     # Tag pinned deliberately: this is the SAME upstream version as the
     # neo4j:5-community image it replaces (verified live: `neo4j --version` =
     # 5.26.27), so the on-disk store format is unchanged and the existing
-    # /data/agno/volumes/neo4j_data reattaches as-is — no dump/load migration.
-    # Pre-swap backups (2026-07-29, ovh-data /data/agno/backups/):
+    # /data/probata/volumes/neo4j_data reattaches as-is — no dump/load migration.
+    # Pre-swap backups (2026-07-29, ovh-data /data/probata/backups/):
     #   neo4j_data_pre_dozerdb_2026-07-29.tar.gz  (physical, 16M)
     #   neo4j_{nodes,rels}_2026-07-29.txt         (logical export, 440 nodes / 717 rels)
     # ROLLBACK: set image back to neo4j:5-community and redeploy; if the store was
@@ -60,7 +60,7 @@ services:
       NEO4J_server_memory_heap_max__size: 1g
       NEO4J_server_memory_pagecache_size: 512m
     volumes:
-      - /data/agno/volumes/neo4j_data:/data
+      - /data/probata/volumes/neo4j_data:/data
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:7474 >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -77,12 +77,12 @@ services:
     #   - traefik.http.services.neo4j.loadbalancer.server.port=7474
     networks:
       - neo4j
-      - agno                # shared external net — reachable as `neo4j` by other OVH-3 apps
+      - probata                # shared external net — reachable as `neo4j` by other OVH-3 apps
 
 networks:
   neo4j:
-  agno:
-    external: true          # pre-created on OVH-3 (`docker network create agno`)
+  probata:
+    external: true          # pre-created on OVH-3 (`docker network create probata`)
 
 # No named volumes — absolute host binds (declared inline above).
 # Byline: Claude Code · Fable 5 · 2026-07-05

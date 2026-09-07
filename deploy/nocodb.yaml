@@ -5,7 +5,7 @@
 # `docker ps` inventory; two nocodb containers have run there for 3 days.
 # Tailnet-only bind (BIND_IP). Bind-mount volume per owner rule (no named volumes).
 # Metadata store = SQLite on the bind mount; casebible PG attaches later as an EXTERNAL data source
-# in the NocoDB UI, reachable over the shared `agno` docker network as ~~`agno-pg`~~
+# in the NocoDB UI, reachable over the shared `probata` docker network as ~~`agno-pg`~~
 # **`data-pg-files`** (PG moved to ovh-files 2026-08-02, wave 1 of the ovh-data retirement).
 services:
   nocodb:
@@ -20,9 +20,9 @@ services:
       - NC_PUBLIC_URL=${NC_PUBLIC_URL}
       - NC_DISABLE_TELE=true
     volumes:
-      - /data/agno/volumes/nocodb:/usr/app/data
+      - /data/probata/volumes/nocodb:/usr/app/data
     networks:
-      - agno
+      - probata
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/v1/health"]
       interval: 30s
@@ -30,5 +30,5 @@ services:
       retries: 5
 
 networks:
-  agno:
+  probata:
     external: true

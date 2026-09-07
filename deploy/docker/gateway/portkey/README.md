@@ -147,12 +147,12 @@ including `/v1/responses` → `graphiti-llm.json`, since `graphiti_core`'s struc
 uses OpenAI's newer Responses API, not `/v1/chat/completions`).
 
 **The static config file bakes the real `NVIDIA_API_KEY` as a literal**, staged at
-`/data/agno/config/graphiti/portkeyfix.conf` on `ovh-data` — same convention as `hostfix.conf`
+`/data/probata/config/graphiti/portkeyfix.conf` on `ovh-data` — same convention as `hostfix.conf`
 already uses for that host path. To regenerate after a key rotation: re-render
 `docker/gateway/portkey/configs/{embed,graphiti-llm}.json` with the new key substituted for
 `$NVIDIA_API_KEY` into the nginx `proxy_set_header x-portkey-config '...'` value (see the template
 this was built from, or just hand-edit the two JSON blobs in the staged file), `scp` it back to
-`/data/agno/config/graphiti/portkeyfix.conf`, then restart just the `graphiti-portkeyfix` container
+`/data/probata/config/graphiti/portkeyfix.conf`, then restart just the `graphiti-portkeyfix` container
 (`docker compose ... restart graphiti-portkeyfix` or a Coolify redeploy of `data-graphiti`) — no
 image rebuild needed.
 

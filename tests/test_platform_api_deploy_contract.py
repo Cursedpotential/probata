@@ -71,7 +71,7 @@ def test_platform_api_bearer_is_a_read_only_runtime_file_not_an_environment_secr
     assert bearer_mounts == [
         {
             "type": "bind",
-            "source": "/data/agno/secrets/platform/api-bearer",
+            "source": "/data/probata/secrets/platform/api-bearer",
             "target": "/run/secrets/platform-api-bearer",
             "read_only": True,
             "bind": {"create_host_path": False},

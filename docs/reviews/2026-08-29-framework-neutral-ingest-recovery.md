@@ -1,6 +1,6 @@
 # Framework-neutral ingest restart recovery
 
-> _Byline: Codex · GPT-5.6 · 2026-08-29._
+> _Byline: Codex · GPT-5.6 · 2026-08-29; host paths re-rooted `/data/agno` → `/data/probata` 2026-09-07 by Claude Code · Fable 5.1 (infra rename plan §4.4)._
 >
 > **Status: SOURCE IMPLEMENTED / NOT DEPLOYED / NOT LIVE-PROVEN.**
 
@@ -45,7 +45,7 @@
 `deploy/exec.yaml`, the actual manifest for Coolify app `exec-tier`
 (`rz41wqhpjfh1rj796ixvjhfs`), now declares the production recovery boundary:
 
-- host source: `/data/agno/volumes/ingest-staging`;
+- host source: `/data/probata/volumes/ingest-staging`;
 - container target and literal `INGEST_STAGING_ROOT`: `/data/ingest-staging`;
 - read/write bind with `bind.create_host_path: false`, so a missing host directory stops deployment
   instead of silently creating an unprotected replacement; and
@@ -56,7 +56,7 @@ The current repo image inherits root execution from `agnohq/python:3.12` and doe
 `USER`. Before deployment, prepare the host path on OVH-1 with:
 
 ```sh
-sudo install -d -m 0700 -o root -g root /data/agno/volumes/ingest-staging
+sudo install -d -m 0700 -o root -g root /data/probata/volumes/ingest-staging
 ```
 
 Do not place a password, access token, or other secret in this path contract or in

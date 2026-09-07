@@ -24,11 +24,11 @@
 # Coolify watch path: deploy/authentik.yaml
 #
 # Host preparation (once, before first deployment):
-#   sudo install -d -m 0750 /data/agno/volumes/authentik/{postgres,data,templates}
-#   sudo install -d -m 0700 /data/agno/secrets/authentik
-#   sudo install -m 0400 /dev/null /data/agno/secrets/authentik/postgres-password
-#   sudo install -m 0400 /dev/null /data/agno/secrets/authentik/secret-key
-#   docker network inspect agno >/dev/null 2>&1 || docker network create agno
+#   sudo install -d -m 0750 /data/probata/volumes/authentik/{postgres,data,templates}
+#   sudo install -d -m 0700 /data/probata/secrets/authentik
+#   sudo install -m 0400 /dev/null /data/probata/secrets/authentik/postgres-password
+#   sudo install -m 0400 /dev/null /data/probata/secrets/authentik/secret-key
+#   docker network inspect probata >/dev/null 2>&1 || docker network create probata
 #
 # Required non-secret Coolify variable:
 #   TRAEFIK_PROXY_CIDR=<the exact Coolify Traefik socket address>/32
@@ -57,10 +57,10 @@ x-authentik-environment: &authentik-environment
   AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: ${TRAEFIK_PROXY_CIDR:?exact Traefik proxy CIDR required}
 
 x-authentik-volumes: &authentik-volumes
-  - /data/agno/volumes/authentik/data:/data
-  - /data/agno/volumes/authentik/templates:/templates
-  - /data/agno/secrets/authentik/postgres-password:/run/secrets/authentik/postgres-password:ro
-  - /data/agno/secrets/authentik/secret-key:/run/secrets/authentik/secret-key:ro
+  - /data/probata/volumes/authentik/data:/data
+  - /data/probata/volumes/authentik/templates:/templates
+  - /data/probata/secrets/authentik/postgres-password:/run/secrets/authentik/postgres-password:ro
+  - /data/probata/secrets/authentik/secret-key:/run/secrets/authentik/secret-key:ro
 
 x-authentik-healthcheck: &authentik-healthcheck
   test: ["CMD", "ak", "healthcheck"]
@@ -79,8 +79,8 @@ services:
       POSTGRES_DB: authentik
       POSTGRES_PASSWORD_FILE: /run/secrets/authentik/postgres-password
     volumes:
-      - /data/agno/volumes/authentik/postgres:/var/lib/postgresql/data
-      - /data/agno/secrets/authentik/postgres-password:/run/secrets/authentik/postgres-password:ro
+      - /data/probata/volumes/authentik/postgres:/var/lib/postgresql/data
+      - /data/probata/secrets/authentik/postgres-password:/run/secrets/authentik/postgres-password:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
       interval: 30s
@@ -88,7 +88,7 @@ services:
       retries: 5
       start_period: 20s
     networks:
-      - agno
+      - probata
 
   authentik-server:
     image: ghcr.io/goauthentik/server:2026.8.0@sha256:7421753cfea67e89a6d295a1f0173ccea3866b33768c88dad90453b151cdcfd5
@@ -104,7 +104,7 @@ services:
     healthcheck: *authentik-healthcheck
     labels:
       - traefik.enable=true
-      - traefik.docker.network=agno
+      - traefik.docker.network=probata
       - traefik.http.routers.authentik.rule=Host(`auth.int.mitechconsult.com`)
       - traefik.http.routers.authentik.entrypoints=https
       - traefik.http.routers.authentik.tls=true
@@ -120,7 +120,7 @@ services:
       - traefik.http.routers.authentik-workbench-outpost.tls.certresolver=letsencrypt
       - traefik.http.routers.authentik-workbench-outpost.service=authentik
     networks:
-      - agno
+      - probata
 
   authentik-worker:
     image: ghcr.io/goauthentik/server:2026.8.0@sha256:7421753cfea67e89a6d295a1f0173ccea3866b33768c88dad90453b151cdcfd5
@@ -135,8 +135,8 @@ services:
         condition: service_healthy
     healthcheck: *authentik-healthcheck
     networks:
-      - agno
+      - probata
 
 networks:
-  agno:
+  probata:
     external: true

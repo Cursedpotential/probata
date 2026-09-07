@@ -38,7 +38,7 @@
 # unbounded against the evidence system-of-record's disk.)
 #
 # HOST-PREP (once, before first deploy):
-#   docker network inspect agno >/dev/null 2>&1 || docker network create agno
+#   docker network inspect probata >/dev/null 2>&1 || docker network create probata
 #   (PG18 databases `temporal` / `temporal_visibility` + role `temporal`
 #   already created live on 100.91.190.107 — see docs/CHANGE-ORDER.md CH-16.)
 # =============================================================================
@@ -70,7 +70,7 @@ services:
     # Liveness is verified externally instead: TCP probe of 7233 + UI on 8233 post-deploy.
     networks:
       - temporal
-      - agno                # shared external net — reachable as `temporal-server` by
+      - probata                # shared external net — reachable as `temporal-server` by
                              # temporal-worker (its own Coolify app) via docker DNS
 
   temporal-ui:
@@ -89,12 +89,12 @@ services:
         condition: service_started   # was service_healthy; healthcheck removed 2026-08-24 (see above)
     networks:
       - temporal
-      - agno
+      - probata
 
 networks:
   temporal:
-  agno:
-    external: true          # pre-created on ovh-files (`docker network create agno`)
+  probata:
+    external: true          # pre-created on ovh-files (`docker network create probata`)
 
 # No named volumes — Temporal's only state is the two Postgres databases on
 # the existing, operated PG18 (100.91.190.107). Nothing to bind-mount here.

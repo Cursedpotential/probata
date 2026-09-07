@@ -13,12 +13,12 @@
 # Branch: workbench/sprint (sprint), main after milestone merges.
 #
 # HOST-PREP (once, before first deploy):
-#   sudo mkdir -p /data/agno/volumes/workbench/{inbox,copilot}
-#   sudo chown -R 1000:1000 /data/agno/volumes/workbench
-#   sudo install -d -m 0700 /data/agno/secrets/platform
-#   sudo install -m 0400 /dev/null /data/agno/secrets/platform/api-bearer
+#   sudo mkdir -p /data/probata/volumes/workbench/{inbox,copilot}
+#   sudo chown -R 1000:1000 /data/probata/volumes/workbench
+#   sudo install -d -m 0700 /data/probata/secrets/platform
+#   sudo install -m 0400 /dev/null /data/probata/secrets/platform/api-bearer
 #   # Write the Platform API bearer without a trailing newline; never place it in env.
-#   docker network inspect agno >/dev/null 2>&1 || docker network create agno
+#   docker network inspect probata >/dev/null 2>&1 || docker network create probata
 #
 # C2.5 (Ops Copilot) points at the exec-gateway service. Authentication for
 # user-facing Workbench traffic is owned by Authentik at Traefik; this manifest
@@ -39,12 +39,12 @@
 # Byline: Claude Code · Fable 5 · 2026-07-19 (MCP_SERVERS/CONTEXTFORGE_TOKEN added 2026-07-20, C1 rebuild; OPENCODE_*/COPILOT_PRESETS_PATH + copilot bind mount added 2026-07-21, C2.5; agno 2.8 MCP door migration (:8001->:8000 + token_env) + GRAPHITI_MCP_URL added 2026-07-23, Claude Code · Sonnet (agent), C4; Coolify path/watch-path true-up 2026-08-13, Codex · GPT-5; Graphiti host repoint + model-lab Portkey env + held neutral-chat config contract 2026-08-16, Codex · GPT-5)
 
 services:
-  knowledge-workbench:
+  workbench:
     build:
       context: ./workbench
       dockerfile: Dockerfile
-    image: agno-knowledge-workbench:latest
-    container_name: knowledge-workbench
+    image: probata-workbench:latest
+    container_name: workbench
     restart: unless-stopped
     environment:
       APP_PORT: "8020"
@@ -120,16 +120,16 @@ services:
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
     volumes:
       # Bind mounts only — owner backs up host dirs (no named volumes).
-      - /data/agno/volumes/workbench/inbox:/data/inbox
+      - /data/probata/volumes/workbench/inbox:/data/inbox
       # C2.5 Ops Copilot preset-prompt override (optional — see
       # app/service/copilot_presets.py; absent file = in-code defaults only).
-      - /data/agno/volumes/workbench/copilot:/data/copilot
+      - /data/probata/volumes/workbench/copilot:/data/copilot
       # Runtime-read bearer rotation takes effect on the next request without
       # rebuilding, restarting, or redeploying Workbench.
-      - /data/agno/secrets/platform/api-bearer:/run/secrets/platform-api-bearer:ro
-      - /data/agno/secrets/platform/evidence-operator-security-key:/run/secrets/evidence-operator-security-key:ro
-      - /data/agno/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro
-      - /data/agno/secrets/proffer/service-token:/run/secrets/proffer-service-token:ro
+      - /data/probata/secrets/platform/api-bearer:/run/secrets/platform-api-bearer:ro
+      - /data/probata/secrets/platform/evidence-operator-security-key:/run/secrets/evidence-operator-security-key:ro
+      - /data/probata/secrets/casebible-r2.json:/run/secrets/casebible-r2.json:ro
+      - /data/probata/secrets/proffer/service-token:/run/secrets/proffer-service-token:ro
     ports:
       # Private door: Tailscale Serve owns the stable HTTPS identity and
       # proxies directly to this unique loopback-only host port. Public
@@ -145,7 +145,7 @@ services:
       start_period: 30s
     networks:
       - workbench
-      - agno
+      - probata
     labels:
       - traefik.enable=true
       - traefik.docker.network=xjbuo6drbwjfby75lalk8bk7
@@ -163,5 +163,5 @@ services:
 
 networks:
   workbench:
-  agno:
+  probata:
     external: true   # shared cross-app net for Traefik, Authentik, and Workbench

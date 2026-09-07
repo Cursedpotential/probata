@@ -23,7 +23,7 @@
 # Portkey earlier today, see docs/portkey cutover notes) — cutover risk here
 # is low; nothing else in the exec-tier calls `gateway` by docker name today
 # (cross-box callers already use the OVH1_HOST tailnet IP), so this app does
-# NOT need the shared `agno` network.
+# NOT need the shared `probata` network.
 #
 # CUTOVER (doors policy): old bundle's gateway container stays up until this
 # is deployed + verified (/health/liveliness 200 + one real completion),
@@ -40,8 +40,8 @@
 #    part of building the session's environment context. Fix: bind-mount a
 #    real host directory to /workspace and always pass a directory UNDER it.
 #    HOST-PREP (once, before first deploy of this fix):
-#      sudo mkdir -p /data/agno/volumes/gateway-workdirs
-#      sudo chown -R 1000:1000 /data/agno/volumes/gateway-workdirs
+#      sudo mkdir -p /data/probata/volumes/gateway-workdirs
+#      sudo chown -R 1000:1000 /data/probata/volumes/gateway-workdirs
 #    The workbench container CANNOT mkdir on this host itself, so per-session
 #    subdirectories aren't viable without a second moving part (an exec-into-
 #    container step or a shared filesystem write path neither side has).
@@ -95,7 +95,7 @@ services:
     volumes:
       # Bind mount only (owner backs up host dirs, no named volumes) — see
       # fix #1 above. HOST-PREP required before first deploy of this change.
-      - /data/agno/volumes/gateway-workdirs:/workspace
+      - /data/probata/volumes/gateway-workdirs:/workspace
     networks:
       - default
 

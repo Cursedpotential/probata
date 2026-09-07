@@ -25,7 +25,7 @@
 # and was functionally redundant with this bundle's tailnet-only copy.
 #
 # This file now holds ONLY the framework-neutral platform API.
-# It reaches contextforge/platform-tools over the shared external `agno`
+# It reaches contextforge/platform-tools over the shared external `probata`
 # docker network (same docker-DNS names as before the split: `contextforge`,
 # `platform-tools` — CF_GATEWAY_URL / SBV_BASE_URL values are UNCHANGED).
 # =============================================================================
@@ -50,17 +50,17 @@
 #
 # HOST-PREP on OVH-1 BEFORE first deploy (the repo image currently runs as
 # root, so the staging directory is deliberately root-only):
-#   sudo mkdir -p /data/agno/volumes/{sbv_data,agent_workspace,kasm_profile,contextforge}
-#   sudo install -d -m 0700 -o root -g root /data/agno/volumes/ingest-staging
-#   sudo install -d -m 0700 -o root -g root /data/agno/secrets/platform
-#   sudo install -m 0400 -o root -g root /path/to/api-bearer /data/agno/secrets/platform/api-bearer
-#   sudo install -m 0400 -o root -g root /path/to/operator-key /data/agno/secrets/platform/evidence-operator-security-key
-#   sudo chown -R 1000:1000 /data/agno/volumes/agent_workspace  # shared sandbox<->desktop
-#   sudo chown -R 1000:1000 /data/agno/volumes/contextforge     # ContextForge SQLite db + state
+#   sudo mkdir -p /data/probata/volumes/{sbv_data,agent_workspace,kasm_profile,contextforge}
+#   sudo install -d -m 0700 -o root -g root /data/probata/volumes/ingest-staging
+#   sudo install -d -m 0700 -o root -g root /data/probata/secrets/platform
+#   sudo install -m 0400 -o root -g root /path/to/api-bearer /data/probata/secrets/platform/api-bearer
+#   sudo install -m 0400 -o root -g root /path/to/operator-key /data/probata/secrets/platform/evidence-operator-security-key
+#   sudo chown -R 1000:1000 /data/probata/volumes/agent_workspace  # shared sandbox<->desktop
+#   sudo chown -R 1000:1000 /data/probata/volumes/contextforge     # ContextForge SQLite db + state
 # (r2-nexus stays a named volume — it uses the rclone driver, not a bind.)
-# `docker network create agno` on OVH-1 if not already present (shared
+# `docker network create probata` on OVH-1 if not already present (shared
 # cross-app network — created 2026-07-19 for this split, mirrors OVH-3's
-# `agno` net from the data-tier split, commit 18c42d2).
+# `probata` net from the data-tier split, commit 18c42d2).
 # =============================================================================
 
 services:
@@ -89,7 +89,7 @@ services:
       # bind syntax prevents Compose from silently creating an unprotected
       # replacement directory when the required host-prep step was missed.
       - type: bind
-        source: /data/agno/volumes/ingest-staging
+        source: /data/probata/volumes/ingest-staging
         target: /data/ingest-staging
         bind:
           create_host_path: false
@@ -97,13 +97,13 @@ services:
       # every request, so an atomic host-file replacement rotates the bearer
       # without changing configuration or redeploying the container.
       - type: bind
-        source: /data/agno/secrets/platform/api-bearer
+        source: /data/probata/secrets/platform/api-bearer
         target: /run/secrets/platform-api-bearer
         read_only: true
         bind:
           create_host_path: false
       - type: bind
-        source: /data/agno/secrets/platform/evidence-operator-security-key
+        source: /data/probata/secrets/platform/evidence-operator-security-key
         target: /run/secrets/evidence-operator-security-key
         read_only: true
         bind:
@@ -148,7 +148,7 @@ services:
       SURREALDB_NS: ${SURREALDB_NS:-agno}
       SURREALDB_DB: ${SURREALDB_DB:-platform}
       # Reach MCP servers ONLY through ContextForge, never graphiti's 8071 directly.
-      # `contextforge` now resolves via the shared `agno` network (its own split
+      # `contextforge` now resolves via the shared `probata` network (its own split
       # app, compose.contextforge.yaml) — value UNCHANGED from before the split.
       CF_GATEWAY_URL: http://contextforge:4444
       CF_GRAPHITI_SERVER_ID: ${CF_GRAPHITI_SERVER_ID:-} # virtual server UUID from POST /servers
@@ -171,7 +171,7 @@ services:
       R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
       # SBV toolkit (facade-collapse plan Batch A, §2.3) — server/agents/tools/
-      # sbv_tools.py talks to SBV directly over the shared `agno` network
+      # sbv_tools.py talks to SBV directly over the shared `probata` network
       # (platform-tools:8085, now its own split app, compose.platform-tools.yaml),
       # not through the tools-facade proxy. Value UNCHANGED from before the split.
       SBV_BASE_URL: ${SBV_BASE_URL:-http://platform-tools:8085}
@@ -187,12 +187,12 @@ services:
     # this port through the tailnet/private service network while the OIDC
     # rollout is completed.
     networks:
-      - agno   # cross-app docker-DNS to contextforge / platform-tools (2026-07-19 split)
+      - probata   # cross-app docker-DNS to contextforge / platform-tools (2026-07-19 split)
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
 networks:
-  agno:
+  probata:
     external: true   # shared cross-app network on OVH-1 (created 2026-07-19 split)
 
 volumes:
@@ -215,4 +215,4 @@ volumes:
 
 # Byline: Claude Code · Opus 4.8 · 2026-06-14
 # Byline: Claude Code · Fable 5 · 2026-07-07 (contextforge 0.8.0 -> v1.0.4: image bump + CSRF_ENABLED=false + PASSWORD_CHANGE_ENFORCEMENT_ENABLED=false)
-# Byline: Claude Code · Sonnet · 2026-07-19 (historical exec-tier split; joined shared `agno` network)
+# Byline: Claude Code · Sonnet · 2026-07-19 (historical exec-tier split; joined shared `probata` network)
