@@ -1,0 +1,48 @@
+# =============================================================================
+# DEVBOX — Kasm Workspaces desktop sandbox for agents, deployed as its OWN Coolify
+# "Docker Compose" app on ovh-files (server cn89l8801u8gsginw1rxq5qt, tailnet
+# 100.91.190.107) — owner orders 2026-09-07 16:18-16:21 ("spin up a sandbox on the VPS …
+# I'll move you there", "not agno", "custom environment", "add kasm").
+#
+# Byline: Claude Code · Fable 5.1 · 2026-09-07
+#
+# Access: https://100.91.190.107:6901 from the tailnet only (BIND_IP), self-signed cert,
+# user `kasm_user`, password = VNC_PW (Coolify env, never in this file).
+# Coolify Watch Paths for this app: deploy/docker/devbox/** + deploy/devbox.yaml
+# Coolify env to set: BIND_IP=100.91.190.107, VNC_PW=<strong>, (optional) DEVBOX_CPUS, DEVBOX_MEM.
+# HOST-PREP (once): sudo install -d -o 1000 -g 1000 /data/probata/volumes/devbox/home
+#                   docker network inspect probata >/dev/null 2>&1 || docker network create probata
+# Joins the shared `probata` network so the sandbox reaches pg/milvus/n8n by service name.
+# Resource caps keep the sandbox from starving n8n/PG on the same host.
+# =============================================================================
+
+services:
+  devbox:
+    build:
+      context: .
+      dockerfile: deploy/docker/devbox/Dockerfile
+    image: ${DEVBOX_IMAGE:-probata-devbox:latest}
+    container_name: devbox
+    restart: unless-stopped
+    shm_size: "1g"                      # KasmVNC needs a large /dev/shm
+    cpus: ${DEVBOX_CPUS:-2}
+    mem_limit: ${DEVBOX_MEM:-4g}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:6901:6901"   # KasmVNC HTTPS — tailnet-only (primary access)
+      - "${BIND_IP:-127.0.0.1}:3389:3389"   # xrdp — backup access via mstsc (owner 16:23)
+      - "${BIND_IP:-127.0.0.1}:8384:8384"   # Syncthing UI — desktop<->devbox file link (owner 16:22)
+      - "${BIND_IP:-127.0.0.1}:22000:22000" # Syncthing sync
+    environment:
+      VNC_PW: ${VNC_PW:?set VNC_PW in Coolify env}
+      KASM_SVC_AUDIO: "0"
+      KASM_SVC_UPLOADS: "1"
+      KASM_SVC_DOWNLOADS: "1"
+      TZ: America/Detroit
+    volumes:
+      - /data/probata/volumes/devbox/home:/home/kasm-user   # persistent home: repos, ~/.claude, ~/.config
+    networks:
+      - probata
+
+networks:
+  probata:
+    external: true
