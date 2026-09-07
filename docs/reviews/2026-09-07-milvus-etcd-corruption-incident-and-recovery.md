@@ -1,7 +1,34 @@
 # Milvus embedded-etcd corruption — incident, root cause, recovery
 
 > _Byline: Claude Code · Fable 5.1 · 2026-09-07._
-> _Status: INCIDENT OPEN — Milvus stopped, memsearch down, awaiting owner go on reset+reindex._
+> _Status: **RESOLVED 2026-09-07 09:27 EDT — memsearch migrated to Zilliz Cloud free tier; the VPS Milvus is retired.**_
+
+## RESOLUTION (owner decision: Zilliz Cloud, free tier)
+
+Owner chose managed Zilliz Cloud (free tier, $0) over disciplined self-hosting. memsearch is
+now off the fragile VPS Milvus entirely — no etcd, no disk-fsync failure mode.
+
+- **Cluster:** Free-01 serverless, `aws-eu-central-1`, endpoint
+  `https://in03-834f340cad0f74d.serverless.aws-eu-central-1.cloud.zilliz.com`.
+- **Wiring:** `~/.memsearch/config.toml` `[milvus]` uri → the cloud endpoint, `token = "env:MEMSEARCH_MILVUS_TOKEN"`;
+  the API key lives in `~/.secrets/memsearch.env` (gitignored), never the repo. Config backed up to `config.toml.bak-*`.
+- **Reindex:** `memsearch index ~/.memsearch/memory` → 585 chunks into collection `agent_session_memory_nemotron3`.
+- **Flush gotcha (as predicted):** fresh inserts showed `row_count 0` until an explicit `flush` + `load_collection`
+  via pymilvus. After that, `stats` = 585 and `memsearch search` returns real hits. **Always flush+load after the
+  first index on a new Milvus/Zilliz collection.**
+- **Validated live:** `search "milvus etcd corruption"` and `search "infra rename probata network"` both return
+  relevant memories.
+- **Cost:** $0 — 585 vectors is far under the free-tier cap (2 collections, ~1M 768-dim units).
+- **VPS Milvus:** `data-vector` left **stopped**; it was memsearch's only real consumer (the platform data-vector role
+  was already parked, ADR-0040). The corrupt volume stays intact under `/data/probata/volumes/milvus-memsearch` for
+  now — owner deletes when ready.
+- The zilliz-cli has **no Windows binary**; wiring was done with pymilvus (already in memsearch), no CLI needed.
+- The second string the owner pasted (`key-…`) is **not** the Zilliz token (401) — set aside, unused, not stored.
+
+The original incident analysis below is retained for the record.
+
+---
+
 
 ## What happened
 
@@ -61,13 +88,15 @@ pgvector and Qdrant are ruled out: the MCP speaks Milvus. Etcd-free ways to keep
 
 | Option | What | Etcd? | Trade-off |
 |---|---|---|---|
-| **Zilliz Cloud** | managed Milvus, free tier | none (managed) | external dependency; no local disk-fsync exposure |
-| **Milvus Lite** | embedded file-based Milvus | none | local to wherever memsearch runs; no shared VPS service |
-| Keep self-hosted | milvus-standalone on VPS | yes (embedded) | must add graceful-stop + never-bounce discipline |
+| **Zilliz Cloud** | managed Milvus, free tier | none (managed) | **best fit** — MCP already speaks a URI+token; no local disk-fsync exposure |
+| ~~Milvus Lite~~ | embedded file-based Milvus | none | **RULED OUT for this box (owner 2026-09-07): Linux/WSL only, WSL is unreliable here; also not a network service** |
+| Keep self-hosted | milvus-standalone on VPS | yes (embedded) | fallback — must add graceful-stop + never-bounce discipline |
 
 If we keep self-hosted: raise `stop_grace_period`, ensure Coolify sends SIGTERM (not
 SIGKILL) with enough grace for Milvus to flush etcd, and keep it off platform-tier
-redeploy waves (step 2 above).
+redeploy waves (step 2 above). Milvus Lite is not an option on the Windows desktop
+(no reliable WSL) and would not serve networked recall anyway, so the durable choice is
+**Zilliz Cloud vs. disciplined self-hosting**.
 
 ## Note
 
