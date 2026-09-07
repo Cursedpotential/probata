@@ -80,6 +80,11 @@ RUN chmod +x /dockerstartup/custom_startup.sh
 # Desktop launchers for the agent CLIs
 RUN for a in claude opencode; do printf '[Desktop Entry]\nType=Application\nName=%s\nExec=xfce4-terminal -e %s\nTerminal=false\nCategories=Development;\n' "$a" "$a" > "/usr/share/applications/$a.desktop"; done
 
+# mise/uv/npm write under ~/.local and ~/.config at first use — make sure the image's home is owned by
+# the desktop user (Kasm ships parts of it root-owned; seen as "tracked-configs: Permission denied")
+RUN mkdir -p /home/kasm-user/.local/state /home/kasm-user/.local/share /home/kasm-user/.config \
+    && chown -R 1000:0 /home/kasm-user
+
 USER 1000
 ENV PATH=/home/kasm-user/.local/bin:$PATH
 WORKDIR /home/kasm-user

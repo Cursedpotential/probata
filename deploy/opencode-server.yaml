@@ -43,7 +43,8 @@ services:
     volumes:
       - /data/probata/volumes/opencode/home:/home/opencode   # entire home persists (dotfiles, config, ~/workspace)
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:4096/ || exit 1"]
+      # 401 is the healthy answer when OPENCODE_SERVER_PASSWORD is set (curl -f would treat it as failure)
+      test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4096/ | grep -Eq '^(200|401)$'"]
       interval: 30s
       timeout: 5s
       retries: 5
