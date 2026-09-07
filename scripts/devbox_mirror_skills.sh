@@ -24,7 +24,13 @@ declare -A MAP=(
   # One-way seed here; continuous two-way sync is the Syncthing folder pair set up after first boot.
   ["$HOME/.claude/projects/E--AI-Workspace-Projects-the-platform-workspace-probata/memory/"]="$DEST/.claude/projects/-home-kasm-user-work-probata/memory/"
   ["/e/AI_Workspace/Projects/the-platform-workspace/probata/.remember/"]="$DEST/work/probata/.remember/"
-  ["$HOME/.claude/plugins/memsearch/"]="$DEST/.claude/plugins/memsearch/"   # memsearch config; the index itself is Zilliz Cloud
+  # memsearch (owner 16:59: "proper use of the skill on both would keep it consistent") — the plugin
+  # itself + marketplace registration so the devbox indexes/searches the SAME Zilliz collection.
+  ["$HOME/.claude/plugins/marketplaces/memsearch-plugins/"]="$DEST/.claude/plugins/marketplaces/memsearch-plugins/"
+  ["$HOME/.claude/plugins/cache/memsearch-plugins/"]="$DEST/.claude/plugins/cache/memsearch-plugins/"
+  ["$HOME/.claude/plugins/known_marketplaces.json"]="$DEST/.claude/plugins/known_marketplaces.json"
+  ["$HOME/.claude/plugins/installed_plugins.json"]="$DEST/.claude/plugins/installed_plugins.json"
+  ["$HOME/.claude/settings.json"]="$DEST/.claude/settings.desktop-reference.json"   # Windows paths inside; port by hand, do not load as-is
 )
 # Session transcripts feed `recall` / read-memories; large, so opt-in: ./devbox_mirror_skills.sh --go --transcripts
 if [[ " $* " == *" --transcripts "* ]]; then
