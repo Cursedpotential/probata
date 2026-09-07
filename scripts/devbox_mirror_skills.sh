@@ -36,6 +36,17 @@ declare -A MAP=(
 if [[ " $* " == *" --transcripts "* ]]; then
   MAP["$HOME/.claude/projects/"]="$DEST/.claude/projects-desktop-mirror/"
 fi
+# --opencode-server: ALSO seed the headless OpenCode server's home (deploy/opencode-server.yaml,
+# /home/opencode inside the container) with the same skills + OpenCode config. OpenCode scans
+# ~/.config/opencode, ~/.agents/skills and ~/.claude/skills. uid 1000 there too.
+if [[ " $* " == *" --opencode-server "* ]]; then
+  OC="/data/probata/volumes/opencode/home"
+  MAP["$HOME/.config/opencode/"]="$OC/.config/opencode/"
+  MAP["$HOME/.agents/skills/"]="$OC/.agents/skills/"
+  MAP["$HOME/.claude/skills/"]="$OC/.claude/skills/"
+  MAP["$HOME/.claude/local-plugins/"]="$OC/.claude/local-plugins/"
+  ssh -i "$KEY" "$HOST" "install -d -o 1000 -g 1000 $OC/.config $OC/.agents $OC/.claude"
+fi
 ssh -i "$KEY" "$HOST" "install -d -o 1000 -g 1000 $DEST/.claude $DEST/.agents $DEST/.config"
 for src in "${!MAP[@]}"; do
   [[ -e "$src" ]] || { echo "skip (missing): $src"; continue; }

@@ -66,7 +66,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ruby-full wget 
 COPY deploy/docker/devbox/mise-config.toml /etc/mise/config.toml
 
 # Agent CLIs (owner 16:22: claude + opencode)
-RUN npm install -g @anthropic-ai/claude-code opencode-ai && npm cache clean --force
+RUN npm install -g @anthropic-ai/claude-code opencode-ai @sprisa/localhost && npm cache clean --force
+# @sprisa/localhost = reserve HTTPS-on-tailnet proxy (owner 17:30: Tailscale certs are the direction; keep this as a tool)
 
 # Passwordless sudo for the desktop user: needed for xrdp daemons at session start; the
 # container is the security boundary of this sandbox.
