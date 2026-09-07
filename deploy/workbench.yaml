@@ -51,7 +51,7 @@ services:
       # Exact socket peer allowed to assert Authentik identity. Set this to the
       # Coolify Traefik address as a /32 (or /128), never a broad Docker/tailnet
       # range. Missing or malformed configuration fails closed.
-      TRUSTED_AUTH_PROXY_CIDRS: ${TRAEFIK_PROXY_CIDR:?exact Traefik proxy CIDR required}
+      TRUSTED_AUTH_PROXY_CIDRS: ${TRAEFIK_PROXY_CIDR}  # Coolify renders a `:?` message as the literal VALUE (seen live 2026-09-07); empty still fails closed in auth.py
       # Feature-gated owner testing path. Traefik remains the trusted socket
       # peer and X-Real-IP must be inside this Tailscale range. Disable after
       # Authentik activation without changing application code.

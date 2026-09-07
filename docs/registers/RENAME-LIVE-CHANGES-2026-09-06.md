@@ -210,3 +210,11 @@ Owner 07:20: "3 network agno not started … why is this staying??!?!?" = go, ha
 Commits (probata `main`): `291f1c5` (schema/D-152/D-153), `ffe1f57` (network + host root), `02d908c` (probata-db + build contexts). advocatio `master` `a44132f` (network). Tracked host scripts: `scripts/phase4_*.sh`.
 
 INCIDENT (open, owner researching): data-vector Milvus crash-loops on embedded-etcd `leader changed` (7th corruption; owner confirms a separate etcd service failed identically → disk-fsync root cause, not embedded-vs-separate). Stopped to halt the burn. Source to re-index is intact: 8,098 local Claude transcripts (3.2G, `~/.claude/projects`) → collection `agent_session_memory_nemotron3` via NIM `nvidia/nemotron-3-embed-1b`. memsearch is a zilliz/milvus MCP (needs Milvus; pgvector/Qdrant ruled out). Recovery on owner go: quarantine etcd → decouple from `probata` net → re-index → live-validate. Durable options: Zilliz Cloud or Milvus Lite.
+## 14. Workbench auth after the network hard cut — FIXED 2026-09-07 ~14:55 EDT
+
+> _Byline: Claude Code · Fable 5.1 · 2026-09-07._
+
+- Symptom: every Workbench request over Tailscale Serve returned 403 `Authentication gateway not configured` from ~08:42 EDT (container restart during §4.3/§4.4).
+- Cause 1: the Serve bypass allowlist `WORKBENCH_TAILSCALE_SERVE_PROXY_CIDRS` still held the old `agno` bridge gateway `172.26.0.1/32`; after the rename the container sees the `probata` gateway `192.168.112.1`. Fixed in Coolify env → `192.168.112.1/32`.
+- Cause 2: `deploy/workbench.yaml` used `${TRAEFIK_PROXY_CIDR:?exact Traefik proxy CIDR required}`; Coolify renders the `:?` message as the literal value, so `TRUSTED_AUTH_PROXY_CIDRS` parsed empty and the fall-through path failed closed. Compose line changed to `${TRAEFIK_PROXY_CIDR}`; Coolify env set to the proxy's `probata` address `192.168.112.2/32`. Rule: never use `:?`/`:-` message syntax in Coolify-rendered compose; fail-closed lives in code.
+- Default-OFF for the bypass is D-125 (fail-closed; ON only in the deployment env) and stays.
