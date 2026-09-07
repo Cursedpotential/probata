@@ -105,7 +105,7 @@ export type UploadItemStatus = "uploading" | "complete" | "error";
 // ---------------------------------------------------------------------------
 // Runs (C1 Operator Console) — mirrors the spine's C0 run ledger
 // (server/evidence/run_ledger.py, server/api/run_routes.py,
-// sql/0005_workflow_run_ledger.sql), a parallel build that landed in this
+// sql/bootstrap/schema_snapshot (ops.workflow_run; migrations retired 2026-09-07)), a parallel build that landed in this
 // same working tree while this frontend was in progress. Field shapes below
 // were cross-checked against that actual code (not just the build brief's
 // prose), which is how the run/stage status-vocabulary mismatch below was
@@ -113,7 +113,7 @@ export type UploadItemStatus = "uploading" | "complete" | "error";
 // ---------------------------------------------------------------------------
 
 /** Lifecycle of a spine run — matches the `analysis.workflow_run.status`
- * CHECK constraint (sql/0005_workflow_run_ledger.sql) exactly. */
+ * CHECK constraint (sql/bootstrap/schema_snapshot (ops.workflow_run; migrations retired 2026-09-07)) exactly. */
 export type RunStatus = "running" | "paused" | "completed" | "failed";
 
 /** Lifecycle of a single STAGE within a run — matches the

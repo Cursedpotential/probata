@@ -51,7 +51,7 @@ server/         THE backend — one boundary, domain-separated inside:
 workbench/      CUSTOM OPERATOR PRODUCT — api/ FastAPI BFF + web/ Next.js; expanding locally
 ui/             superseded/deferred shell proposal; do not start a parallel UI
 shared/         cross-boundary contracts — created only when ui/ needs them (DEFERRED)
-sql/            numbered migrations only: NNNN_name.sql (e.g. 0003_normalized_records.sql)
+sql/            bootstrap/schema_snapshot_<date>.sql IS the database (no migrations since 2026-09-07, D-153; retired chain in sql/_stale/)
 docker/         one folder per service image: postgres/ (pg_duckdb), tools/, sandbox/, gateway/, milvus/, n8n/, coolify-mcp/
 compose.yaml    mirrored stack definition with production-facing live sections; never describe
                 it as laptop-only. Per-app Coolify compose files live in deploy/ (S10
@@ -168,10 +168,11 @@ docstring for the full mount<->import contract.
 | A new parser/extractor/visualizer tool (Python) | `server/tools/parsers/{messaging,ai_chat,generic}/<name>.py`, `server/tools/extractors/<name>.py`, or `server/tools/visualizers/<name>.py` (ADR-0035) — one capability, self-register via `@register`; `load_builtin_tools()` auto-discovers it, nothing else to wire |
 | A tool that's really a TS/Go binary or external service | expose it behind a framework-neutral HTTP/MCP adapter; the current Agno adapter may consume it, but must not own its public contract |
 | A shared helper (not itself a tool) | `server/tools/_helpers.py` (underscore prefix) or `server/evidence/<module>.py` (evidence-domain-specific) |
-| A DB schema change | new `sql/NNNN_*.sql` migration (never edit an applied one) |
+| A DB schema change | edit `sql/bootstrap/schema_snapshot_<date>.sql` in its final form, then `scripts/rebuild_platform_from_snapshot.sh` (no migrations, D-153) |
 | A new service/container | `docker/<service>/` + a block in `compose.yaml` |
 | A decision | an ADR in `docs/adr/` (supersede, don't edit) AND update `PROJECT_CANON.md` §5 same change |
 | A stub you couldn't avoid | `# STUB: <tag>` in code + a row in `docs/DEBT.md` (ADR-0021) |
+| A real-name / case-fact working file | `docs/private/` — gitignored; lives here, never committed, never redacted (owner ruling 2026-09-06; Claude Code · Sonnet) |
 
 ## Reference / read-only (never edit, never build inside)
 

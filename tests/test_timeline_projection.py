@@ -4,7 +4,7 @@
 Two layers:
   1. Pure-unit tests (no DB) for the hashing/serialization contract and the pure member-
      projection logic — these run every default `pytest -q`.
-  2. One `@pytest.mark.integration` test that applies `sql/0035_timeline_projection.sql` against
+  2. One `@pytest.mark.integration` test that runs against the live snapshot schema (no DDL applied; migrations retired 2026-09-07)
      the LIVE tailnet PostgreSQL inside a transaction and rolls back — proving the migration, the
      append-only/immutability guards, `build_generation()`'s idempotency, `change_class`
      transitions, `PostgresTimelineProjectionSource.fetch_generation()`, and the receipt/manifest
@@ -174,12 +174,13 @@ _LIVE_SKIP = pytest.mark.skipif(
 )
 
 
-def _migration_body() -> str:
-    from pathlib import Path
+def _assert_timeline_schema_present(conn) -> None:
+    """The database IS the snapshot (D-142 §3, D-152): the timeline projection objects must already exist.
+    Migrations were retired 2026-09-07; this replaces the old apply-0035-then-rollback rehearsal."""
+    from sqlalchemy import text
 
-    sql = (Path(__file__).resolve().parents[1] / "sql" / "0035_timeline_projection.sql").read_text(encoding="utf-8")
-    body = sql.replace("BEGIN;", "", 1)
-    return body[: body.rfind("COMMIT;")]
+    n = conn.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'timeline'")).scalar_one()
+    assert n > 0, "timeline schema missing from the live database; rebuild from sql/bootstrap/schema_snapshot"
 
 
 def _live_engine():
@@ -228,7 +229,7 @@ def test_live_build_generation_idempotent_and_supersedes_prior() -> None:
         with engine.connect() as conn:
             trans = conn.begin()
             try:
-                conn.execute(text(_migration_body()))
+                _assert_timeline_schema_present(conn)
                 collection_id = conn.execute(
                     text("SELECT id FROM timeline.timeline_collection WHERE slug = 'primary'")
                 ).scalar_one()
@@ -279,7 +280,7 @@ def test_live_projection_rows_reject_update_and_delete() -> None:
         with engine.connect() as conn:
             trans = conn.begin()
             try:
-                conn.execute(text(_migration_body()))
+                _assert_timeline_schema_present(conn)
                 collection_id = conn.execute(
                     text("SELECT id FROM timeline.timeline_collection WHERE slug = 'primary'")
                 ).scalar_one()
@@ -315,7 +316,7 @@ def test_live_projector_and_receipts_round_trip() -> None:
         with engine.connect() as conn:
             trans = conn.begin()
             try:
-                conn.execute(text(_migration_body()))
+                _assert_timeline_schema_present(conn)
                 collection_id = conn.execute(
                     text("SELECT id FROM timeline.timeline_collection WHERE slug = 'primary'")
                 ).scalar_one()
@@ -375,7 +376,7 @@ def test_live_rollback_leaves_no_trace() -> None:
         with engine.connect() as conn:
             trans = conn.begin()
             try:
-                conn.execute(text(_migration_body()))
+                _assert_timeline_schema_present(conn)
                 count_inside = conn.execute(
                     text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'timeline'")
                 ).scalar_one()

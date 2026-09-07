@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -59,10 +58,13 @@ func TestPreviewDecisionKeyIsDeterministicAndCoordinateBound(t *testing.T) {
 	}
 }
 
-func TestMigration0050RollbackOnlyOnPostgreSQL18(t *testing.T) {
-	dsn := strings.TrimSpace(os.Getenv("PLATFORM_0050_TEST_DSN"))
+func TestPreviewStoreAgainstSnapshotSchemaRollbackOnly(t *testing.T) {
+	// The database IS sql/bootstrap/schema_snapshot_<date>.sql (owner rulings D-142 §3, D-152; migrations retired
+	// 2026-09-07). This test assumes the preview projection store already exists in the target database and
+	// exercises the store inside a rollback-only transaction; it applies no DDL.
+	dsn := strings.TrimSpace(os.Getenv("PLATFORM_PREVIEW_STORE_TEST_DSN"))
 	if dsn == "" {
-		t.Skip("PLATFORM_0050_TEST_DSN is not configured")
+		t.Skip("PLATFORM_PREVIEW_STORE_TEST_DSN is not configured")
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, dsn)
@@ -75,16 +77,8 @@ func TestMigration0050RollbackOnlyOnPostgreSQL18(t *testing.T) {
 		t.Fatal(err)
 	}
 	if major != "18" {
-		t.Fatalf("migration rehearsal requires PostgreSQL 18, got %s", major)
+		t.Fatalf("snapshot schema requires PostgreSQL 18, got %s", major)
 	}
-	migrationPath := filepath.Join("..", "..", "sql", "0050_uiw_preview_projection_store.sql")
-	body, err := os.ReadFile(migrationPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sql := strings.TrimSpace(string(body))
-	sql = strings.TrimSpace(strings.TrimPrefix(sql, "-- Migration 0050: durable opaque Proffer preview projection store.\n-- Reference-only operator projection; no source or normalized payload bytes enter workflow history.\n-- Byline: Codex · GPT-5.6 · 2026-08-29.\n\nBEGIN;"))
-	sql = strings.TrimSpace(strings.TrimSuffix(sql, "COMMIT;"))
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -94,30 +88,27 @@ func TestMigration0050RollbackOnlyOnPostgreSQL18(t *testing.T) {
 			// pgx reports ErrTxClosed after a test failure that closed the tx.
 		}
 	}()
-	if _, err := tx.Exec(ctx, sql); err != nil {
-		t.Fatalf("apply migration 0050 in rollback-only transaction: %v", err)
-	}
 	var relation string
 	if err := tx.QueryRow(ctx, `SELECT to_regclass('context.proffer_preview_binding')::text`).Scan(&relation); err != nil {
 		t.Fatal(err)
 	}
 	if relation != "context.proffer_preview_binding" && relation != "proffer_preview_binding" {
-		t.Fatalf("migration relation = %q", relation)
+		t.Fatalf("snapshot schema lacks context.proffer_preview_binding (got %q); rebuild from sql/bootstrap", relation)
 	}
 	store, err := NewProfferPreviewStore(nestedPreviewTestDB{tx: tx}, strings.NewReader(strings.Repeat("abcdefghijklmnopqrstuvwx", 8)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	binding, err := store.Create(ctx, previewmodel.Binding{
-		RequestID: "request-0050", SourceRef: "upload://source", WorkflowID: "workflow-0050",
-		RunID: "run-0050", ParserOptionsRef: "options-0050",
+		RequestID: "request-preview", SourceRef: "upload://source", WorkflowID: "workflow-preview",
+		RunID: "run-preview", ParserOptionsRef: "options-preview",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	duplicate, err := store.Create(ctx, previewmodel.Binding{
-		RequestID: "request-0050", SourceRef: "upload://source", WorkflowID: "workflow-0050",
-		RunID: "run-0050", ParserOptionsRef: "options-0050",
+		RequestID: "request-preview", SourceRef: "upload://source", WorkflowID: "workflow-preview",
+		RunID: "run-preview", ParserOptionsRef: "options-preview",
 	})
 	if err != nil || duplicate.Handle != binding.Handle {
 		t.Fatalf("idempotent binding = %+v, %v; want handle %s", duplicate, err, binding.Handle)

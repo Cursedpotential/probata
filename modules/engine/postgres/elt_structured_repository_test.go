@@ -148,8 +148,8 @@ func TestDuckDBReaderExprRejectsUnknownFormat(t *testing.T) {
 }
 
 func TestSQLStringLiteralEscapesSingleQuotes(t *testing.T) {
-	got := sqlStringLiteral("h2-rawelement-duckdb-json-v1")
-	if got != "'h2-rawelement-duckdb-json-v1'" {
+	got := sqlStringLiteral("context-rawrecord-fingerprint-duckdb-json-v1")
+	if got != "'context-rawrecord-fingerprint-duckdb-json-v1'" {
 		t.Fatalf("literal = %q", got)
 	}
 	if got := sqlStringLiteral("it's"); got != "'it''s'" {
@@ -175,12 +175,16 @@ func TestValidateOptionalUUIDAcceptsWellFormed(t *testing.T) {
 	}
 }
 
-func TestEltCanonAndParserVersionAreDistinctFromH2RawElementV1(t *testing.T) {
-	// Guards the deliberate deviation documented at the top of
-	// elt_structured_repository.go: this lane must never silently start
-	// writing the byte-exact H2 contract's tag onto a post-decode hash.
-	if eltRawElementDuckDBJSONCanon == "h2-rawelement-v1" {
-		t.Fatal("structured ELT content_canon must not collide with the byte-exact h2-rawelement-v1 contract")
+func TestEltCanonIsAContextFingerprintNotCustodyH2(t *testing.T) {
+	// Guards the ruling recorded at the top of elt_structured_repository.go
+	// (D-124, D-149): this lane writes a post-decode CONTEXT FINGERPRINT and must
+	// never carry a custody H-family tag - neither the byte-exact contract tag
+	// nor any other h2- prefixed name (the pre-2026-09-07 mistake).
+	if eltContextFingerprintCanon == "h2-rawelement-v1" || (len(eltContextFingerprintCanon) >= 3 && eltContextFingerprintCanon[:3] == "h2-") {
+		t.Fatal("structured ELT content_canon is a context fingerprint and must never carry the custody h2- prefix")
+	}
+	if len(eltContextFingerprintCanon) < 8 || eltContextFingerprintCanon[:8] != "context-" {
+		t.Fatal("structured ELT content_canon must belong to the sql/0048 context-fingerprint family")
 	}
 	if eltParserVersion == "" {
 		t.Fatal("structured ELT parser_version tag must not be empty")

@@ -87,9 +87,11 @@ docstring. This prevents context rot in LLM-based agents.
 - Keep the donor file header convention: `// File: <path> | Date: <d> | Agent: <who> | Model: <m>`.
 - Don't port TS→Python wholesale; wrap behind Agno (REPO_STRUCTURE placement rules).
 
-## SQL / migrations
+## SQL / schema
 
-- Numbered, append-only: `sql/NNNN_name.sql`. Never edit an applied migration — add a new one.
+> **2026-09-07 (owner, D-153):** there are no migrations. `sql/bootstrap/schema_snapshot_<date>.sql` is the database; change it in its final form and rebuild (`scripts/rebuild_platform_from_snapshot.sh`). Reference/state tables survive every rebuild (keep set). The rule below is struck.
+
+- ~~Numbered, append-only: `sql/NNNN_name.sql`. Never edit an applied migration — add a new one.~~ (struck 2026-09-07, D-153; see note above)
 - `evidence` schema is read-only except via `custody.py`; derived data lands in `analysis`.
 
 ## Citation convention (added 2026-08-09)
@@ -154,3 +156,5 @@ def run(payload: dict) -> dict:
 - Root loose files quarantined to `_stale/root-tidy-20260824/` (scratch inspect script, an
   Aug-5 scripts/ backup zip). The stray root `iceberg` DuckDB database moved to
   `.duckdb/iceberg.duckdb` (local, gitignored — the .duckdb/ convention).
+- **`docs/private/`** — gitignored; real-name / case-fact working files live here, never
+  committed, never redacted (owner ruling 2026-09-06; Claude Code · Sonnet).

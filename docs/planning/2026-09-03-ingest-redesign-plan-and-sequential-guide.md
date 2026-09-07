@@ -34,21 +34,21 @@ atomically."* Owner also said the messaging chunk unit is **unknown** — so the
 measure it, not assume it.
 
 Outcome: one approved design that (a) closes the SAT-RAG ADR gap, (b) answers the chunk
-barrier question by construction, (c) names the chunk-unit bake-off that gates acceptance.
+barrier question by construction, ~~(c) names the chunk-unit bake-off that gates acceptance.~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.**
 
 ## The design to be ruled (proposal)
 
 | # | Element | Proposal | Status |
 |---|---|---|---|
 | 1 | **Evidence unit** | the normalized message row in `working.*` (hub, per the hub-and-mirror model). Content + timestamps immutable (D-136). No column added to it. | proposal |
-| 2 | **Search unit** | a small overlapping message-safe window written to `working.content_chunk` as an **index handle**, never a display unit. Candidate default: center message ± N neighbors. Alternatives to bake off: time-gap session window; Chonkie semantic group over a turn-aware pre-split (Chonkie already chosen, `docs/planning/agno-chunking-strategy.md`). | **unmeasured** |
+| 2 | **Search unit** | a small overlapping message-safe window written to `working.content_chunk` as an **index handle**, never a display unit. Candidate default: center message ± N neighbors. ~~Alternatives to bake off: time-gap session window; Chonkie semantic group over a turn-aware pre-split (Chonkie already chosen, `docs/planning/agno-chunking-strategy.md`).~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.** | **unmeasured** |
 | 3 | **Provenance** | ~~new table `working.content_chunk_message` (name not ruled)~~ **BUILT 2026-09-05** as `sql/0072_content_chunk_message_bridge.sql` per Q9: `(chunk_id, message_id)` PK, `is_center`, `position`, `created_at`, append-only, FKs to `content_chunk` and `normalized_record`. The centre is carried as the `is_center` flag rather than a `center_message_id` column, and `conversation_id`/ordinal are read from the message row (D-136: never duplicated onto the association). `chat_chunk_message` died in 0058; this is its successor. | **built, not deployed** |
 | 4 | **Retrieval** | hit → chunk_id → provenance → center_message_id + conversation_id → expand **on the message table** by conversation + ordinal (PREV/NEXT), bounded by K neighbors or a time gap → dedupe on center id, merge overlapping spans → return **messages**, never chunk text. K is a runtime parameter independent of N. | proposal |
 | 5 | **Barrier question** | dissolved: expansion never touches chunks. A hit at the edge of chunk A pulls neighboring messages, which exist once in the message table. Overlapping windows dedupe on center id. | by construction |
 | 6 | **Graph lane `sat-temporal`** | one node per message row carrying the PG source coordinate (`normalized_record_id` + `content_chunk_id`) with the seven version-stamp fields (`sql/0055:256-272`); `PREV`/`NEXT` from ordinal; `IN_CONVERSATION` edges; no fusion with Semantica `evidence`; lane-labelled results (D-093). ADR-0062 claim-temporal edges are *asserted* order and are NOT duplicated here — these are structural sequence edges. | proposal |
 | 7 | **Where it runs** | chunking + provenance = a **new** Go activity beside `chunk_document_activity` (`modules/engine/activities/chunking.go`), not a widening of it (D-130 rule 7). Expansion = one bounded unit callable direct / Temporal Activity / n8n node, consumed by **any** agent runtime. | proposal |
 | 8 | **Horizon** | none in this unit. Walks and deltas are SurrealDB-only in analysis (D-073/D-080/D-107). Nobody re-adds a pre-filter here. | already ruled |
-| 9 | **Acceptance gate** | bake-off on the Google Voice corpus (plan says ~29.3k raw+sorted; inventory says 7,006 in sorted — dedup explains it; corpus = whatever survives). Compare N ∈ {1,2,3,5}, time-gap sessions, Chonkie semantic. Owner authors a held-out query set from known incidents. Metrics: message-level recall@k, MRR, expansion precision, mean messages returned, duplicate-center rate, **boundary-straddle rate** (no recall penalty allowed), index size, latency. Receipts in `analysis.graphrag_*`. | not run |
+| 9 | **Acceptance gate** | ~~bake-off on the Google Voice corpus (plan says ~29.3k raw+sorted; inventory says 7,006 in sorted — dedup explains it; corpus = whatever survives). Compare N ∈ {1,2,3,5}, time-gap sessions, Chonkie semantic. Owner authors a held-out query set from known incidents. Metrics: message-level recall@k, MRR, expansion precision, mean messages returned, duplicate-center rate, **boundary-straddle rate** (no recall penalty allowed), index size, latency. Receipts in `analysis.graphrag_*`.~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.** | not run |
 
 ## DuckDB ELT — owner ruling 2026-09-03 (source: the "elt process" conversation, reconciled)
 
@@ -63,7 +63,7 @@ begin in that workflow, so it needs to be able to make those queries."*
 | **Existing Go/Python parsers remain as failure fallback**, not as a parallel first-class path. | One primary per file; fallback only on logged ELT failure (same shape as ADR-0052 Q3's Go→Python fallback). No rewrite of any parser. |
 | **Go stays the orchestrator and the caller.** The workflow begins in Go; Go must be able to issue the DuckDB queries. | `duckdb_elt_activity` in `modules/engine/activities/`: input = locator + SQL template id + target table; runs the query through the PG connection (pg_duckdb) so the result lands in PG in the same transaction as the per-table outbox row (ADR-0052). No hashing, chunking, or projection inside it (D-130). |
 | **Files that must be PARSED** (PDF, images/OCR, docx layout, screenshots, anything opaque) stay with Go/Python decoders. DuckDB has nothing for them beyond `read_text` on `word/document.xml`. | unchanged |
-| **In-database chunking** (`string_split` + `UNNEST`) is a **candidate in the §9 bake-off**, not canon. | third candidate beside the Go message-window chunker and Chonkie |
+| **In-database chunking** (`string_split` + `UNNEST`) ~~is a **candidate in the §9 bake-off**, not canon.~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.** | third candidate beside the Go message-window chunker and Chonkie |
 | **R2 pushdown vs block scratch:** splittable/columnar AND a subset scan → query R2 directly with pushdown; opaque, or full-text needed → materialize to block scratch first (the gateway already does this). | write it as a rule in the routing table so it stops being re-derived |
 | **Superseded content from that conversation, NOT carried:** LangGraph/LlamaIndex retrieval (ADR-0041; owner 2026-09-03 "no LlamaIndex"); RRF fusion across stores (D-093 no-fusion; walks are Surreal-only D-073/D-080); "Agno agent drains the outbox" (Temporal activity drains it). | — |
 
@@ -270,6 +270,18 @@ held; immutability guards switchable by design (D-110/D-127/D-128); naming (D-13
 > geo lane's parking is now on the critical path of the second lane's value, not before.
 > Contradiction kinds so far: promise→contrary act; stated plan→different act; commitment→
 > reversal; stated location→GPS elsewhere; stated errand→GPS shows a different stop+duration.
+> **FIRST REAL RUNS, ruled 10:47–10:49 (owner):** (1) the **iMessage pilot** conversation
+> (`imessage:+18108532989`, the July 1,918-message file) — "start there, rerun that file";
+> (2) an **SMS log** and (3) a **call log** — "the three most important things." For iMessage,
+> **run every export type of the SAME export** (PDF, TXT, CSV, HTML, XLSX — "same information
+> but different metadata") **for comparison** — this is the corroboration/stitching design on
+> real data; differences between formats are findings, not errors. Sources found so far:
+> Google Drive holds daily SMS Backup & Restore pairs (`sms-20251126065531.xml` 1.26 GB +
+> `calls-20251126065531.xml` 131 KB, generations back to 2025-11-09) and an iMessage export
+> spreadsheet (`8102689630 2023-2024`). Authorized start source is `r2://casebible-sorted/…`;
+> anything Drive-only must be copied into the vault first (billable; owner sign-off). ~~A CALL-LOG
+> decoder may not exist — confirm before run 3.~~ **WRONG, struck 2026-09-06 12:44.** The SBV `smsbackuprestore_xml` decoder handles `<call>` elements alongside `<sms>`/`<mms>` (`sms_xml_importer.go:105,150`); the 2026-09-06 parse test decoded `calls-20260609173028.xml` 1,457/1,457. The call-log decoder exists and is proven. Its record schema is the source for the DuckDB ELT template for the same format (owner 12:44: the decoder schema converts into the DuckDB SQL query).
+> ~~**TEST DATA PROCESS (owner 11:06–11:07, ruled shape, not yet executed):** … test bucket, two-host mirror, sync activity, ingress push~~ **SUPERSEDED 2026-09-06 12:07–12:12 (owner):** no test bucket, no second transfer, no sync activity. Tiers: **vault** (`r2:casebible-sorted`, cold, the home of everything already sorted) · **block** (`/data/test_data/<source_type>/<export-folder>/` + `.sha256` sidecars, working AND test area, on ovh-files; live: `smsbackuprestore/export-20251206`, `imessage/export-18108532989`, hashes verified) · **`nexus`** (workbench `upload://` staging only; the four test copies parked there are leftovers, owner deletes). Ingest sources: vault locator (live); local block path behind `PROFFER_TEST_DATA_DIR` + dev flag (the alternate run path, NOT built); manual `upload://`. Destination gate (test / vault / discard) fires ONLY for one-offs; vault sources have their home and skip it. Atomic parse tests run directly on block files, no workflow (done 2026-09-06, see the parse-test results block). Cross-host reachability = mount or gateway materialize, decided when a parser on ovh-app needs a block file. No file service; Filestash/SFTPGo = separate human-surface decision.
 > **Gold labels (owner 10:44–10:45):** a label schema + one-shot prompt/examples for Action/
 > Contradiction extraction is being written to `docs/reference/SAT-ACTION-CONTRADICTION-LABELS-
 > 2026-09-06.md` from the owner's five verbatim examples. It sits ALONGSIDE the existing
@@ -298,7 +310,9 @@ held; immutability guards switchable by design (D-110/D-127/D-128); naming (D-13
   the raw content tables, filled whenever the envelope carried a range (all DuckDB records + Go
   range parsers), null for StoredBytes-only parsers. Re-verification: offsets present → seek +
   hash + compare (fast lane); null → re-parse with pinned parser version + compare (slow lane).
-  Retire `h2-rawelement-duckdb-json-v1`; ELT rows carry the real `h2-rawelement-v1`. Cost:
+  ~~Retire `h2-rawelement-duckdb-json-v1`; ELT rows carry the real `h2-rawelement-v1`.~~ **Corrected 2026-09-07 (Claude Code · Fable 5.1):**
+  superseded by D-124/D-149 - intake hashes are context fingerprints, custody H2 is computed at promotion; the ELT tag was renamed to
+  `context-rawrecord-fingerprint-duckdb-json-v1` and the `raw.*` defaults to `context-rawrecord-fingerprint-v1` in `schema_snapshot_20260907.sql`, live since the 2026-09-07 rebuild (simplification-plan item 5). Cost:
   `read_text` is whole-file; multi-GB XML needs block scratch + streaming (ties to Q3).
 - ~~☐ Q2 router tie-break · Q3 ELT unit (file vs package) · Q5 Google Voice first-run path.~~
 - ☑ **Q3 RULED 2026-09-06 = B** (one package per call — the orchestrator stitches before
@@ -378,13 +392,15 @@ held; immutability guards switchable by design (D-110/D-127/D-128); naming (D-13
   (lane_a|lane_b|both_retained|neither|not_comparable|stale), `rationale`, `decided_by`,
   `decided_at`, `supersedes_verdict_id`, `extractor_versions` (jsonb), `run_id`. See Stage 3.5.
 
-### Stage 2 — Gateway live (owner + Sonnet)
-- ☐ Owner: mint `tag:docker` Tailscale auth key → `/data/agno/secrets/tool-gateway/ts-authkey`;
-  add materialize mount to platform-tools (bounces it) (B5).
-- ☐ Deploy tool-gateway via Coolify; verify `svc:tool-gateway` on the tailnet; rehearsal passes
-  `assess_source_repair`.
+### Stage 2 — Gateway live — ☑ DONE 2026-09-05 (Claude Code · Fable 5.1)
+- ☑ `tag:docker` Tailscale auth key minted → `/data/agno/secrets/tool-gateway/ts-authkey`;
+  materialize mount added to platform-tools (B5). Record: `docs/reviews/2026-09-05-ingest-day-live-chain.md`.
+- ☑ tool-gateway deployed via Coolify as `svc:tool-gateway` (VIP 100.110.251.133, node
+  `tool-gateway-node`); worker repointed; rehearsal passed `assess_source_repair`, reached the
+  HITL repair gate, 9 stages green (execute_parser failed on the synthetic NUL fixture, Q19=A).
 
 ### Stage 3 — First real ingest: Google Voice (~29k HTML + 502 MP3)
+- ☐ **FIRST (owner, 2026-09-06 11:52; D-131):** decoder library subtree → `modules/engine/decode/`, drop the `replace` in go.mod, retire the separate CI/digest contract. Viewer front end stays a client with the D-123 desktop client. Then fix in-tree, once: smsbackuprestore XML scanner resync (aborts at 2,135/11,676 on an unescaped attribute quote); imessage_html depth-0 flush (1/1,918); route bracket-timestamp iMessage TXT to `messages_transcript`. DuckDB ELT primary for extract-only formats; decoders are the logged-failure fallback. Go orchestrates; the decoders are Activities, not an engine.
 - ☐ Route per Q5; classify emits file class + extract-only? + tentative group + package.
 - ~~☐ Message-window chunker activity (new, per Q7) + provenance rows; provisional window if Q6=A.~~
 - ☐ **`group_conversations` pass 2 via `registry.id_xref` as-of message date (pre-mortem #4) —
@@ -432,6 +448,10 @@ held; immutability guards switchable by design (D-110/D-127/D-128); naming (D-13
   `disputed` (blocking-vs-flag choice is an open owner question, thinking-pass §H-1).
 
 ### Stage 4 — Retrieval layer (added 2026-09-06, thinking pass §G-6: renamed from "Retrieval
+> **Framing (owner, 2026-09-06 11:50):** reading context, deciding what goes to Surreal, and
+> analyzing in Surreal is the platform's purpose in use, not a build stage. This stage lists only
+> the facilities that make that possible. Nothing here is "work to be done" by the owner.
+
 layer (LlamaIndex + LangGraph, as Temporal activities)" — per D-144, LangGraph and LlamaIndex's
 ingest-side roles moved to Stage 3/3.5 above; this stage is retrieval only)  [Opus design]
 - ☐ Neo4j `sat-temporal`: Item/Version/Action/TextUnit/Theme/ItemType labels per Stage-0
@@ -446,7 +466,7 @@ ingest-side roles moved to Stage 3/3.5 above; this stage is retrieval only)  [Op
   also runnable inside n8n agent nodes.
 - ☐ D-093 no-fusion between lanes preserved; lane-labelled envelopes; comparison join only.
 - ☐ Maximal determinism rule: one LLM step at entry, zero in traversal.
-- ☐ Chunk-window bake-off on Google Voice (Q6): recall@k, MRR, expansion precision,
+- ☐ ~~Chunk-window bake-off on Google Voice (Q6): recall@k, MRR, expansion precision,~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.**
   boundary-straddle, TG-RAG incremental re-index cost; owner rules N.
 
 ### Stage 5 — Promotion to evidence (owner-gated)
@@ -461,7 +481,7 @@ ingest-side roles moved to Stage 3/3.5 above; this stage is retrieval only)  [Op
 
 ### Stage 6 — Later
 - ☐ STAR-RAG rule graph + PPR at the guide's size trigger.
-- ☐ Ed25519-signed custody chain; Tether models; SBV absorption (D-131); agno_app role
+- ☐ Ed25519-signed custody chain; Tether models; ~~SBV absorption (D-131)~~ (moved to Stage 3 head, 2026-09-06 11:52); agno_app role
   cutover; horizon predicate → ADR-0059 source-class; Semantica activation; native
   evidence-vector cutover; repo/legal/client names (D-137, forked session).
 
@@ -605,7 +625,7 @@ SAT-RAG graph nodes compatible instead of competing.
                         message-window chunker Activity (NEW, D-130 rule 7)
                         writes working.content_chunk +
                         working.content_chunk_message provenance
-                        (unit: bake-off, §9 — N-neighbor / session / Chonkie)
+                        ~~(unit: bake-off, §9 — N-neighbor / session / Chonkie)~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.**
                                       │
                     ┌─────────────────┼─────────────────┐
                     ▼                 ▼                  ▼
@@ -644,14 +664,14 @@ SAT-RAG graph nodes compatible instead of competing.
 | LlamaIndex | **Not in this diagram.** | Owner ruling 2026-09-03: no. Struck from the ADR draft and this synthesis. |
 | Rename (propria) | Orthogonal — naming, not architecture | Doesn't touch this diagram; tracked separately (D-137, forked session). |
 
-**What is still a bake-off, not a ruling, inside this diagram:** the chunk window unit
+~~**What is still a bake-off, not a ruling, inside this diagram:**~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.** the chunk window unit
 (N/session/Chonkie, §9), the expansion ordinal source, and the provenance table's exact
 shape. Everything else in the diagram is either already ruled (cited above) or newly
 proposed in this plan and awaiting approval.
 
 ## Genuinely open — owner rulings needed
 
-1. Window unit and N — measured by the bake-off, not chosen here.
+1. Window unit and N — ~~measured by the bake-off, not chosen here.~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.**
 2. Expansion ordinal: `first_party_context_thread_message.thread_ordinal` exists; `normalized_record` has no per-conversation ordinal. Add one to the hub row, or key on the thread projection?
 3. Provenance table name/shape.
 4. May expansion step outside a sealed D-093 manifest's membership, and how are such neighbors labelled?
@@ -667,7 +687,7 @@ Every step runs as a subagent on owner command. Nothing writes before that.
 4. ~~**Migration** `sql/00NN_content_chunk_message_provenance.sql` — the provenance table; zero-net-write validated (apply in a txn, count, rollback) against live PG before apply.~~ **DONE 2026-09-05** as `sql/0072_content_chunk_message_bridge.sql`, rollback-validated live exactly as specified (applied twice in one txn, function exercised, ROLLBACK, absence re-asserted). Still to do: push → apply live → redeploy. See `docs/reviews/2026-09-05-h04-bridge-and-weaviate-feed-rewire.md`.
 5. **Go: message-window chunker activity** — new unit, emits chunk rows + provenance rows + `content_sha256`; registered in the stage graph; `go build/vet/test` green.
 6. **Go or Python: expansion unit** — input (chunk_id | message_id, K | gap), output message rows + boundary metadata; wrapped as Temporal Activity + n8n binding via the existing flow-binding registry.
-7. **Bake-off harness** — runs the §9 comparison on Google Voice, writes receipts, produces the metrics table; owner rules N and the unit; ADR flips to Accepted only then.
+7. ~~**Bake-off harness** — runs the §9 comparison on Google Voice, writes receipts, produces the metrics table; owner rules N and the unit; ADR flips to Accepted only then.~~ **STRUCK D-151 (owner 2026-09-06 17:52): no bake-off.**
 
 ## Verification
 

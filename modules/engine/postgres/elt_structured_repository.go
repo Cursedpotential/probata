@@ -6,45 +6,30 @@
 // landed into raw.raw_csv with one set-based INSERT..SELECT per source. No
 // row-at-a-time Go loop ever touches a source record.
 //
-// content_hash / content_canon (READ BEFORE CHANGING): the platform's H2
-// custody contract (docs/reference/HASH-TAXONOMY-2026-08-29.md; also
-// vendor/github.com/lowcarbdev/sbv/pkg/custodyhash.CanonH2) defines
-// "h2-rawelement-v1" as SHA-256 of the exact raw record bytes/span BEFORE
-// any decoding. DuckDB's read_csv_auto/read_json_auto already decode each
-// row into typed columns before PostgreSQL ever sees it, so this Activity
-// cannot honor that byte-exact construction — the hash computed here is
-// SHA-256 over the UTF-8 bytes of row_to_json() applied to the
-// DuckDB-decoded row: a canonical, deterministic, but POST-decode
-// representation, not the platform's pre-decode H2 bytes.
+// content_hash / content_canon (READ BEFORE CHANGING): this Activity hashes the
+// DuckDB-DECODED row - SHA-256 over the UTF-8 bytes of row_to_json() - so the
+// value is a canonical, deterministic, POST-decode digest. It is therefore a
+// CONTEXT FINGERPRINT, not custody H2: the custody contract
+// (docs/reference/HASH-TAXONOMY-2026-08-29.md; custodyhash.CanonH2
+// "h2-rawelement-v1") is SHA-256 of the exact raw span BEFORE decoding, and
+// D-124 (2026-09-02) + D-149 item 1 (2026-09-06) place custody H1/H2/H3 at
+// governed PROMOTION, computed from the vault original; intake carries
+// fingerprints only, and a fingerprint is never H-named. D-149 item 6 makes
+// read_xml/ELT the slow lane that re-parses at promotion, so no byte spans are
+// required here.
 //
-// The platform's own hash-chain/canon-tag naming rule — two different
-// constructions must never share one tag, exactly the failure mode recorded
-// against "h3-chain-v1" (see AGENT_MEMORY.md
-// custody-h3-two-chains-not-one.md and the CLAUDE.md hard rule it
-// generalizes) — means this construction must NOT be written under
-// 'h2-rawelement-v1', even though the BUILD LANE E1 task text named that
-// literal tag. This repository writes content_canon =
-// eltRawElementDuckDBJSONCanon ("h2-rawelement-duckdb-json-v1") instead.
-// This is a deliberate, reported deviation from the task's literal
-// instruction — flagged in the BUILD LANE E1 handoff for an owner ruling on
-// whether the DuckDB ELT lane needs its own permanent canon-tag family.
-//
-// OPEN QUESTION (not resolved by any live schema, writer code, or doc found
-// 2026-09-02 — reported rather than guessed): live introspection shows every
-// raw.<format> table (raw_csv, raw_facebook, raw_sms, ...) shares this exact
-// same content_canon default verbatim, with zero existing writers for any of
-// them and zero live context.hash_receipt rows to compare against — so it is
-// unclear whether raw.<format>.content_hash is meant to belong to (a) the
-// custody H1/H2/H3 family (what the literal default text names), (b) the
-// separate "context fingerprint" family (context_raw_record_fingerprint,
-// construction context-rawrecord-fingerprint-v1, per sql/0048 and
-// docs/reference/HASH-TAXONOMY-2026-08-29.md's "everything ingests as
-// context ... custody begins only at promotion"), or (c) its own third,
-// table-local dedup/integrity concept unrelated to either family. This file
-// takes option (c) with its own distinct tag rather than silently reusing
-// either existing family's name for an unverified construction; content_canon
-// is plain TEXT with no CHECK constraint (live-confirmed), so re-tagging
-// later costs zero migration.
+// History: until 2026-09-07 this constant was "h2-rawelement-duckdb-json-v1" -
+// a deliberate, reported deviation from the BUILD LANE E1 task text, which had
+// named the literal custody tag (two constructions must never share one tag:
+// the h3-chain-v1 lesson, AGENT_MEMORY custody-h3-two-chains-not-one). The h2-
+// prefix itself still violated the taxonomy ("a context fingerprint is never
+// labeled H1/H2/H3"), so on 2026-09-07 the tag was renamed into the sql/0048
+// fingerprint family and the raw.<format>.content_canon defaults were moved off
+// 'h2-rawelement-v1' in the schema snapshot and applied LIVE by the 2026-09-07
+// rebuild from sql/bootstrap/schema_snapshot_20260907.sql (owner 02:58: rebuild
+// and move on; no more hash work until promotion is being built). No live row carried the old tag; if any ever
+// does, it is never restamped - disambiguate by parser_version. content_canon
+// is plain TEXT with no CHECK (live-confirmed 2026-09-02).
 //
 // Byline: Claude Code · Sonnet 5 · 2026-09-02
 package postgres
@@ -60,9 +45,11 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// eltRawElementDuckDBJSONCanon is this Activity's own content_canon tag —
-// see the package-level comment above for why it is not "h2-rawelement-v1".
-const eltRawElementDuckDBJSONCanon = "h2-rawelement-duckdb-json-v1"
+// eltContextFingerprintCanon is this Activity's content_canon tag: a member of
+// the sql/0048 context-fingerprint family (see the package comment above for
+// why it is a fingerprint and not custody H2). Renamed 2026-09-07 from
+// "h2-rawelement-duckdb-json-v1".
+const eltContextFingerprintCanon = "context-rawrecord-fingerprint-duckdb-json-v1"
 
 // eltParserVersion tags every row this Activity writes so it is trivially
 // distinguishable from parser-produced raw rows sharing the same table.
@@ -160,7 +147,8 @@ func (r *StructuredELTRepository) ExecuteStructuredELT(ctx context.Context, spec
 	// raw is built server-side via row_to_json() over the DuckDB result set;
 	// content_hash is SHA-256 (pgcrypto digest(), see sql/0001_init_extensions.sql)
 	// over that same canonical JSON text — see the package comment for
-	// exactly what bytes this hashes and why content_canon is NOT
+	// exactly what bytes this hashes and why content_canon is a context
+	// fingerprint tag, NOT
 	// 'h2-rawelement-v1'.
 	insertSQL := fmt.Sprintf(`
 WITH source_rows AS (
@@ -192,7 +180,7 @@ inserted AS (
 	RETURNING 1
 )
 SELECT count(*)::bigint FROM inserted;`,
-		readerExpr, eltDuckDBQuoteTag, sqlStringLiteral(eltRawElementDuckDBJSONCanon), sqlStringLiteral(eltParserVersion),
+		readerExpr, eltDuckDBQuoteTag, sqlStringLiteral(eltContextFingerprintCanon), sqlStringLiteral(eltParserVersion),
 	)
 
 	var rowsInserted int64

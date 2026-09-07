@@ -55,6 +55,7 @@ Any statement that this collision is still open is stale.
 | `context_source_fingerprint` | `context-source-fingerprint-v1` |
 | `context_raw_record_fingerprint` | `context-rawrecord-fingerprint-v1` / `context-rawspan-fingerprint-v1` |
 | `context_raw_generation_fingerprint` | `context-rawgen-fingerprint-chain-v1` |
+| `context_raw_record_fingerprint` (DuckDB ELT lane) | `context-rawrecord-fingerprint-duckdb-json-v1` — SHA-256 over the UTF-8 bytes of `row_to_json()` of the DuckDB-decoded row (post-decode; `modules/engine/postgres/elt_structured_repository.go`). Registered 2026-09-07; replaces the mis-prefixed `h2-rawelement-duckdb-json-v1` (never written live). `raw.*.content_canon` defaults moved from `h2-rawelement-v1` to `context-rawrecord-fingerprint-v1` in `schema_snapshot_20260907.sql` and applied live by the 2026-09-07 rebuild (owner 02:57/02:58: no further hash work until promotion is built - D-124/D-149: intake = fingerprints, custody H1/H2/H3 at promotion). |
 
 Structurally parallel to H1/H2/H3 — source, record, generation-fold — deliberately **named
 differently** so a fingerprint is never mistaken for custody.
