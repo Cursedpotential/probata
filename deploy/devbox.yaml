@@ -39,7 +39,11 @@ services:
       KASM_SVC_DOWNLOADS: "1"
       TZ: America/Detroit
     volumes:
-      - /data/probata/volumes/devbox/home:/home/kasm-user   # persistent home: repos, ~/.claude, ~/.config
+      # Persistent state lives under ~/persist (NOT the whole home — Kasm ships its desktop config in
+      # /home/kasm-user and an empty bind over it breaks the session). custom_startup.sh symlinks
+      # ~/work, ~/.claude, ~/.agents, ~/.ssh, ~/.config/opencode, ~/.config/syncthing into it, so the
+      # mirror script's DEST layout (.claude/, .agents/, .ssh/, work/, .config/) is unchanged.
+      - /data/probata/volumes/devbox/home:/home/kasm-user/persist
     networks:
       - probata
 

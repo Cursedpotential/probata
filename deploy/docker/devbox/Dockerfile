@@ -48,8 +48,14 @@ RUN curl -fsSL https://syncthing.net/release-key.gpg | gpg --dearmor -o /usr/sha
     && adduser xrdp ssl-cert \
     && echo 'startxfce4' > /home/kasm-user/.xsession && chown 1000:1000 /home/kasm-user/.xsession
 
-# DuckDB CLI (owner's preferred bulk-scan engine)
-RUN curl -fsSL https://install.duckdb.org | sh -s -- --install-dir /usr/local/bin || true
+# DuckDB CLI (owner's preferred bulk-scan engine) — direct release zip into /usr/local/bin
+# (the install.duckdb.org script ignores --install-dir and drops into $HOME, which is a runtime mount)
+RUN curl -fsSL https://github.com/duckdb/duckdb/releases/latest/download/duckdb_cli-linux-amd64.zip -o /tmp/duckdb.zip \
+    && unzip -o /tmp/duckdb.zip -d /usr/local/bin && chmod +x /usr/local/bin/duckdb && rm /tmp/duckdb.zip
+
+# uv system-wide (uv-managed Python everywhere, never bare pip); installed as root because
+# /home/kasm-user is not writable at build time and is overlaid at runtime anyway
+RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 
 # Agent CLIs (owner 16:22: claude + opencode)
 RUN npm install -g @anthropic-ai/claude-code opencode-ai && npm cache clean --force
@@ -65,8 +71,6 @@ RUN chmod +x /dockerstartup/custom_startup.sh
 # Desktop launchers for the agent CLIs
 RUN for a in claude opencode; do printf '[Desktop Entry]\nType=Application\nName=%s\nExec=xfce4-terminal -e %s\nTerminal=false\nCategories=Development;\n' "$a" "$a" > "/usr/share/applications/$a.desktop"; done
 
-# uv for the desktop user (uv-managed Python everywhere, never bare pip)
 USER 1000
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH=/home/kasm-user/.local/bin:$PATH
 WORKDIR /home/kasm-user
