@@ -19,7 +19,17 @@ declare -A MAP=(
   ["$HOME/.claude/rules/"]="$DEST/.claude/rules/"
   ["$HOME/.config/opencode/"]="$DEST/.config/opencode/"
   ["$HOME/.ssh/"]="$DEST/.ssh/"                      # owner 16:24: "sync the ssh keys also" — private keys land 0600, dir 0700
+  # owner 16:55: "need to sync memories somehow" — canonical auto-memory store -> the devbox's project slug
+  # (Claude Code keys auto-memory by cwd: /home/kasm-user/work/probata -> -home-kasm-user-work-probata).
+  # One-way seed here; continuous two-way sync is the Syncthing folder pair set up after first boot.
+  ["$HOME/.claude/projects/E--AI-Workspace-Projects-the-platform-workspace-probata/memory/"]="$DEST/.claude/projects/-home-kasm-user-work-probata/memory/"
+  ["/e/AI_Workspace/Projects/the-platform-workspace/probata/.remember/"]="$DEST/work/probata/.remember/"
+  ["$HOME/.claude/plugins/memsearch/"]="$DEST/.claude/plugins/memsearch/"   # memsearch config; the index itself is Zilliz Cloud
 )
+# Session transcripts feed `recall` / read-memories; large, so opt-in: ./devbox_mirror_skills.sh --go --transcripts
+if [[ " $* " == *" --transcripts "* ]]; then
+  MAP["$HOME/.claude/projects/"]="$DEST/.claude/projects-desktop-mirror/"
+fi
 ssh -i "$KEY" "$HOST" "install -d -o 1000 -g 1000 $DEST/.claude $DEST/.agents $DEST/.config"
 for src in "${!MAP[@]}"; do
   [[ -e "$src" ]] || { echo "skip (missing): $src"; continue; }
