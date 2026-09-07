@@ -1,0 +1,14 @@
+# Lazy-installed dev tools for the devbox — same set as sprisa/opencode-server's
+# /etc/mise/config.toml (https://github.com/sprisa/opencode-server, MPL-2.0), owner 2026-09-07
+# 17:24: "add the same programs as described". Installed by mise on first use.
+# Differences from upstream: node/python/npm are native in this image (NodeSource + apt), and the
+# three zerobrew-backed entries (ruby, wget, nano) are plain apt packages here — no zerobrew.
+# Byline: Claude Code · Fable 5.1 · 2026-09-07
+[tools]
+"github:cli/cli" = "latest"             # gh (also apt-installed; this keeps it current)
+"github:jqlang/jq" = "latest"
+"glab" = "latest"
+"github:BurntSushi/ripgrep" = "latest"  # rg
+"github:sharkdp/fd" = "latest"
+"github:zyedidia/micro" = "latest"
+"github:facebook/sapling" = "latest"    # sl

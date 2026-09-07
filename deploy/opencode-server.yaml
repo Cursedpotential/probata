@@ -1,0 +1,71 @@
+# =============================================================================
+# OPENCODE-SERVER — headless OpenCode API (`opencode serve`) pulled straight from Docker Hub
+# (sprisa/opencode, https://github.com/sprisa/opencode-server, MPL-2.0; owner 2026-09-07 17:24:
+# "just pull it from where it's at", no fork). Ubuntu 26.04 + opencode pinned by version, uid 1000
+# `opencode` with passwordless sudo, mise lazy tools (node, python3, gh, jq, rg, fd, glab, ruby,
+# vim, micro, nano, wget, sapling), tini as PID 1, /home/opencode = THE persistent volume.
+# Own Coolify "Docker Compose" app on ovh-files (server cn89l8801u8gsginw1rxq5qt, 100.91.190.107).
+#
+# Byline: Claude Code · Fable 5.1 · 2026-09-07
+#
+# Coolify env: BIND_IP=100.91.190.107, OPENCODE_SERVER_PASSWORD (never in this file),
+#              optional OPENCODE_IMAGE_TAG (pinned default below; bump deliberately, never :latest).
+# Coolify Watch Paths: deploy/opencode-server.yaml
+# HOST-PREP (once): sudo install -d -o 1000 -g 1000 /data/probata/volumes/opencode/home
+# Skills/config mirror: scripts/devbox_mirror_skills.sh --opencode-server → that home
+#   (~/.config/opencode, ~/.agents/skills, ~/.claude/skills — all paths OpenCode scans).
+# Provider keys are NOT env here: ~/.config/opencode/auth.json (mirrored) or `opencode auth login`
+# inside the container; Portkey base URL belongs in opencode.json.
+# Consumers: Workbench Ops Copilot (OPENCODE_URL), the `oc` CLI (opencode-ops skill), the devbox.
+#
+# INGRESS (owner 17:26): Traefik labels are PRE-WIRED for the Authentik-fronted pattern used by the
+# Workbench (deploy/workbench.yaml) in case this is later served through Portkey/ContextForge or
+# another auth front — but the route is NOT opened: `traefik.enable=false`. Flip that one label to
+# `true` (and confirm the Host rule + middleware) to publish; until then it is tailnet-only via BIND_IP.
+# =============================================================================
+
+services:
+  opencode-server:
+    image: sprisa/opencode:${OPENCODE_IMAGE_TAG:-1.18.29}
+    container_name: opencode-server
+    restart: unless-stopped
+    cpus: ${OPENCODE_CPUS:-2}
+    mem_limit: ${OPENCODE_MEM:-3g}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:4096:4096"   # http://100.91.190.107:4096 — tailnet-only
+    environment:
+      OPENCODE_PORT: "4096"
+      OPENCODE_SERVER_PASSWORD: ${OPENCODE_SERVER_PASSWORD:?set OPENCODE_SERVER_PASSWORD in Coolify env}
+      OPENCODE_INSTALL_HOME_TOOLS: "true"   # installs ~/.config/mise/config.toml tools 3 s after boot
+      OPENCODE_PRINT_LOGS: "true"
+      OPENCODE_LOG_LEVEL: INFO
+      TZ: America/Detroit
+    volumes:
+      - /data/probata/volumes/opencode/home:/home/opencode   # entire home persists (dotfiles, config, ~/workspace)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:4096/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - probata
+    labels:
+      # ---- route prepared, NOT open (owner 17:26: "add the traefik labels … just don't open the route")
+      - traefik.enable=false
+      - traefik.docker.network=probata
+      - traefik.http.routers.opencode-server.rule=Host(`opencode.int.mitechconsult.com`)
+      - traefik.http.routers.opencode-server.entrypoints=https
+      - traefik.http.routers.opencode-server.tls=true
+      - traefik.http.routers.opencode-server.tls.certresolver=letsencrypt
+      - traefik.http.routers.opencode-server.service=opencode-server
+      - traefik.http.routers.opencode-server.middlewares=opencode-server-authentik
+      - traefik.http.services.opencode-server.loadbalancer.server.port=4096
+      - 'traefik.http.middlewares.opencode-server-authentik.forwardauth.address=http://authentik-server:9000/outpost.goauthentik.io/auth/traefik'
+      - traefik.http.middlewares.opencode-server-authentik.forwardauth.trustForwardHeader=true
+      - 'traefik.http.middlewares.opencode-server-authentik.forwardauth.authResponseHeaders=X-authentik-username,X-authentik-groups,X-authentik-entitlements,X-authentik-email,X-authentik-name,X-authentik-uid,X-authentik-jwt,X-authentik-meta-jwks,X-authentik-meta-outpost,X-authentik-meta-provider,X-authentik-meta-app,X-authentik-meta-version'
+      - coolify.traefik.middlewares=opencode-server-authentik
+
+networks:
+  probata:
+    external: true

@@ -57,6 +57,14 @@ RUN curl -fsSL https://github.com/duckdb/duckdb/releases/latest/download/duckdb_
 # /home/kasm-user is not writable at build time and is overlaid at runtime anyway
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 
+# Same tool set as sprisa/opencode-server (owner 17:24 "add the same programs as described"):
+# apt for ruby/wget/vim/nano, mise (system config) for the lazy github/core-backed tools.
+RUN apt-get update && apt-get install -y --no-install-recommends ruby-full wget vim nano \
+    && apt-get clean && rm -r /var/lib/apt/lists \
+    && curl -fsSL https://mise.run | MISE_INSTALL_PATH=/usr/local/bin/mise sh \
+    && mkdir -p /etc/mise && printf 'eval "$(/usr/local/bin/mise activate bash)"\n' > /etc/profile.d/mise.sh
+COPY deploy/docker/devbox/mise-config.toml /etc/mise/config.toml
+
 # Agent CLIs (owner 16:22: claude + opencode)
 RUN npm install -g @anthropic-ai/claude-code opencode-ai && npm cache clean --force
 

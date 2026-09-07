@@ -26,6 +26,7 @@ link .config/syncthing "$P/.config/syncthing"
 # xrdp needs its two daemons; sudo is passwordless for kasm-user in this sandbox image
 sudo /usr/sbin/xrdp-sesman >/dev/null 2>&1 &
 sudo /usr/sbin/xrdp --nodaemon >/dev/null 2>&1 &
+# (OpenCode's headless server is its own container — deploy/opencode-server.yaml, owner 17:24 — not run here.)
 # Syncthing: GUI on 0.0.0.0:8384 (published on the tailnet IP only), config under the persistent tree
 nohup syncthing serve --no-browser --gui-address=0.0.0.0:8384 --home="$P/.config/syncthing" >"$P/.config/syncthing.log" 2>&1 &
 exit 0
