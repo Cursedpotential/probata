@@ -48,7 +48,7 @@ before = s
 s = re.sub(r"\buiw_", "proffer_", s)
 s = re.sub(r"_uiw_", "_proffer_", s)
 # 2. agno_app is dead: drop every GRANT/REVOKE/ALTER DEFAULT PRIVILEGES line naming it
-s = "\n".join(ln for ln in s.split("\n") if "agno_app" not in ln)
+s = "\n".join(ln for ln in s.split("\n") if not re.search(r"\bagno_app\b", ln))
 # 3. human labels are reference data: move both tables (and their indexes/constraints) under reference
 s = s.replace("analysis.human_label_gold", "reference.human_label_gold").replace("analysis.human_label", "reference.human_label")
 # 4. reference never carries an FK to an operational table
