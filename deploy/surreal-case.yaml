@@ -1,0 +1,55 @@
+# =============================================================================
+# SURREAL-CASE — the family-court-toolkit case store as ONE shared SurrealDB service in the
+# cloud (owner rulings 2026-09-07 16:15-16:56: "move it to the cloud and serve it through
+# ContextForge"; "stand it up" after discovery found no live governed SurrealDB — only the
+# parked legacy instance). Deployed as its own Coolify "Docker Compose" app on ovh-files
+# (server cn89l8801u8gsginw1rxq5qt, tailnet 100.91.190.107). One concern per app.
+#
+# Byline: Claude Code · Fable 5.1 · 2026-09-07
+#
+# Clients (plugin console on the desktop, the console in the cloud, the Tauri app, other
+# harnesses) connect with CUSTODY_CASE_DB=ws://100.91.190.107:8471 and root creds resolved
+# from env / ~/.secrets (store.ts already supports ws:// + signin). Same engine family as the
+# retired embedded store (SurrealDB 3.x, RocksDB) so nothing in the schema changes.
+# Coolify env to set: BIND_IP=100.91.190.107, SURREAL_USER, SURREAL_PASS (never in this file).
+# Coolify Watch Paths: deploy/surreal-case.yaml
+# HOST-PREP (once): sudo install -d -o 65532 -g 65532 /data/probata/volumes/surreal-case
+#   (the official image runs as a non-root user; if the container logs a permission error on
+#    /data, chown the dir to the uid it reports)
+# Tailnet-only by BIND_IP AND by the host DOCKER-USER rules (commit 7d4583d).
+# =============================================================================
+
+services:
+  surreal-case:
+    image: surrealdb/surrealdb:v3.2.4
+    container_name: surreal-case
+    restart: unless-stopped
+    user: root                      # RocksDB dir is a host bind; run as root to avoid uid drift (single-tenant host)
+    command:
+      - start
+      - --bind
+      - 0.0.0.0:8000
+      - --log
+      - info
+      - rocksdb:/data/case.db
+    environment:
+      SURREAL_USER: ${SURREAL_USER:?set SURREAL_USER in Coolify env}
+      SURREAL_PASS: ${SURREAL_PASS:?set SURREAL_PASS in Coolify env}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:8471:8000"   # ws://100.91.190.107:8471 — tailnet-only
+    volumes:
+      - /data/probata/volumes/surreal-case:/data
+    mem_limit: 2g
+    cpus: 1.5
+    healthcheck:
+      test: ["CMD", "/surreal", "is-ready", "--endpoint", "http://127.0.0.1:8000"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - probata
+
+networks:
+  probata:
+    external: true
