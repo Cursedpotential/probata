@@ -15,37 +15,37 @@ for a in "$@"; do case "$a" in --go) GO=1;; --opencode-server) OCS=1;; --transcr
 # junk scrub (owner rule): never ship node_modules/.git/__pycache__/venvs/tmp/holding areas
 EXCL=(--exclude=node_modules --exclude=.git --exclude=__pycache__ --exclude=.venv --exclude=venv
       --exclude='*.duckdb' --exclude=_stale --exclude=_quarantine --exclude=tmp --exclude='.review_h*')
-declare -A MAP=(
-  ["$HOME/.claude/skills/"]="$DEST/.claude/skills/"
-  ["$HOME/.agents/skills/"]="$DEST/.agents/skills/"
-  ["$HOME/.claude/local-plugins/"]="$DEST/.claude/local-plugins/"
-  ["$HOME/.claude/CLAUDE.md"]="$DEST/.claude/CLAUDE.md"
-  ["$HOME/.claude/rules/"]="$DEST/.claude/rules/"
-  ["$HOME/.config/opencode/"]="$DEST/.config/opencode/"
-  ["$HOME/.ssh/"]="$DEST/.ssh/"                      # owner 16:24: "sync the ssh keys also" — dir 0700, files 0600
+PAIRS=(
+  "$HOME/.claude/skills/|$DEST/.claude/skills/"
+  "$HOME/.agents/skills/|$DEST/.agents/skills/"
+  "$HOME/.claude/local-plugins/|$DEST/.claude/local-plugins/"
+  "$HOME/.claude/CLAUDE.md|$DEST/.claude/CLAUDE.md"
+  "$HOME/.claude/rules/|$DEST/.claude/rules/"
+  "$HOME/.config/opencode/|$DEST/.config/opencode/"
+  "$HOME/.ssh/|$DEST/.ssh/"                      # owner 16:24: "sync the ssh keys also" — dir 0700, files 0600
   # auto-memory -> the devbox's project slug (Claude Code keys memory by cwd: /home/kasm-user/work/probata)
-  ["$HOME/.claude/projects/E--AI-Workspace-Projects-the-platform-workspace-probata/memory/"]="$DEST/.claude/projects/-home-kasm-user-work-probata/memory/"
-  ["/e/AI_Workspace/Projects/the-platform-workspace/probata/.remember/"]="$DEST/work/probata/.remember/"
+  "$HOME/.claude/projects/E--AI-Workspace-Projects-the-platform-workspace-probata/memory/|$DEST/.claude/projects/-home-kasm-user-work-probata/memory/"
+  "/e/AI_Workspace/Projects/the-platform-workspace/probata/.remember/|$DEST/work/probata/.remember/"
   # memsearch (owner 16:59): plugin + marketplace registration so both boxes use the SAME Zilliz collection
-  ["$HOME/.claude/plugins/marketplaces/memsearch-plugins/"]="$DEST/.claude/plugins/marketplaces/memsearch-plugins/"
-  ["$HOME/.claude/plugins/cache/memsearch-plugins/"]="$DEST/.claude/plugins/cache/memsearch-plugins/"
-  ["$HOME/.claude/plugins/known_marketplaces.json"]="$DEST/.claude/plugins/known_marketplaces.json"
-  ["$HOME/.claude/plugins/installed_plugins.json"]="$DEST/.claude/plugins/installed_plugins.json"
-  ["$HOME/.claude/settings.json"]="$DEST/.claude/settings.desktop-reference.json"   # Windows paths inside; port by hand
+  "$HOME/.claude/plugins/marketplaces/memsearch-plugins/|$DEST/.claude/plugins/marketplaces/memsearch-plugins/"
+  "$HOME/.claude/plugins/cache/memsearch-plugins/|$DEST/.claude/plugins/cache/memsearch-plugins/"
+  "$HOME/.claude/plugins/known_marketplaces.json|$DEST/.claude/plugins/known_marketplaces.json"
+  "$HOME/.claude/plugins/installed_plugins.json|$DEST/.claude/plugins/installed_plugins.json"
+  "$HOME/.claude/settings.json|$DEST/.claude/settings.desktop-reference.json"   # Windows paths inside; port by hand
 )
-if (( TR )); then MAP["$HOME/.claude/projects/"]="$DEST/.claude/projects-desktop-mirror/"; fi
+if (( TR )); then PAIRS+=("$HOME/.claude/projects/|$DEST/.claude/projects-desktop-mirror/"); fi
 if (( OCS )); then
   OC="/data/probata/volumes/opencode/home"
-  MAP["$HOME/.config/opencode/"]="$OC/.config/opencode/"
-  MAP["$HOME/.agents/skills/"]="$OC/.agents/skills/"
-  MAP["$HOME/.claude/skills/"]="$OC/.claude/skills/"
-  MAP["$HOME/.claude/local-plugins/"]="$OC/.claude/local-plugins/"
+  MAP"$HOME/.config/opencode/|$OC/.config/opencode/"
+  MAP"$HOME/.agents/skills/|$OC/.agents/skills/"
+  MAP"$HOME/.claude/skills/|$OC/.claude/skills/"
+  MAP"$HOME/.claude/local-plugins/|$OC/.claude/local-plugins/"
 fi
 SSH=(ssh -i "$KEY" -o BatchMode=yes "$HOST")
 "${SSH[@]}" "install -d -o 1000 -g 1000 $DEST/.claude $DEST/.agents $DEST/.config $DEST/work ${OCS:+/data/probata/volumes/opencode/home/.config /data/probata/volumes/opencode/home/.agents /data/probata/volumes/opencode/home/.claude}" >/dev/null
 total_files=0; total_bytes=0
-for src in "${!MAP[@]}"; do
-  dst="${MAP[$src]}"
+for pair in "${PAIRS[@]}"; do
+  src="${pair%%|*}"; dst="${pair#*|}"
   [[ -e "$src" ]] || { echo "skip (missing): $src"; continue; }
   if [[ -d "$src" ]]; then
     n=$(tar -C "$src" "${EXCL[@]}" -cf - . 2>/dev/null | tar -tf - 2>/dev/null | grep -vc '/$' || true)
