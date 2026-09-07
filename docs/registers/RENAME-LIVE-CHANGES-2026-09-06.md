@@ -175,4 +175,21 @@ Owner 19:04–19:14: no dual execution until really live; simplest/fastest appro
 
 Left on the instance, owner's call: `platform_preburn_20260830`, `platform_baseline_test` (old rehearsal DBs), `uiw-pg18-rehearsal-20260830` Coolify database.
 
-**Post-deploy fixes 19:25–19:40 (same session).** The rebuilt `proffer-worker` crash-looped on its schema-admission gate (`modules/engine/postgres/proffer_schema_probe.go:274`): (1) the restored database was owned by `ai`, the gate requires `platform_admin` → `ALTER DATABASE platform OWNER TO platform_admin`; (2) the gate also checks constraint names by their new `proffer_*` spelling → every `uiw_*` constraint and index renamed in one DO block; 0 `uiw`-named objects remain anywhere in `platform`. Worker started on `proffer-v1` at 00:17 UTC; `parser-activity-runtime` and `tool-gateway` redeployed healthy; `proffer-starter` still on the 14:35 build (its redeploy was queued, not yet run). The push did trigger webhook deploys; my API trigger doubled them, harmless. `.claude/settings.local.json` still carries historical one-shot permission entries with the old scratchpad path; they are inert allow-list lines and belong to handoff 02 (owner's settings file).
+## 12. Retirements and the no-ruling identifiers — 2026-09-07 02:55–03:10 EDT (Claude Code · Fable 5.1)
+
+Owner 02:56: "con". Everything here needed no name ruling.
+
+| Item | Done |
+|---|---|
+| `first-real-runs` copies (owner: "stupid and unneeded") | R2: 4 objects (1.24 GiB) moved server-side to `nexus/.review_hold/first-real-runs-20260906/`; VPS: `/data/agno/volumes/proffer/source-objects/test-fixtures/first-real-runs` moved to `/data/.review_hold/first-real-runs-20260906`. Originals untouched at `/data/test_data/<source_type>/<export>/` with their `.sha256` sidecars. |
+| Handoff 03 (fixture prefix) | the one synthetic fixture `live-proof-20260827-sample_backup.xml` copied to `nexus/proffer/test-fixtures/` (code's `devFixturePrefix`); `uiw/` copy left in place. DONE. |
+| R-14 retire Graphiti / phase1-surreal | Coolify apps `data-graphiti-case`, `data-graphiti-files`, `data-surreal-phase1-t0-r1` stopped; 0 such containers on ovh-files. Compose files moved to `deploy/_retired/`. Still referenced: a `graphiti-mcp` service block inside root `deploy/compose.yaml` (lines ~203-270) and `server/analysis/graphiti_case_client.py:32` default URL — left for the compose-owner session. |
+| R-13 `unified-operator-surface` | compose file moved to `deploy/_retired/`; mockup dir untouched. |
+| R-11 `knowledge-workbench` → `workbench` | compose service key, image `probata-workbench:latest`, `container_name: workbench`; npm `workbench-web` (package + lock); FastAPI title "Probata Workbench API"; deploy-contract test updated, 18 passed. Forced redeploy queued 03:08 (webhook did not fire on this push). |
+| R-18 | `knowledge/platform/docs/agno-mcp-platform-mvp-handoff-guide-v8.1.md` → `probata-mvp-handoff-guide-v8.1.md`, contents untouched. |
+| R-6 `OS_SECURITY_KEY` | compose comment rewritten as retired; the AGENTS.md learning line is history and stays. |
+| Commit | probata `main` `97d3eca`, pushed. |
+
+Not done, one coordinated all-apps window with the owner reachable: R-1 network, R-2 host root, R-3 `agentos-db/api` + `DB_ID`, R-5 `AGENTOS_*`, R-9 `SURREALDB_NS`, R-10 Tailscale services, R-12 `platform-api`, R-17 ghcr image. Name for all of them unless the owner says otherwise: **`probata`**.
+
+**Post-deploy fixes 19:25–19:40 (2026-09-06, same session).** The rebuilt `proffer-worker` crash-looped on its schema-admission gate (`modules/engine/postgres/proffer_schema_probe.go:274`): (1) the restored database was owned by `ai`, the gate requires `platform_admin` → `ALTER DATABASE platform OWNER TO platform_admin`; (2) the gate also checks constraint names by their new `proffer_*` spelling → every `uiw_*` constraint and index renamed in one DO block; 0 `uiw`-named objects remain anywhere in `platform`. Worker started on `proffer-v1` at 00:17 UTC; `parser-activity-runtime` and `tool-gateway` redeployed healthy; `proffer-starter` still on the 14:35 build (its redeploy was queued, not yet run). The push did trigger webhook deploys; my API trigger doubled them, harmless. `.claude/settings.local.json` still carries historical one-shot permission entries with the old scratchpad path; they are inert allow-list lines and belong to handoff 02 (owner's settings file).
