@@ -67,7 +67,7 @@
 services:
   gateway:
     build:
-      context: ./docker/gateway
+      context: ./deploy/docker/gateway
     image: agno-gateway:latest
     container_name: gateway
     restart: unless-stopped

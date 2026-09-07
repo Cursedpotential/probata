@@ -126,6 +126,8 @@ Every phase: (a) is a Coolify/host change, (b) ends with a read that proves it, 
 
 ### Phase 4.3 — docker network `agno` → N-1 (both boxes; ~1 hour; every app bounces once)
 
+> **EXECUTED 2026-09-07 07:30–08:10 EDT as a hard cut (19:15 amendment) — Claude Code · Fable 5.1.** N-1 = `probata`. Steps 1–6 done as written except step 7: `agno` was removed the same morning, not on 2026-09-13 (no dual execution). Live record: `docs/registers/RENAME-LIVE-CHANGES-2026-09-06.md` §13. Owner 07:20: "why is this staying??"
+
 1. On ovh-files and ovh-app: `docker network create <N-1>` (bridge, same options as `agno`; read `docker network inspect agno` first and copy `Options`/`IPAM` shape, not the subnet).
 2. `docker network connect <N-1> coolify-proxy` on both boxes (Traefik must be on the new network before any app moves, or routing dies at the first redeploy).
 3. Edit all 29 compose files: network name in `networks:` blocks, `external: true` name, and every `traefik.docker.network=agno` label. One commit, **not yet pushed**.
@@ -135,6 +137,8 @@ Every phase: (a) is a Coolify/host change, (b) ends with a read that proves it, 
 7. Old network stays (empty) until 2026-09-13, then `docker network rm agno`.
 
 ### Phase 4.4 — host root `/data/agno` → N-2 (both boxes; ~1 hour)
+
+> **EXECUTED 2026-09-07 07:52 EDT as a hard cut — Claude Code · Fable 5.1.** N-2 = `probata`. ~~Step 1 (stop every app) and the step-2 symlink~~ were **not** done: apps kept running (Linux bind mounts follow the inode, so `mv` under a running container is safe) and the 19:15 amendment forbids the alias; `scripts/phase4_host_root_rename.sh` did the rename on both boxes (11/11 and 4/4 top-level entries). Mount lines actually numbered 135 across 43 files, not 113/29. Verification per step 5 in register §13.
 
 1. Stop every Coolify app on the box (Coolify API `stop`), confirm `docker ps` shows only `coolify-proxy`, `coolify`, `coolify-*` system containers.
 2. `mv /data/agno /data/<N-2>` and `ln -s /data/<N-2> /data/agno` (the alias; same role the Windows junctions play). Verify `ls -la /data/agno` shows the symlink and `du -sh` matches §2.1 before/after.

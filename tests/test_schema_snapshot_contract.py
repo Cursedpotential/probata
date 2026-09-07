@@ -25,7 +25,7 @@ def test_snapshot_has_the_ruled_shape() -> None:
     # word-bounded: ai.agno_approvals is a table that legitimately survives; the agno_app ROLE is what must be gone
     assert not re.search(r"\bagno_app\b", sql), "agno_app role is dead (owner 2026-09-06)"
     assert "CREATE TABLE reference.human_label (" in sql and "analysis.human_label" not in sql
-    assert "CREATE TABLE working.normalized_record_chunk" in sql
+    assert "CREATE TABLE working.content_chunk (" in sql  # chunk spine (ADR-0053); normalized_record_chunk writer retired 2026-09-05
     assert "CREATE TABLE raw.raw_sms" in sql
 
 

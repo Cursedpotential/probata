@@ -25,7 +25,7 @@
 services:
   sandbox:
     build:
-      context: ./docker/sandbox
+      context: ./deploy/docker/sandbox
     image: agno-sandbox:latest
     container_name: agent-sandbox
     restart: unless-stopped

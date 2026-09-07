@@ -8,14 +8,14 @@
 #         both models probe-verified 200. Ports/other services unchanged.
 
 services:
-  agentos-db:
+  probata-db:
     # Custom PG18 image: pg_duckdb + PostGIS + pgvector + pg_stat_statements
     # (ADR-0013; docker/postgres/Dockerfile). Was: agnohq/pgvector:18 — same
     # PG major, so the pgdata volume carries over.
     build:
       context: ./docker/postgres
-    image: agno-postgres:18-duckdb
-    container_name: agentos-db
+    image: probata-postgres:18-duckdb
+    container_name: probata-db
     restart: unless-stopped
     ports:
       - "5432:5432"
@@ -61,7 +61,7 @@ services:
       AGNO_DEBUG: "True"
       WAIT_FOR_DB: "True"
       AGENTOS_URL: http://127.0.0.1:8000
-      DB_HOST: agentos-db
+      DB_HOST: probata-db
       DB_PORT: 5432
       DB_USER: ${DB_USER:-ai}
       DB_PASS: ${DB_PASS:-ai}
@@ -98,7 +98,7 @@ services:
       # any env is now a no-op and safe to delete there too.
       SBV_SERVICE_PASS: ${SBV_SERVICE_PASS:-}
     depends_on:
-      agentos-db:
+      probata-db:
         condition: service_healthy
     networks:
       - agentos

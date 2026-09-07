@@ -34,6 +34,6 @@ deploy)
   [ -n "${2:-}" ] || { echo "uuid list required"; exit 2; }
   api -X POST "$BASE/deploy?uuid=$2&force=false" | python3 -c 'import json,sys; d=json.load(sys.stdin); [print(x.get("message"), x.get("resource_uuid"), x.get("deployment_uuid")) for x in d.get("deployments", [d])]' ;;
 queue)
-  api "$BASE/deployments" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len(d), "active"); [print(x.get("status"), "|", x.get("application_name") or x.get("application_id"), "|", x.get("deployment_uuid")) for x in d]' ;;
+  api "$BASE/deployments" | python3 -c 'import json,sys; d=json.load(sys.stdin); items=list(d.values()) if isinstance(d,dict) else d; print(len(items), "active"); [print(x.get("status"), "|", x.get("application_name") or x.get("application_id"), "|", x.get("deployment_uuid")) for x in items if isinstance(x,dict)]' ;;
 *) echo "usage: $0 servers|services|list [server]|app <uuid>|deploy <uuids>|queue"; exit 2;;
 esac

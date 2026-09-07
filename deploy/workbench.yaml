@@ -41,7 +41,7 @@
 services:
   workbench:
     build:
-      context: ./workbench
+      context: ./modules/workbench
       dockerfile: Dockerfile
     image: probata-workbench:latest
     container_name: workbench

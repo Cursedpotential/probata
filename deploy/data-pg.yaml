@@ -24,12 +24,12 @@
 # =============================================================================
 
 services:
-  agentos-db:
+  probata-db:
     # Custom PG18: pg_duckdb + PostGIS + pgvector + pg_stat_statements.
     build:
-      context: ./docker/postgres
-    image: agno-postgres:18-duckdb
-    container_name: agentos-db
+      context: ./deploy/docker/postgres   # Coolify resolves build contexts from the repo root (base_directory), not the compose file
+    image: probata-postgres:18-duckdb
+    container_name: probata-db
     restart: unless-stopped
     ports:
       # raw TCP, tailnet-only (reached by agentos-api on OVH-1); never proxied
@@ -50,7 +50,7 @@ services:
       retries: 10
     networks:
       - pg
-      - probata                # shared external net — reachable as `agentos-db` by other OVH-3 apps
+      - probata                # shared external net — reachable as `probata-db` by other ovh-files apps (renamed from agentos-db 2026-09-07, plan §4.6)
 
 networks:
   pg:
