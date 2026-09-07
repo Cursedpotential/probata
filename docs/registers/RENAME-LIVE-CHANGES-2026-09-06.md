@@ -156,4 +156,21 @@ Owner rulings 18:51–18:57: no migration and no rehearsal for a database that h
 | Exported as primary data | `/data/agno/backups/primary-data-20260906/` on ovh-files: 26 per-table CSVs (header row), per-schema schema+data SQL for `reference`, `media`, `knowledge`, `analysis.human_label*`, `SHA256SUMS`, README. Contains real names/lexicon values: vault tier only, never git. The raw load file is beside it as `precious-20260906.sql` (117 MB). |
 | `casebible` database | untouched; remains the source of record until its role is ruled (consignatio, D-141) |
 
-Not done here: an R2 copy of the export (billable; dry-run + owner sign-off first), and the `platform` rebuild from the edited snapshot (owner says "rebuild"). Migration `0073` and its rehearsal are withdrawn in favour of editing the snapshot; the Go/test/script renames to `proffer_*` in local commit `dddbd4d` stay and go live with the rebuild. `.claude/settings.local.json` still carries historical one-shot permission entries with the old scratchpad path; they are inert allow-list lines and belong to handoff 02 (owner's settings file).
+Not done here: an R2 copy of the export (billable; dry-run + owner sign-off first).
+
+## 11. Simplest wins — 2026-09-06 19:03–19:20 EDT (Claude Code · Fable 5.1)
+
+Owner 19:04–19:14: no dual execution until really live; simplest/fastest approach wins; "why not just delete the table and recreate it"; "you're in bypass mode so get rid of it" (the hook).
+
+| Step | Result |
+|---|---|
+| Snapshot rebuild attempt 19:08 | FAILED at line 5151: my edit step dropped `CREATE TABLE ai.agno_approvals` (substring match on `agno_app`). `platform` was left half-built. |
+| Recovery 19:13 | Restored the 19:03 safety dump (`platform-pre-rebuild-20260906.dump`) into `platform_restore`, swapped database names, dropped the half-built one. 276 tables, reference data intact (custody_factor 12, media.photos 7,121). |
+| `uiw_*` → `proffer_*` | 9 `ALTER TABLE … RENAME`; 0 `uiw_*` tables remain (constraint/index names keep the old prefix; cosmetic). |
+| `analysis.human_label*` → `reference.*` | 2 `ALTER TABLE … SET SCHEMA`; 1,918 + 1,918 rows. |
+| `agno_app` | `DROP OWNED BY` in every database on the instance, then `DROP ROLE`; 0 rows in `pg_roles`. Its last consumer, Coolify app `temporal-worker` (Python `evidence-pipeline` worker), stopped. |
+| Hook | `.claude/hooks/db_write_gate.py` (local, gitignored; registered in `.claude/settings.json`) no longer denies DROP DATABASE / DROP SCHEMA / TRUNCATE CASCADE. |
+| Code | probata `main` pushed at `5f1c4f9`: Go store/tests/scripts use `proffer_*`; 0073 parked under `sql/parked/` as superseded; snapshot + rebuild script kept as provenance. Coolify redeploys `proffer-worker`, `proffer-starter`, `parser-activity-runtime`, `tool-gateway` on that push. |
+| Directory junctions | all four removed 19:16 (`Agno-MCP-Platform`, `modules/traceIQ`, `modules/Legal-Workspace`, the Claude memory dir alias). Workspace `.gitignore` alias line removed; `master` at `36b6807c`. |
+
+Left on the instance, owner's call: `platform_preburn_20260830`, `platform_baseline_test` (old rehearsal DBs), `uiw-pg18-rehearsal-20260830` Coolify database. `.claude/settings.local.json` still carries historical one-shot permission entries with the old scratchpad path; they are inert allow-list lines and belong to handoff 02 (owner's settings file).

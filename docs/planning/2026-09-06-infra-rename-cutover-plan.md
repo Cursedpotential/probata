@@ -1,6 +1,19 @@
 # Infra rename cutover plan — network, host root, roles, tables, Tailscale services, component names
 
 > _Byline: Claude Code · Fable 5.1 · 2026-09-06 18:45 EDT._
+> **AMENDED 19:15 (owner 19:04–19:14), binding over everything below:**
+> 1. **No dual execution until really live.** Every "keep the old name 7 days" / symlink / dual-advertise /
+>    old-network-kept line in §4 is STRUCK. Hard cut. If it breaks, we know what to fix. The directory
+>    junctions were removed 19:16 for the same reason.
+> 2. **Simplest, fastest approach wins for everything.** The database work in §4.1 and §7 was done as
+>    13 statements at 19:13 (restore the 19:03 safety dump, 9 `ALTER TABLE … RENAME` uiw→proffer,
+>    2 `SET SCHEMA reference` for the label tables, `DROP ROLE agno_app`), not as a snapshot rebuild.
+>    The snapshot rebuild script and migration 0073 are parked provenance.
+> 3. **On reset during testing: drop every table that is not reference and recreate it as it needs to be.**
+>    Reference stays. That is the whole teardown procedure.
+> 4. `.claude/hooks/db_write_gate.py` no longer denies DROP DATABASE / DROP SCHEMA / TRUNCATE CASCADE
+>    (local, gitignored hook; restore the deny when real evidence lands).
+>
 > **STATUS: ITERATING — NOT DONE.** Owner, 18:20: "i want a complete plan first." Nothing in
 > §4 onward runs until the owner says go, phase by phase. Everything in §2 was read live
 > between 17:40 and 18:35 today.
