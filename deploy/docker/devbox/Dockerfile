@@ -192,9 +192,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends pandoc ghostwri
     && apt-get clean && rm -r /var/lib/apt/lists
 
 # EXIF / image stack (owner: exiv2, gimp, pinta replace PhotoScape — no snapd in Docker and the
-# PhotoScape snap is a Wine wrapper anyway)
+# PhotoScape snap is a Wine wrapper anyway). DROPPED pinta (live build failure 2026-09-08):
+# `apt-cache policy pinta` on a stock ubuntu:24.04 image shows "Candidate: (none)" — no apt
+# package on Noble, the pinta-maintainers PPA 404s for noble, and upstream's own GitHub releases
+# ship only Windows .exe / macOS .dmg / a source tarball, no Linux .deb or AppImage. Same
+# packaging gap PhotoScape had. GIMP remains as the raster editor; owner can revisit a
+# from-source Pinta build later if actually wanted.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        imagemagick libimage-exiftool-perl exiv2 gimp pinta ffmpeg tesseract-ocr tesseract-ocr-eng \
+        imagemagick libimage-exiftool-perl exiv2 gimp ffmpeg tesseract-ocr tesseract-ocr-eng \
     && apt-get clean && rm -r /var/lib/apt/lists
 
 # Obsidian — latest GitHub release THAT HAS a .deb asset (the newest tag can lag its deb build)
