@@ -14,12 +14,14 @@ env={}
 for f in sorted(glob.glob(os.path.expanduser('~/.secrets/*.env'))):
     for line in open(f,encoding='utf-8',errors='replace'):
         m=re.match(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?)\s*$',line)
-        if m and m.group(1) not in env: env[m.group(1)]=m.group(2).strip().strip('"').strip("'")
+        if m and m.group(1) not in env:
+            v=re.sub(r'\s+#.*$','',m.group(2)).strip().strip('"').strip("'")   # drop inline "# comment" tails (the GEMINI line has one)
+            env[m.group(1)]=v
 auth={}
 try: auth=json.load(open(os.path.expanduser('~/.local/share/opencode/auth.json')))
 except Exception: pass
 for prov,var in [("nvidia","NVIDIA_API_KEY"),("openrouter","OPENROUTER_API_KEY"),("groq","GROQ_API_KEY"),("cerebras","CEREBRAS_API_KEY"),("mistral","MISTRAL_API_KEY"),("google","GEMINI_API_KEY")]:
-    if env.get(var) and prov not in auth: auth[prov]={"type":"api","key":env[var]}
+    if env.get(var): auth[prov]={"type":"api","key":env[var]}   # always refresh from ~/.secrets (owner 2026-09-08: update the gemini key)
 print(json.dumps(auth))
 import sys; sys.stderr.write("providers: "+", ".join(sorted(auth))+"\n")
 PY
