@@ -25,7 +25,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # System tooling
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git curl ca-certificates gnupg ripgrep fd-find jq tmux build-essential pkg-config \
-        python3 python3-venv python3-pip unzip less openssh-client \
+        python3 python3-venv python3-pip unzip less openssh-client rclone fuse3 \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && apt-get clean && rm -r /var/lib/apt/lists
 

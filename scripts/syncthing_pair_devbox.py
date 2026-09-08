@@ -27,6 +27,9 @@ FOLDERS = [  # id, label, desktop path, devbox path
     ("probata-remember", "probata .remember", r"E:\AI_Workspace\Projects\the-platform-workspace\probata\.remember", f"{P}/work/probata/.remember"),
     ("opencode-home", "~/.opencode", str(Path.home() / ".opencode"), f"{P}/.opencode"),
     ("work-sync", "work sync drop", r"E:\AI_Workspace\sync", f"{P}/work/sync"),
+    ("claude-skills", "~/.claude/skills", str(Path.home() / ".claude/skills"), f"{P}/.claude/skills"),
+    ("agents-skills", "~/.agents/skills", str(Path.home() / ".agents/skills"), f"{P}/.agents/skills"),
+    ("local-plugins", "~/.claude/local-plugins", str(Path.home() / ".claude/local-plugins"), f"{P}/.claude/local-plugins"),
 ]
 
 
@@ -44,6 +47,14 @@ dev_id = re.search(r'<device id="([A-Z0-9-]+)"', dev_cfg).group(1)
 print("desktop", desk_id[:7], "| devbox", dev_id[:7])
 Path(r"E:\AI_Workspace\sync").mkdir(exist_ok=True)
 
+
+IGNORE = "node_modules\n.git\n.review_hold\n__pycache__\n.venv\n*.duckdb\n"   # owner junk-scrub rule; applied as .stignore on both sides
+for _fid, _label, dpath, _v in FOLDERS:
+    try:
+        Path(dpath).mkdir(parents=True, exist_ok=True); (Path(dpath) / ".stignore").write_text(IGNORE, encoding="utf-8")
+    except OSError as e: print("stignore skip", dpath, e)
+subprocess.run(["ssh", "-i", str(Path.home() / ".ssh/ovh"), "-o", "BatchMode=yes", "root@100.91.190.107",
+    " && ".join(f"install -d -o 1000 -g 1000 {v} && printf '{IGNORE}' > {v}/.stignore && chown 1000:1000 {v}/.stignore" for _f,_l,_d,v in FOLDERS)], check=False)
 
 def side(url: str, key: str, my_id: str, peer_id: str, peer_name: str, peer_addr: list[str], path_idx: int) -> None:
     c = httpx.Client(base_url=url, headers={"X-API-Key": key}, timeout=30)

@@ -42,6 +42,11 @@ services:
       TZ: America/Detroit
     volumes:
       - /data/probata/volumes/opencode/home:/home/opencode   # entire home persists (dotfiles, config, ~/workspace)
+      # ONE VPS copy of skills/plugins (owner 2026-09-08 10:36): the devbox persist tree is the copy Syncthing keeps
+      # in step with the desktop; the OpenCode server reads the same directories instead of a second mirror.
+      - /data/probata/volumes/devbox/home/.claude/skills:/home/opencode/.claude/skills
+      - /data/probata/volumes/devbox/home/.agents/skills:/home/opencode/.agents/skills
+      - /data/probata/volumes/devbox/home/.claude/local-plugins:/home/opencode/.claude/local-plugins
     healthcheck:
       # 401 is the healthy answer when OPENCODE_SERVER_PASSWORD is set (curl -f would treat it as failure)
       test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4096/ | grep -Eq '^(200|401)$'"]

@@ -29,6 +29,14 @@ mkdir -p "$P/.memsearch/memory"; link .memsearch "$P/.memsearch"
 if command -v memsearch >/dev/null 2>&1; then
   ( while true; do memsearch index "$HOME/.memsearch/memory" >>"$P/.memsearch/index.log" 2>&1; sleep 1800; done ) &
 fi
+# OpenList (R2/B2/VPS volumes/desktop share) mounted as a filesystem at ~/files via rclone WebDAV (owner 2026-09-08)
+if command -v rclone >/dev/null 2>&1 && [[ -n "${OPENLIST_PASS:-}" ]]; then
+  mkdir -p "$HOME/files" "$P/.config/rclone"
+  OBS=$(rclone obscure "$OPENLIST_PASS")
+  printf '[openlist]\ntype = webdav\nurl = %s/dav\nvendor = other\nuser = %s\npass = %s\n' "$OPENLIST_URL" "$OPENLIST_USER" "$OBS" > "$P/.config/rclone/rclone.conf"
+  chmod 600 "$P/.config/rclone/rclone.conf"; link .config/rclone "$P/.config/rclone"
+  nohup rclone mount openlist: "$HOME/files" --vfs-cache-mode writes --dir-cache-time 30s --allow-non-empty >"$P/.config/rclone-mount.log" 2>&1 &
+fi
 # xrdp needs its two daemons; sudo is passwordless for kasm-user in this sandbox image
 sudo /usr/sbin/xrdp-sesman >/dev/null 2>&1 &
 sudo /usr/sbin/xrdp --nodaemon >/dev/null 2>&1 &

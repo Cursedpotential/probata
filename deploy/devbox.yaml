@@ -25,6 +25,13 @@ services:
     container_name: devbox
     restart: unless-stopped
     shm_size: "1g"                      # KasmVNC needs a large /dev/shm
+    # FUSE for the rclone mount of OpenList's WebDAV at ~/files (owner 2026-09-08: virtual file shares inside the box)
+    devices:
+      - /dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
     cpus: ${DEVBOX_CPUS:-2}
     mem_limit: ${DEVBOX_MEM:-4g}
     ports:
@@ -34,6 +41,9 @@ services:
       - "${BIND_IP:-127.0.0.1}:22000:22000" # Syncthing sync
     environment:
       VNC_PW: ${VNC_PW:?set VNC_PW in Coolify env}
+      OPENLIST_URL: ${OPENLIST_URL:-http://openlist:5244}      # service DNS on the probata network
+      OPENLIST_USER: ${OPENLIST_USER:-admin}
+      OPENLIST_PASS: ${OPENLIST_PASS:-}                        # set in Coolify env; empty = no mount
       KASM_SVC_AUDIO: "0"
       KASM_SVC_UPLOADS: "1"
       KASM_SVC_DOWNLOADS: "1"
