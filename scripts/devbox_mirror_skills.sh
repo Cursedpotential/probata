@@ -39,6 +39,10 @@ PAIRS=(
   "$HOME/.local/share/opencode/mcp-auth.json|$DEST/.local/share/opencode/mcp-auth.json"
   "$HOME/.local/share/opencode/account.json|$DEST/.local/share/opencode/account.json"
   "$HOME/.opencode/|$DEST/.opencode/"
+  # memsearch config + profile (owner 2026-09-08 "both systems"); digests are per-box, the Zilliz collection is shared
+  "$HOME/.memsearch/config.toml|$DEST/.memsearch/config.toml"
+  "$HOME/.memsearch/PROJECT.md|$DEST/.memsearch/PROJECT.md"
+  "$HOME/.memsearch/USER.md|$DEST/.memsearch/USER.md"
 )
 if (( TR )); then PAIRS+=("$HOME/.claude/projects/|$DEST/.claude/projects-desktop-mirror/"); fi
 if (( OCS )); then

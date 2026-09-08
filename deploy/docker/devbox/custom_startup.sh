@@ -23,6 +23,12 @@ link .ssh "$P/.ssh"
 link .config/opencode "$P/.config/opencode"
 link .config/syncthing "$P/.config/syncthing"
 [[ -f "$P/.gitconfig" ]] && link .gitconfig "$P/.gitconfig"
+# memsearch (owner 2026-09-08 "both systems"): persistent config + digests, and a 30-min indexer into the shared
+# Zilliz collection — same cadence as the desktop's `memsearch-index` scheduled task
+mkdir -p "$P/.memsearch/memory"; link .memsearch "$P/.memsearch"
+if command -v memsearch >/dev/null 2>&1; then
+  ( while true; do memsearch index "$HOME/.memsearch/memory" >>"$P/.memsearch/index.log" 2>&1; sleep 1800; done ) &
+fi
 # xrdp needs its two daemons; sudo is passwordless for kasm-user in this sandbox image
 sudo /usr/sbin/xrdp-sesman >/dev/null 2>&1 &
 sudo /usr/sbin/xrdp --nodaemon >/dev/null 2>&1 &
