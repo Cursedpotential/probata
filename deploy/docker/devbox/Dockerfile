@@ -127,9 +127,13 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && apt-get clean && rm -r /var/lib/apt/lists
 
-# SurrealDB CLI (stable channel) — the install script drops the binary under root's $HOME at build time
+# SurrealDB CLI (stable channel) — the install script drops the binary under $HOME/.surrealdb.
+# Fixed 2026-09-08 after a live build failure: this base image sets HOME=/home/kasm-user even
+# while USER is root at build time (confirmed by rustup's own euid-vs-HOME warning at the Rust
+# layer above), so the binary landed at /home/kasm-user/.surrealdb/surreal, NOT /root/.surrealdb —
+# use $HOME directly rather than assuming root's home.
 RUN curl -sSf https://install.surrealdb.com | sh \
-    && mv /root/.surrealdb/surreal /usr/local/bin/surreal && chmod +x /usr/local/bin/surreal
+    && mv "$HOME/.surrealdb/surreal" /usr/local/bin/surreal && chmod +x /usr/local/bin/surreal
 
 # CocoIndex Code (ccc) — same version as the desktop (private discovery tool; see AGENTS.md)
 RUN UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 cocoindex-code==0.2.41 \
