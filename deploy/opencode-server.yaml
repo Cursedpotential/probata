@@ -101,18 +101,12 @@ services:
     volumes:
       - /data/probata/tsnet/opencode:/var/lib/tailscale
       - /data/probata/secrets/tsnet/authkey:/run/secrets/ts-authkey:ro
-      # Coolify-created file (inline `content:` bind — Coolify does not check the repo out beside the rendered compose,
-      # so a relative bind of a repo file becomes an empty directory; verified 2026-09-08). Hostname hard-coded on
-      # purpose: Coolify interpolates `${...}` at render time, so tailscale's TS_CERT_DOMAIN placeholder can't be used.
-      - type: bind
-        source: ./tailscale-serve.json
-        target: /config/serve.json
-        read_only: true
-        content: |
-          {
-            "TCP": { "443": { "HTTPS": true } },
-            "Web": { "opencode.tilapia-skilift.ts.net:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:4096" } } } }
-          }
+      # Serve config = ABSOLUTE host path written by host-prep (2026-09-08 13:32). History: a relative repo-file bind
+      # became an empty directory (Coolify does not check the repo out beside the rendered compose), and Coolify's
+      # inline `content:` bind was rendered to the right path but the file was never written (verified). Host file:
+      # /data/probata/config/tailscale-serve/opencode.json (hostname hard-coded; tailscale's TS_CERT_DOMAIN placeholder
+      # can't survive Coolify's render-time interpolation). Repo copy for reference: deploy/docker/tailscale-serve/.
+      - /data/probata/config/tailscale-serve/opencode.json:/config/serve.json:ro
 
 networks:
   probata:
