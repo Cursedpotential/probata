@@ -54,6 +54,9 @@ services:
       # ~/work, ~/.claude, ~/.agents, ~/.ssh, ~/.config/opencode, ~/.config/syncthing into it, so the
       # mirror script's DEST layout (.claude/, .agents/, .ssh/, work/, .config/) is unchanged.
       - /data/probata/volumes/devbox/home:/home/kasm-user/persist
+      # the owner's desktop `the-platform-workspace` over SMB (host automount /mnt/desktop-share, tailnet, encrypted;
+      # owner 2026-09-08 10:44-10:55). Read-write. Empty when the desktop is off — nothing here may depend on it at boot.
+      - /mnt/desktop-share:/home/kasm-user/desktop:rslave
     networks:
       - probata
 

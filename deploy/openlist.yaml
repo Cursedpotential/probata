@@ -34,6 +34,7 @@ services:
       - /data/probata/volumes/openlist:/opt/openlist/data       # OpenList's own db/config
       - /data/probata/exchange:/mnt/exchange                    # rw drop zone shared by every host/agent
       - /data/probata/volumes:/mnt/probata-volumes:ro           # platform volumes, read-only browse (devbox, opencode, surreal-case …)
+      - /mnt/desktop-share:/mnt/desktop:rslave                  # desktop the-platform-workspace via the host's SMB automount (replaces the WebDAV storage)
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5244/ping >/dev/null 2>&1 || curl -fsS http://127.0.0.1:5244/ping >/dev/null"]
       interval: 30s
