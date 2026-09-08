@@ -100,38 +100,20 @@ services:
     volumes:
       - /data/probata/tsnet/kasm:/var/lib/tailscale
       - /data/probata/secrets/tsnet/authkey:/run/secrets/ts-authkey:ro
-    configs:
-      # Fixed 2026-09-08 (found by opencode-server session, same bug hit opencode-server.yaml
-      # and openlist.yaml): Coolify's "up" phase runs `docker compose` against its OWN persistent
-      # /data/coolify/applications/<uuid>/ directory, which holds only the rendered
-      # docker-compose.yaml + .env — NOT a full repo checkout. A relative bind like
-      # `./deploy/docker/tailscale-serve/kasm.json:...` therefore points at a path that doesn't
-      # exist there, and Docker silently creates an EMPTY DIRECTORY in its place instead of
-      # mounting the file (verified live: kasm.json was a directory on the host, `file` confirms
-      # "directory"). Fix: embed the file as compose-native `configs: content:` (the same proven
-      # pattern already used for Milvus's embedEtcd.yaml/user.yaml below in data-vector.yaml),
-      # which Docker Compose materializes and mounts regardless of what's on disk at the app dir.
-      - source: kasm_serve_json
-        target: /config/serve.json
+      # CORRECTED TWICE 2026-09-08 (matches the identical fix for opencode-server.yaml / openlist.yaml):
+      # (1) a relative bind of deploy/docker/tailscale-serve/kasm.json became an EMPTY DIRECTORY on the
+      #     host, because Coolify's "up" phase runs against its own persistent
+      #     /data/coolify/applications/<uuid>/, which holds only the rendered docker-compose.yaml + .env,
+      #     not a repo checkout (verified live: `file` reported "directory"; the stray directory was
+      #     quarantined to /data/probata/to_be_deleted/devbox-coolify-empty-dir-artifact-20260908/).
+      # (2) Coolify's inline `content:` bind (the compose-spec long-form with a `content:` field) does
+      #     NOT work on this Coolify install either — it rendered the path but never wrote the file
+      #     (verified live 13:31). The actual fix is a plain bind to an ABSOLUTE host path, which bypasses
+      #     Coolify's relative-path resolution entirely: /data/probata/config/tailscale-serve/kasm.json
+      #     staged on ovh-files (hostname hard-coded to kasm.tilapia-skilift.ts.net; Coolify interpolates
+      #     `${...}` at its own render pass, before docker compose ever sees the file).
+      - /data/probata/config/tailscale-serve/kasm.json:/config/serve.json:ro
 
 networks:
   probata:
     external: true
-
-# Tailscale serve config for the sidecar above, as a compose-native config (see the fix comment
-# on the tailscale service's `configs:` block for why this replaced a relative bind mount).
-# $${TS_CERT_DOMAIN} is intentionally double-dollar-escaped so docker compose passes it through
-# literally — containerboot (the tailscale image's entrypoint) does its own env substitution on
-# TS_SERVE_CONFIG at container start; if left single-dollar, compose would try to interpolate it
-# at compose-parse time instead, when TS_CERT_DOMAIN isn't a compose/Coolify env var at all.
-configs:
-  kasm_serve_json:
-    content: |
-      {
-        "_byline": "Claude Code · Fable 5.1 · 2026-09-08 -- TS_SERVE_CONFIG for the devbox's tailscale sidecar: https://kasm.tilapia-skilift.ts.net -> Kasm (self-signed 6901), plus Syncthing UI on :8384. Embedded as a compose config 2026-09-08 (Sonnet 5) -- relative bind mounts don't survive Coolify's runtime app directory, which has no repo checkout.",
-        "TCP": { "443": { "HTTPS": true }, "8384": { "HTTPS": true } },
-        "Web": {
-          "$${TS_CERT_DOMAIN}:443":  { "Handlers": { "/": { "Proxy": "https+insecure://127.0.0.1:6901" } } },
-          "$${TS_CERT_DOMAIN}:8384": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:8384" } } }
-        }
-      }
