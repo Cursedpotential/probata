@@ -1,0 +1,61 @@
+# =============================================================================
+# OPENLIST — one file surface over R2, B2, both VPS disks and the desktop (owner 2026-09-07 18:17:
+# "let's try this https://doc.oplist.org/ … to tie together and easily access and pass data between
+# R2, B2, VPS instances and local"). OpenList (AList fork, AGPL-3.0) = web file browser + WebDAV
+# (/dav) + per-storage drivers (S3-compatible for R2/B2, local, SFTP/SMB/WebDAV for the other hosts).
+# Own Coolify "Docker Compose" app on ovh-files (server cn89l8801u8gsginw1rxq5qt, 100.91.190.107).
+#
+# Byline: Claude Code · Fable 5.1 · 2026-09-07
+#
+# Access (tailnet-only via BIND_IP): http://100.91.190.107:5244 (UI) · WebDAV http://100.91.190.107:5244/dav
+# First boot prints the generated admin password in the container log (`openlist admin` resets it).
+# Storages are added in the UI/API, NOT here: R2 + B2 as S3 drivers with keys from ~/.secrets
+# (casebible-r2.json / b2), local mounts below, SFTP driver for ovh-app, the desktop via its own
+# WebDAV/SMB share or Syncthing. Coolify env: BIND_IP=100.91.190.107.
+# Coolify Watch Paths: deploy/openlist.yaml
+# HOST-PREP (once): sudo install -d /data/probata/volumes/openlist /data/probata/exchange
+# Traefik/Authentik labels pre-wired but DISABLED (traefik.enable=false) — same rule as opencode-server.
+# =============================================================================
+
+services:
+  openlist:
+    image: openlistteam/openlist:${OPENLIST_IMAGE_TAG:-v4.2.6}   # pinned; never :latest
+    container_name: openlist
+    restart: unless-stopped
+    user: "0:0"
+    cpus: ${OPENLIST_CPUS:-1.5}
+    mem_limit: ${OPENLIST_MEM:-1g}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:5244:5244"   # UI + WebDAV (/dav) — tailnet-only
+    environment:
+      UMASK: "022"
+      TZ: America/Detroit
+    volumes:
+      - /data/probata/volumes/openlist:/opt/openlist/data       # OpenList's own db/config
+      - /data/probata/exchange:/mnt/exchange                    # rw drop zone shared by every host/agent
+      - /data/probata/volumes:/mnt/probata-volumes:ro           # platform volumes, read-only browse (devbox, opencode, surreal-case …)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5244/ping >/dev/null 2>&1 || curl -fsS http://127.0.0.1:5244/ping >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - probata
+    labels:
+      - traefik.enable=false
+      - traefik.docker.network=probata
+      - traefik.http.routers.openlist.rule=Host(`files.int.mitechconsult.com`)
+      - traefik.http.routers.openlist.entrypoints=https
+      - traefik.http.routers.openlist.tls=true
+      - traefik.http.routers.openlist.tls.certresolver=letsencrypt
+      - traefik.http.routers.openlist.service=openlist
+      - traefik.http.routers.openlist.middlewares=openlist-authentik
+      - traefik.http.services.openlist.loadbalancer.server.port=5244
+      - 'traefik.http.middlewares.openlist-authentik.forwardauth.address=http://authentik-server:9000/outpost.goauthentik.io/auth/traefik'
+      - traefik.http.middlewares.openlist-authentik.forwardauth.trustForwardHeader=true
+      - coolify.traefik.middlewares=openlist-authentik
+
+networks:
+  probata:
+    external: true
