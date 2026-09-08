@@ -32,6 +32,8 @@
 # tools we use" framing above: that governs the BASE IMAGE choice (Kasm core, not a bloated
 # desktop image) — it does not mean a minimal toolchain; the toolchain list below IS "exactly
 # the tools we use", just a long list of them.)
+# Byline: Claude Code · Sonnet 5 · 2026-09-08 (fifth live build iteration: SurrealDB CLI install
+# path fixed twice, pinta dropped for lack of an apt candidate/PPA/Linux binary on Noble).
 FROM kasmweb/core-ubuntu-noble:1.17.0
 
 USER root
