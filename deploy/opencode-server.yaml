@@ -7,6 +7,8 @@
 # Own Coolify "Docker Compose" app on ovh-files (server cn89l8801u8gsginw1rxq5qt, 100.91.190.107).
 #
 # Byline: Claude Code · Fable 5.1 · 2026-09-07
+# Byline: Claude Code · Fable 5.1 · 2026-09-08 — `opencode web` (server + browser UI at /) via a bind-mounted
+#   entrypoint (deploy/docker/opencode-server/entrypoint-web.sh); owner 12:23 "do the web thing". Same password auth.
 #
 # Coolify env: BIND_IP=100.91.190.107, OPENCODE_SERVER_PASSWORD (never in this file),
 #              optional OPENCODE_IMAGE_TAG (pinned default below; bump deliberately, never :latest).
@@ -28,6 +30,9 @@ services:
   opencode-server:
     image: sprisa/opencode:${OPENCODE_IMAGE_TAG:-1.18.29}
     container_name: opencode-server
+    # `opencode web` = the same headless API as `serve` PLUS the web UI at / (basic auth applies to both).
+    # The image's own entrypoint hard-codes `serve`, so we mount a one-line-different copy and point tini at it.
+    entrypoint: ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint-web.sh"]
     restart: unless-stopped
     cpus: ${OPENCODE_CPUS:-2}
     mem_limit: ${OPENCODE_MEM:-3g}
@@ -48,6 +53,7 @@ services:
       - /data/probata/volumes/devbox/home/.agents/skills:/home/opencode/.agents/skills
       - /data/probata/volumes/devbox/home/.claude/local-plugins:/home/opencode/.claude/local-plugins
       - /mnt/desktop-share:/home/opencode/desktop:rslave     # desktop the-platform-workspace over SMB (host automount)
+      - ./deploy/docker/opencode-server/entrypoint-web.sh:/usr/local/bin/entrypoint-web.sh:ro
     healthcheck:
       # 401 is the healthy answer when OPENCODE_SERVER_PASSWORD is set (curl -f would treat it as failure)
       test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4096/ | grep -Eq '^(200|401)$'"]
