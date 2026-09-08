@@ -7,8 +7,8 @@
 # Own Coolify "Docker Compose" app on ovh-files (server cn89l8801u8gsginw1rxq5qt, 100.91.190.107).
 #
 # Byline: Claude Code · Fable 5.1 · 2026-09-07
-# Byline: Claude Code · Fable 5.1 · 2026-09-08 — `opencode web` (server + browser UI at /) via a bind-mounted
-#   entrypoint (deploy/docker/opencode-server/entrypoint-web.sh); owner 12:23 "do the web thing". Same password auth.
+# Byline: Claude Code · Fable 5.1 · 2026-09-08 — `opencode web` (server + browser UI at /), owner 12:23 "do the web thing";
+#   same password auth. 13:25: inlined entrypoint + Coolify `content:` bind for the tailscale serve config (see notes below).
 #
 # Coolify env: BIND_IP=100.91.190.107, OPENCODE_SERVER_PASSWORD (never in this file),
 #              optional OPENCODE_IMAGE_TAG (pinned default below; bump deliberately, never :latest).
@@ -31,8 +31,12 @@ services:
     image: sprisa/opencode:${OPENCODE_IMAGE_TAG:-1.18.29}
     container_name: opencode-server
     # `opencode web` = the same headless API as `serve` PLUS the web UI at / (basic auth applies to both).
-    # The image's own entrypoint hard-codes `serve`, so we mount a one-line-different copy and point tini at it.
-    entrypoint: ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint-web.sh"]
+    # The image's own entrypoint hard-codes `serve`. CORRECTION 2026-09-08 13:25: the first attempt bind-mounted a
+    # repo script, but Coolify does NOT check the repo out next to the rendered compose — relative binds of repo
+    # files become empty directories (container looped on exit 126). So the command is inlined here instead
+    # (no `$` expansions on purpose: Coolify interpolates the compose at render time). The image's mise
+    # home-tools step is skipped; those tools already live in the persistent home from earlier boots.
+    entrypoint: ["/usr/bin/tini", "--", "/bin/bash", "-lc", "mkdir -p /home/opencode/.config/opencode /home/opencode/workspace && cd /home/opencode/workspace && exec opencode web --hostname 0.0.0.0 --port 4096 --print-logs --log-level INFO"]
     restart: unless-stopped
     cpus: ${OPENCODE_CPUS:-2}
     mem_limit: ${OPENCODE_MEM:-3g}
@@ -44,6 +48,7 @@ services:
       OPENCODE_INSTALL_HOME_TOOLS: "true"   # installs ~/.config/mise/config.toml tools 3 s after boot
       OPENCODE_PRINT_LOGS: "true"
       OPENCODE_LOG_LEVEL: INFO
+      BROWSER: "true"                       # `opencode web` tries to open a browser; make that a no-op in the container
       TZ: America/Detroit
     volumes:
       - /data/probata/volumes/opencode/home:/home/opencode   # entire home persists (dotfiles, config, ~/workspace)
@@ -53,7 +58,6 @@ services:
       - /data/probata/volumes/devbox/home/.agents/skills:/home/opencode/.agents/skills
       - /data/probata/volumes/devbox/home/.claude/local-plugins:/home/opencode/.claude/local-plugins
       - /mnt/desktop-share:/home/opencode/desktop:rslave     # desktop the-platform-workspace over SMB (host automount)
-      - ./deploy/docker/opencode-server/entrypoint-web.sh:/usr/local/bin/entrypoint-web.sh:ro
     healthcheck:
       # 401 is the healthy answer when OPENCODE_SERVER_PASSWORD is set (curl -f would treat it as failure)
       test: ["CMD-SHELL", "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4096/ | grep -Eq '^(200|401)$'"]
@@ -97,7 +101,18 @@ services:
     volumes:
       - /data/probata/tsnet/opencode:/var/lib/tailscale
       - /data/probata/secrets/tsnet/authkey:/run/secrets/ts-authkey:ro
-      - ./deploy/docker/tailscale-serve/opencode.json:/config/serve.json:ro
+      # Coolify-created file (inline `content:` bind — Coolify does not check the repo out beside the rendered compose,
+      # so a relative bind of a repo file becomes an empty directory; verified 2026-09-08). Hostname hard-coded on
+      # purpose: Coolify interpolates `${...}` at render time, so tailscale's TS_CERT_DOMAIN placeholder can't be used.
+      - type: bind
+        source: ./tailscale-serve.json
+        target: /config/serve.json
+        read_only: true
+        content: |
+          {
+            "TCP": { "443": { "HTTPS": true } },
+            "Web": { "opencode.tilapia-skilift.ts.net:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:4096" } } } }
+          }
 
 networks:
   probata:

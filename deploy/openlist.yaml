@@ -75,7 +75,18 @@ services:
     volumes:
       - /data/probata/tsnet/files:/var/lib/tailscale
       - /data/probata/secrets/tsnet/authkey:/run/secrets/ts-authkey:ro
-      - ./deploy/docker/tailscale-serve/files.json:/config/serve.json:ro
+      # Coolify-created file (inline `content:` bind). CORRECTION 2026-09-08 13:25: the previous relative bind of
+      # deploy/docker/tailscale-serve/files.json became an EMPTY DIRECTORY on the host — Coolify does not check the
+      # repo out beside the rendered compose. Hostname hard-coded (Coolify interpolates `${...}` at render time).
+      - type: bind
+        source: ./tailscale-serve.json
+        target: /config/serve.json
+        read_only: true
+        content: |
+          {
+            "TCP": { "443": { "HTTPS": true } },
+            "Web": { "files.tilapia-skilift.ts.net:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:5244" } } } }
+          }
 
 networks:
   probata:
