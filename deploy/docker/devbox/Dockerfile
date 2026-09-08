@@ -17,7 +17,9 @@
 # home by scripts/devbox_mirror_skills.sh, not baked in.
 # BUILD CONTEXT = repository root (Coolify runs compose with --project-directory <root>).
 # =============================================================================
-FROM kasmweb/ubuntu-noble-desktop:1.17.0
+# Base switched 2026-09-08 11:04 (owner: "kasmweb/claude-code, then add opencode on top"): Kasm's own Claude Code
+# workspace image (Ubuntu desktop + Claude Code preinstalled). We layer OpenCode, the toolchain, xrdp, Syncthing, memsearch.
+FROM kasmweb/claude-code:1.17.0
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
@@ -71,7 +73,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ruby-full wget 
 COPY deploy/docker/devbox/mise-config.toml /etc/mise/config.toml
 
 # Agent CLIs (owner 16:22: claude + opencode)
-RUN npm install -g @anthropic-ai/claude-code opencode-ai @sprisa/localhost && npm cache clean --force
+RUN npm install -g opencode-ai @sprisa/localhost && npm cache clean --force   # claude ships in the base image
 # @sprisa/localhost = reserve HTTPS-on-tailnet proxy (owner 17:30: Tailscale certs are the direction; keep this as a tool)
 
 # Passwordless sudo for the desktop user: needed for xrdp daemons at session start; the
@@ -80,7 +82,8 @@ RUN echo "kasm-user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/kasm-user && chmod 
 
 # Kasm startup hook: starts xrdp + syncthing beside the desktop session
 COPY deploy/docker/devbox/custom_startup.sh /dockerstartup/custom_startup.sh
-RUN chmod +x /dockerstartup/custom_startup.sh
+COPY deploy/docker/devbox/claude-rc.sh /usr/local/bin/claude-rc
+RUN chmod +x /dockerstartup/custom_startup.sh /usr/local/bin/claude-rc
 
 # Desktop launchers for the agent CLIs
 RUN for a in claude opencode; do printf '[Desktop Entry]\nType=Application\nName=%s\nExec=xfce4-terminal -e %s\nTerminal=false\nCategories=Development;\n' "$a" "$a" > "/usr/share/applications/$a.desktop"; done
