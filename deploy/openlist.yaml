@@ -57,30 +57,9 @@ services:
       - traefik.http.middlewares.openlist-authentik.forwardauth.trustForwardHeader=true
       - coolify.traefik.middlewares=openlist-authentik
 
-  # Tailscale sidecar: https://files.tilapia-skilift.ts.net -> OpenList UI + WebDAV, real cert, tag:docker (owner 2026-09-08)
-  tailscale:
-    image: tailscale/tailscale:stable
-    container_name: openlist-tailscale
-    restart: unless-stopped
-    network_mode: "service:openlist"
-    depends_on:
-      - openlist
-    environment:
-      TS_HOSTNAME: files
-      TS_AUTHKEY: file:/run/secrets/ts-authkey
-      TS_EXTRA_ARGS: --advertise-tags=tag:docker
-      TS_STATE_DIR: /var/lib/tailscale
-      TS_SERVE_CONFIG: /config/serve.json
-      TS_USERSPACE: "true"
-    volumes:
-      - /data/probata/tsnet/files:/var/lib/tailscale
-      - /data/probata/secrets/tsnet/authkey:/run/secrets/ts-authkey:ro
-      # Serve config = ABSOLUTE host path written by host-prep (2026-09-08 13:32). History: a relative repo-file bind
-      # became an empty directory (Coolify does not check the repo out beside the rendered compose), and Coolify's
-      # inline `content:` bind was rendered to the right path but the file was never written (verified). Host file:
-      # /data/probata/config/tailscale-serve/files.json (hostname hard-coded; tailscale's TS_CERT_DOMAIN placeholder
-      # can't survive Coolify's render-time interpolation). Repo copy for reference: deploy/docker/tailscale-serve/.
-      - /data/probata/config/tailscale-serve/files.json:/config/serve.json:ro
+  # Tailnet hostname: served by the HOST's tailscaled as a Tailscale Service (`tailscale serve --service=svc:<name>`),
+  # like svc:workbench / svc:llm-probe. The tailscale/tailscale sidecar + serve.json that lived here was RETIRED
+  # 2026-09-08 13:45 (owner: use the feature, not a hand-rolled sidecar). See docs/planning/2026-09-08-TODO.md #18.
 
 networks:
   probata:
