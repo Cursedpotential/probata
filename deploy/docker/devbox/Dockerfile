@@ -74,7 +74,8 @@ RUN curl -fsSL https://github.com/duckdb/duckdb/releases/latest/download/duckdb_
 RUN curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR=/usr/local/bin sh
 
 # memsearch (owner 2026-09-08 08:55 "both systems"): same version as the desktop, system-wide, so the devbox
-# digests + indexes into the SAME Zilliz collection (config mirrored into ~/persist/.memsearch by the mirror script)
+# digests + indexes into the SAME Zilliz collection (config mirrored into ~/.memsearch by the mirror script —
+# corrected 2026-09-08: whole-home design, no more ~/persist indirection)
 RUN UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 memsearch==0.4.19 \
     && chmod -R a+rX /opt/uv-tools
 
