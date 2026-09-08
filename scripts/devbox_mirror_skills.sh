@@ -32,6 +32,13 @@ PAIRS=(
   "$HOME/.claude/plugins/known_marketplaces.json|$DEST/.claude/plugins/known_marketplaces.json"
   "$HOME/.claude/plugins/installed_plugins.json|$DEST/.claude/plugins/installed_plugins.json"
   "$HOME/.claude/settings.json|$DEST/.claude/settings.desktop-reference.json"   # Windows paths inside; port by hand
+  # OpenCode state beyond opencode.json (owner 21:31: "a couple of different auth.json files are needed"):
+  # ~/.local/share/opencode holds auth.json (provider keys), mcp-auth.json (MCP OAuth), account.json;
+  # ~/.opencode holds agents/commands/prompts/skills/plugin/tools. auth.json is NOT overwritten here —
+  # scripts/opencode_server_seed_providers.sh writes the merged one (desktop keys + ~/.secrets keys).
+  "$HOME/.local/share/opencode/mcp-auth.json|$DEST/.local/share/opencode/mcp-auth.json"
+  "$HOME/.local/share/opencode/account.json|$DEST/.local/share/opencode/account.json"
+  "$HOME/.opencode/|$DEST/.opencode/"
 )
 if (( TR )); then PAIRS+=("$HOME/.claude/projects/|$DEST/.claude/projects-desktop-mirror/"); fi
 if (( OCS )); then
@@ -39,7 +46,10 @@ if (( OCS )); then
   PAIRS+=("$HOME/.config/opencode/|$OC/.config/opencode/"
           "$HOME/.agents/skills/|$OC/.agents/skills/"
           "$HOME/.claude/skills/|$OC/.claude/skills/"
-          "$HOME/.claude/local-plugins/|$OC/.claude/local-plugins/")
+          "$HOME/.claude/local-plugins/|$OC/.claude/local-plugins/"
+          "$HOME/.local/share/opencode/mcp-auth.json|$OC/.local/share/opencode/mcp-auth.json"
+          "$HOME/.local/share/opencode/account.json|$OC/.local/share/opencode/account.json"
+          "$HOME/.opencode/|$OC/.opencode/")
 fi
 SSH=(ssh -i "$KEY" -o BatchMode=yes "$HOST")
 "${SSH[@]}" "install -d -o 1000 -g 1000 $DEST/.claude $DEST/.agents $DEST/.config $DEST/work ${OCS:+/data/probata/volumes/opencode/home/.config /data/probata/volumes/opencode/home/.agents /data/probata/volumes/opencode/home/.claude}" >/dev/null
