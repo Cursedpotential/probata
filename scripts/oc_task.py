@@ -37,5 +37,13 @@ r.raise_for_status()
 msg = r.json()
 text = "\n".join(p.get("text", "") for p in msg.get("parts", []) if p.get("type") == "text")
 tools = [p.get("tool") for p in msg.get("parts", []) if p.get("type") == "tool"]
+if not text.strip():  # the POST body is not always the final assistant turn — fetch the transcript and take the last one
+    msgs = c.get(f"/session/{sid}/message").json()
+    for m in reversed(msgs):
+        if m.get("info", {}).get("role") == "assistant":
+            t = "\n".join(p.get("text", "") for p in m.get("parts", []) if p.get("type") == "text")
+            if t.strip():
+                text, msg = t, m
+                break
 print(text)
 print(f"\n--- session={sid} elapsed={time.time()-t0:.0f}s tool_calls={len(tools)} tokens={msg.get('info',{}).get('tokens')}", file=sys.stderr)
