@@ -127,13 +127,14 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && apt-get clean && rm -r /var/lib/apt/lists
 
-# SurrealDB CLI (stable channel) — the install script drops the binary under $HOME/.surrealdb.
-# Fixed 2026-09-08 after a live build failure: this base image sets HOME=/home/kasm-user even
-# while USER is root at build time (confirmed by rustup's own euid-vs-HOME warning at the Rust
-# layer above), so the binary landed at /home/kasm-user/.surrealdb/surreal, NOT /root/.surrealdb —
-# use $HOME directly rather than assuming root's home.
+# SurrealDB CLI (stable channel). Corrected TWICE by live build failures 2026-09-08: the
+# install script's own INSTALL_DIR default IS /usr/local/bin (verified by reading
+# install.surrealdb.com directly) — as root, that's writable, so it installs straight there
+# and prints "SurrealDB successfully installed in: /usr/local/bin/surreal". No `mv` is needed
+# or correct here; both earlier attempts (assuming /root/.surrealdb, then $HOME/.surrealdb)
+# were chasing a staging-directory fallback that only triggers when INSTALL_DIR isn't writable.
 RUN curl -sSf https://install.surrealdb.com | sh \
-    && mv "$HOME/.surrealdb/surreal" /usr/local/bin/surreal && chmod +x /usr/local/bin/surreal
+    && chmod +x /usr/local/bin/surreal && surreal version
 
 # CocoIndex Code (ccc) — same version as the desktop (private discovery tool; see AGENTS.md)
 RUN UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin uv tool install --python 3.12 cocoindex-code==0.2.41 \
