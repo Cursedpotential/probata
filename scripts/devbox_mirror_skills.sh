@@ -36,10 +36,10 @@ PAIRS=(
 if (( TR )); then PAIRS+=("$HOME/.claude/projects/|$DEST/.claude/projects-desktop-mirror/"); fi
 if (( OCS )); then
   OC="/data/probata/volumes/opencode/home"
-  MAP"$HOME/.config/opencode/|$OC/.config/opencode/"
-  MAP"$HOME/.agents/skills/|$OC/.agents/skills/"
-  MAP"$HOME/.claude/skills/|$OC/.claude/skills/"
-  MAP"$HOME/.claude/local-plugins/|$OC/.claude/local-plugins/"
+  PAIRS+=("$HOME/.config/opencode/|$OC/.config/opencode/"
+          "$HOME/.agents/skills/|$OC/.agents/skills/"
+          "$HOME/.claude/skills/|$OC/.claude/skills/"
+          "$HOME/.claude/local-plugins/|$OC/.claude/local-plugins/")
 fi
 SSH=(ssh -i "$KEY" -o BatchMode=yes "$HOST")
 "${SSH[@]}" "install -d -o 1000 -g 1000 $DEST/.claude $DEST/.agents $DEST/.config $DEST/work ${OCS:+/data/probata/volumes/opencode/home/.config /data/probata/volumes/opencode/home/.agents /data/probata/volumes/opencode/home/.claude}" >/dev/null
