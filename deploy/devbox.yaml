@@ -60,6 +60,28 @@ services:
     networks:
       - probata
 
+  # Tailscale sidecar (owner 2026-09-08 11:07 "tag it in docker and it just works"): its own tailnet identity `kasm`,
+  # tag:docker, shares the devbox network namespace, serves https://kasm.tilapia-skilift.ts.net (Kasm) and :8384
+  # (Syncthing UI) with real certs. State in /data/probata/tsnet/kasm; auth key file installed by the root session.
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: devbox-tailscale
+    restart: unless-stopped
+    network_mode: "service:devbox"
+    depends_on:
+      - devbox
+    environment:
+      TS_HOSTNAME: kasm
+      TS_AUTHKEY: file:/run/secrets/ts-authkey
+      TS_EXTRA_ARGS: --advertise-tags=tag:docker
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "true"
+    volumes:
+      - /data/probata/tsnet/kasm:/var/lib/tailscale
+      - /data/probata/secrets/tsnet/authkey:/run/secrets/ts-authkey:ro
+      - ./deploy/docker/tailscale-serve/kasm.json:/config/serve.json:ro
+
 networks:
   probata:
     external: true

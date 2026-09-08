@@ -57,6 +57,26 @@ services:
       - traefik.http.middlewares.openlist-authentik.forwardauth.trustForwardHeader=true
       - coolify.traefik.middlewares=openlist-authentik
 
+  # Tailscale sidecar: https://files.tilapia-skilift.ts.net -> OpenList UI + WebDAV, real cert, tag:docker (owner 2026-09-08)
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: openlist-tailscale
+    restart: unless-stopped
+    network_mode: "service:openlist"
+    depends_on:
+      - openlist
+    environment:
+      TS_HOSTNAME: files
+      TS_AUTHKEY: file:/run/secrets/ts-authkey
+      TS_EXTRA_ARGS: --advertise-tags=tag:docker
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_USERSPACE: "true"
+    volumes:
+      - /data/probata/tsnet/files:/var/lib/tailscale
+      - /data/probata/secrets/tsnet/authkey:/run/secrets/ts-authkey:ro
+      - ./deploy/docker/tailscale-serve/files.json:/config/serve.json:ro
+
 networks:
   probata:
     external: true

@@ -1,0 +1,5 @@
+{
+  "_byline": "Claude Code · Fable 5.1 · 2026-09-08 — TS_SERVE_CONFIG for the OpenCode server's tailscale sidecar: https://opencode.tilapia-skilift.ts.net -> opencode serve :4096 (password auth stays on)",
+  "TCP": { "443": { "HTTPS": true } },
+  "Web": { "${TS_CERT_DOMAIN}:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:4096" } } } }
+}
