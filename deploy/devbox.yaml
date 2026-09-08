@@ -4,13 +4,24 @@
 # 100.91.190.107) — owner orders 2026-09-07 16:18-16:21 ("spin up a sandbox on the VPS …
 # I'll move you there", "not agno", "custom environment", "add kasm").
 #
-# Byline: Claude Code · Fable 5.1 · 2026-09-07
+# Byline: Claude Code · Sonnet 5 · 2026-09-08 (persistent single-user desktop: whole-home
+# mapped volume, run as root, apt installs survive restarts/reboots — owner decisions
+# 2026-09-08 11:41-11:44; redeploys are accepted as reinstalls of anything not under
+# /home/kasm-user).
+# Byline: Claude Code · Sonnet 5 · 2026-09-08 (devbox v2 full-toolchain build: second mapped
+# volume for /home/linuxbrew so Homebrew survives redeploys, glances web port, DEVBOX_CPUS/MEM
+# defaults bumped to 4/8g — plan "rosy-wibbling-cosmos", owner APPROVED 12:10 EDT).
 #
 # Access: https://100.91.190.107:6901 from the tailnet only (BIND_IP), self-signed cert,
 # user `kasm_user`, password = VNC_PW (Coolify env, never in this file).
-# Coolify Watch Paths for this app: deploy/docker/devbox/** + deploy/devbox.yaml
+# Coolify Watch Paths for this app: DISABLED ON PURPOSE — deploy manually via the API.
 # Coolify env to set: BIND_IP=100.91.190.107, VNC_PW=<strong>, (optional) DEVBOX_CPUS, DEVBOX_MEM.
-# HOST-PREP (once): sudo install -d -o 1000 -g 1000 /data/probata/volumes/devbox/home
+# HOST-PREP (once, before first deploy of this revision): seed BOTH mapped volumes —
+# /data/probata/volumes/devbox/home from the base image's /home/kasm-user, AND
+# /data/probata/volumes/devbox/linuxbrew from the built image's /home/linuxbrew (Homebrew is
+# installed at build time as kasm-user; seed the volume from the built image AFTER the first
+# deploy, see TOOLING-REPAIRS.md 2026-09-08 entry for the exact seed commands), then
+# chown -R 1000:1000 /data/probata/volumes/devbox/home /data/probata/volumes/devbox/linuxbrew
 #                   docker network inspect probata >/dev/null 2>&1 || docker network create probata
 # Joins the shared `probata` network so the sandbox reaches pg/milvus/n8n by service name.
 # Resource caps keep the sandbox from starving n8n/PG on the same host.
@@ -24,6 +35,7 @@ services:
     image: ${DEVBOX_IMAGE:-probata-devbox:latest}
     container_name: devbox
     restart: unless-stopped
+    user: root                          # Kasm-documented root override (docs.kasm.com "running-as-root"); sandbox is the security boundary
     shm_size: "1g"                      # KasmVNC needs a large /dev/shm
     # FUSE for the rclone mount of OpenList's WebDAV at ~/files (owner 2026-09-08: virtual file shares inside the box)
     devices:
@@ -32,13 +44,14 @@ services:
       - SYS_ADMIN
     security_opt:
       - apparmor:unconfined
-    cpus: ${DEVBOX_CPUS:-2}
-    mem_limit: ${DEVBOX_MEM:-4g}
+    cpus: ${DEVBOX_CPUS:-4}
+    mem_limit: ${DEVBOX_MEM:-8g}
     ports:
       - "${BIND_IP:-127.0.0.1}:6901:6901"   # KasmVNC HTTPS — tailnet-only (primary access)
       - "${BIND_IP:-127.0.0.1}:3389:3389"   # xrdp — backup access via mstsc (owner 16:23)
       - "${BIND_IP:-127.0.0.1}:8384:8384"   # Syncthing UI — desktop<->devbox file link (owner 16:22)
       - "${BIND_IP:-127.0.0.1}:22000:22000" # Syncthing sync
+      - "${BIND_IP:-127.0.0.1}:61208:61208" # glances web dashboard (owner 11:52 "dashboard monitor")
     environment:
       VNC_PW: ${VNC_PW:?set VNC_PW in Coolify env}
       OPENLIST_URL: ${OPENLIST_URL:-http://openlist:5244}      # service DNS on the probata network
@@ -48,12 +61,19 @@ services:
       KASM_SVC_UPLOADS: "1"
       KASM_SVC_DOWNLOADS: "1"
       TZ: America/Detroit
+      # START_PULSEAUDIO: "0"   # uncomment + redeploy ONLY if the root session loops on "Creating secure
+                                 # connection" (Kasm docs: fix for root sessions that fail to start)
     volumes:
-      # Persistent state lives under ~/persist (NOT the whole home — Kasm ships its desktop config in
-      # /home/kasm-user and an empty bind over it breaks the session). custom_startup.sh symlinks
-      # ~/work, ~/.claude, ~/.agents, ~/.ssh, ~/.config/opencode, ~/.config/syncthing into it, so the
-      # mirror script's DEST layout (.claude/, .agents/, .ssh/, work/, .config/) is unchanged.
-      - /data/probata/volumes/devbox/home:/home/kasm-user/persist
+      # WHOLE HOME is the mapped volume (owner decision 2026-09-08 11:41-11:44): persistent single-user
+      # desktop, not a persist-and-symlink subset. Seeded once from the image on the host BEFORE first
+      # boot of this revision (see devbox.yaml header + TOOLING-REPAIRS.md), so /home/kasm-user/.claude,
+      # .agents, .ssh, .config, .memsearch, .opencode, work, .local all land directly in the volume.
+      - /data/probata/volumes/devbox/home:/home/kasm-user
+      # Homebrew lives under a SEPARATE mapped volume (Homebrew refuses to run as root; it's installed at
+      # build time as kasm-user into /home/linuxbrew/.linuxbrew — owner addition 11:54-12:02). Seeded once
+      # from the built image the same way as /home/kasm-user (see TOOLING-REPAIRS.md), so brew packages
+      # survive redeploys too.
+      - /data/probata/volumes/devbox/linuxbrew:/home/linuxbrew
       # the owner's desktop `the-platform-workspace` over SMB (host automount /mnt/desktop-share, tailnet, encrypted;
       # owner 2026-09-08 10:44-10:55). Read-write. Empty when the desktop is off — nothing here may depend on it at boot.
       - /mnt/desktop-share:/home/kasm-user/desktop:rslave
