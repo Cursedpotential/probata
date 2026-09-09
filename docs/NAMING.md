@@ -53,7 +53,7 @@ belongs to.
 
 | Old | New | Scope of change | Notes |
 |---|---|---|---|
-| `Agno-MCP-Platform` (as a product name) / "Temporal Evidence and Agent Experience Platform" | **Indicia Probata** / `probata` | Product name, README title, repo | The local checkout directory name (`Agno-MCP-Platform/`) and the GitHub repo `Cursedpotential/mcp-platform-agno-mvp` are the same underlying identifier being renamed to `probata`; the local folder path itself is not force-renamed by this sweep (filesystem path changes are a separate, disruptive operation — not executed here). |
+| `Agno-MCP-Platform` (as a product name) / "Temporal Evidence and Agent Experience Platform" | **Indicia Probata** / `probata` | Product name, README title, repo | The local checkout directory name (`Agno-MCP-Platform/`) and the GitHub repo `Cursedpotential/mcp-platform-agno-mvp` are the same underlying identifier being renamed to `probata`; the local folder path HAS BEEN CHANGED |
 | `mcp-platform-agno-mvp` (GitHub repo) | `probata` (`Cursedpotential/probata`) | Repo identifier, Coolify remotes, parent gitlink | D-138 |
 | UIW / Universal Import Workflow / `uiw` / `uiwworker` / `universal-import-worker` / `universal-import-starter` / task queue `universal-import-v1` / Python `server/ingest/` | **proffer** — package `proffer`, binaries `proffer-worker` / `proffer-starter`, queue `proffer-v1`, workflow type `ProfferWorkflow`, Python `server/proffer/` | Go packages, binaries, Temporal queue name, workflow type, Python package | D-140 |
 | `traceIQ` (product name) | **vestigia** (product name only) | Product/brand name | D-140. traceIQ's repo, `modules/traceIQ/`, and its internal identifiers are **NOT renamed** — this is a naming-tier change only, not an execution order. |
@@ -100,6 +100,9 @@ service + Horreum Apps); `reconditorium` (UK security firm); `thesaurus` /
    become one.
 3. **Forks keep the upstream name.** A fork tracks upstream, rebases, and may
    contribute back — it keeps the name the upstream project uses (D-131).
+
+   PER OWNER--
+   WE WILL NOT BE CONTRIBUTING BACK. MOST OF OUR FORKS ARE HEAVILY MODIFIED OR STRUPPED THAT THEY END UP DONORS 
 4. **Donors are named for what they are now.** A donor has had its guts
    extracted, permanently diverged, and has no rebase path — it is named for
    its current function with provenance credited in-file, not for its origin
@@ -122,8 +125,7 @@ parent product has a new name:
   namespace (an earlier revision of this line said "schema" — no such PG schema exists; live schemas are 
   ai, analysis, archive, canon, context, duckdb, evidence, ext, ops, public, raw, reference, registry, 
   timeline, working), the catalog skill, and every `cb-*` command (`cb-status`, `cb-sync`, `cb-custody`, …) 
-  — even though the product is now **consignatio** (D-141, restating D-138 item 2). Renaming these is a 
-  separate, not-yet-scheduled decision.
+  — even though the product is now **consignatio** (D-141, restating D-138 item 2). 
 - The `traceIQ` repository and its internal module/identifier names — even
   though the product is now **vestigia** (D-140). traceIQ's repo is not
   renamed by any entry through D-141.
