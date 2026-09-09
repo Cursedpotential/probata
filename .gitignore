@@ -197,3 +197,7 @@ modules/apps/
 
 # generated pytest reports (workbench API; same rule as tests/_reports/)
 modules/workbench/api/tests/_reports/
+
+# Private data (real names, case facts) — stays on disk, never committed (owner 2026-09-06)
+docs/private/
+**/*.private.md

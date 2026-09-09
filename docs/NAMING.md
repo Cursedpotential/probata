@@ -23,11 +23,11 @@ this document owns naming intent, not a deployment attestation.
 | **propria** | `propria` | Umbrella product name, from *in propria persona* (the self-represented litigant speaking in their own person). Not a repository — a brand covering the whole family below. | D-137 | New; no legacy identifiers to migrate. |
 | **Indicia Probata** | `probata` | The evidence-record product: ingest, sorting, custody, normalize. **This repository.** Latin "proven signs" (neuter plural noun + agreeing participle). | D-138 | GitHub repo `Cursedpotential/mcp-platform-agno-mvp` → `Cursedpotential/probata`; Go module → `github.com/Cursedpotential/probata/engine`; Coolify app prefix `probata-*`; tsnet service identities `probata-*`. |
 | **Indagatio Veri** (proposed full form) | `indagatio` | The analysis engine: horizon walks, ignorant/hindsight agents, the delta, SurrealDB as its store (D-073/D-080). Splits off from `probata` as its own product with its own Go front end and its own tsnet identity (D-134). Full form from Cicero, *De Officiis* I.13: *propria veri inquisitio atque investigatio* — "the search and investigation of truth is proper to man" — ties the umbrella and this product in one attested sentence. | D-139 | Short form `indagatio` ruled; full form offered, not ruled. What moves out of `probata` and the boundary contract are a separate, not-yet-written plan — nothing has split yet. |
-| **consignatio** | `consignatio` | The Vault / Case Bible system. Latin: the affixing of a seal; an attested document; written proof — the custody guarantee itself, not merely a storeroom. | D-141 (vacates and replaces the D-138 slot `vestigia`, which moved to geo under D-140) | **Product name only.** `casebible-*` R2 buckets, the `casebible` database / `ai.casebible_*` table prefix (not a PG schema), the catalog skill, and `cb-*` commands are explicitly NOT renamed — see §3. |
+| **consignatio** | `consignatio` | The Vault / Case Bible system. Latin: the affixing of a seal; an attested document; written proof — the custody guarantee itself, not merely a storeroom. | D-141 (vacates and replaces the D-138 slot `vestigia`, which moved to geo under D-140) | 
 | **advocatio** | `advocatio` | The legal workbench (`Legal-Workspace` repo). Twist on the rejected `advocatus` (collides with Advocatus Digital / AdvocatusMobile / advocatus.ro). | D-138 | `Legal-Workspace` repo itself is **not renamed yet** (see §3). |
 | **vestigia** | `vestigia` | The geo product ("footprints, tracks"). Replaces `traceIQ` as the product name. | D-140 | `traceIQ` repo and its identifiers are **not renamed** by this entry (see §3). |
 
-Chain of custody in one sentence (D-141): evidence is deposited into
+Chain of custody in one sentence (D-141): INFORMATION is deposited into
 **consignatio**, proffered through **probata**, admitted into evidence,
 investigated by **indagatio**, argued from **advocatio**, located by
 **vestigia**.
@@ -105,7 +105,7 @@ service + Horreum Apps); `reconditorium` (UK security firm); `thesaurus` /
    its current function with provenance credited in-file, not for its origin
    (D-131; e.g. the SBV donor becomes `modules/engine/decode/` with
    `UPSTREAM.md` carrying attribution to lowcarbdev).
-5. **One concept, one name.** A renamed concept does not keep its old name as
+5. **One conce/pt, one name.** A renamed concept does not keep its old name as
    a synonym in new writing. Old names survive only as glossary entries (this
    file) and inside historical documents that are explicitly not rewritten
    (see the doc-drift rule in `AGENTS.md` and `docs/DECISION_LOG.md`).
@@ -118,18 +118,21 @@ separate to avoid needless churn across buckets, schemas, and tooling that
 already work. The following are **intentionally frozen** even though their
 parent product has a new name:
 
-- `casebible-*` R2 buckets, the `casebible` database, `ai.casebible_*` table prefix, and Weaviate namespace (an earlier revision of this line said "schema" — no such PG schema exists; live schemas are ai, analysis, archive, canon, context, duckdb, evidence, ext, ops, public, raw, reference, registry, timeline, working), the catalog
-  skill, and every `cb-*` command (`cb-status`, `cb-sync`, `cb-custody`, …) —
-  even though the product is now **consignatio** (D-141, restating D-138
-  item 2). Renaming these is a separate, not-yet-scheduled decision.
+- `casebible-*` R2 buckets, the `casebible` database, `ai.casebible_*` table prefix, and Weaviate 
+  namespace (an earlier revision of this line said "schema" — no such PG schema exists; live schemas are 
+  ai, analysis, archive, canon, context, duckdb, evidence, ext, ops, public, raw, reference, registry, 
+  timeline, working), the catalog skill, and every `cb-*` command (`cb-status`, `cb-sync`, `cb-custody`, …) 
+  — even though the product is now **consignatio** (D-141, restating D-138 item 2). Renaming these is a 
+  separate, not-yet-scheduled decision.
 - The `traceIQ` repository and its internal module/identifier names — even
   though the product is now **vestigia** (D-140). traceIQ's repo is not
   renamed by any entry through D-141.
 - The `Legal-Workspace` repository name — even though the product is now
   **advocatio** (D-138). Not renamed yet.
-- `modules/forks/sbv` and `modules/forks/timesketch` — these are forks (not
-  donors), so per rule 3 above they correctly keep their upstream names and
-  are never subject to this rename at all.
+- `modules/forks/sbv` and `modules/forks/timesketch` — these are forks OR DONORS, so per
+  rule 3 above they correctly keep their upstream names and are NOT CURRENTLY
+  subject to this rename at all.
+
 
 ## 7. Related decisions
 
@@ -140,3 +143,6 @@ Veri*), D-140 (`proffer`, `vestigia` moves to geo), D-141 (`consignatio`,
 naming canon complete at product tier). See also `docs/adr/` for any ADR
 that references component names directly (never rewritten by this sweep —
 ADRs are append-only signed records).
+
+
+OWNER REVISED 9/8/26
