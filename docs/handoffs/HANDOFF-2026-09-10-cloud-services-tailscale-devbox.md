@@ -56,6 +56,7 @@ Re-checked 2026-09-10 06:40 EDT unless marked otherwise.
 - **Relative-bind audit:** `deploy/compose.yaml` still binds `./sql/bootstrap/schema_snapshot_20260907.sql` and `./docker/graphiti/config.yaml`. Not checked whether that stack is Coolify-rendered.
 - **Phase-2 plan not approved** by the owner. Nothing from P1–P8 has started.
 - **Memory for sessions started inside `Probata\probata`:** that cwd maps to slug `E--AI-Workspace-Projects-Propria-Probata-probata`, which has no store. WHY open: aliasing is ruled out (no-dual-execution 2026-09-06). Owner to decide the one working directory sessions start from; today that is `Propria\Probata`.
+- **Handoff commits not pushed.** `f9ddbf0`, `ec60c8e`, `12cb90c` sit on local main behind another session's unpushed `b560f2e` (docstore, 09-09). WHY not pushed: pushing would publish that session's commit. The shared index also holds ~519 staged paths from other sessions at 07:00; commit only by explicit path.
 - **Coolify status drift:** Coolify reported opencode-server exited / openlist restarting while containers were healthy. Not investigated.
 
 ## Pending owner decisions
