@@ -189,9 +189,18 @@ async def recall(query: str, kind: str = "doc", status: str = "active", k: int =
         kw = list(merged.values())
         kw_mode = "any-term"
     params["v"] = await embed_task
-    vec = _rows(await db.query(
-        "SELECT id, text, vector::distance::knn() AS dist, (->chunk_of->document)[0] AS doc FROM chunk "
-        "WHERE embedding <|80,200|> $v" + extra + " ORDER BY dist;", params))
+    if doc_type:
+        # HNSW with a doc_type filter took 4.6 s (measured 2026-09-10); one kind is a few hundred chunks, so
+        # exact cosine through the chunk_type index took 0.6 s and returned the same top 20 chunks.
+        # doc_type goes first so the planner picks chunk_type rather than the far larger chunk_status index.
+        exact = " AND ".join(["doc_type = $dt"] + [f for f in filters if f != "doc_type = $dt"])
+        vec = _rows(await db.query(
+            "SELECT id, text, 1 - vector::similarity::cosine(embedding, $v) AS dist, (->chunk_of->document)[0] AS doc "
+            "FROM chunk WHERE " + exact + " ORDER BY dist LIMIT 80;", params))
+    else:
+        vec = _rows(await db.query(
+            "SELECT id, text, vector::distance::knn() AS dist, (->chunk_of->document)[0] AS doc FROM chunk "
+            "WHERE embedding <|80,200|> $v" + extra + " ORDER BY dist;", params))
     t_search = time.perf_counter()
 
     def best(chunks, better):
