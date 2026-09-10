@@ -1,0 +1,59 @@
+# =============================================================================
+# SURREAL-DOCS - the probata document store as its OWN SurrealDB service in the cloud.
+# Owner rulings 2026-09-10: "push it out to the cloud... spin up an entirely different
+# instance. Don't put it with the case, but put it on the server." "Follow the same
+# deployment as the case: its own tailnet address, its own hostname, its own IP, using
+# tailscale serve." Deployed exactly like surreal-case: its own Coolify "Docker Compose"
+# app on ovh-files (server cn89l8801u8gsginw1rxq5qt, tailnet 100.91.190.107).
+#
+# Byline: Claude Code · Opus 5 · 2026-09-10
+#
+# Clients connect to wss://surreal-docs.tilapia-skilift.ts.net (Tailscale Service
+# svc:surreal-docs, tag:docker, host `tailscale serve` -> 100.91.190.107:8472) or directly
+# ws://100.91.190.107:8472. Root creds: ~/.secrets/probata-docstore.env, never in this file.
+# Coolify env to set: BIND_IP=100.91.190.107, SURREAL_USER, SURREAL_PASS.
+# Coolify Watch Paths: deploy/surreal-docs.yaml
+# HOST-PREP (once, done 2026-09-10):
+#   install -d -m 0750 /data/probata/volumes/surreal-docs
+#   install -d -m 0775 /data/probata/exchange/surreal-docs
+# Exchange mount (owner order 2026-09-10: always a bind mount to move scripts/files in and
+# out): /data/probata/exchange/surreal-docs -> /exchange. /data/probata/exchange is served by
+# svc:files, so files dropped there are reachable from the desktop without SSH.
+# Tailnet-only by BIND_IP AND by the host DOCKER-USER rules (commit 7d4583d).
+# UNCAPPED on purpose: a 2g/1.5cpu cap made SurrealDB report available_parallelism=1 and
+# deadlock under a vector ingest (surreal-case, 2026-09-09). Do not cap without a measured reason.
+# =============================================================================
+
+services:
+  surreal-docs:
+    image: surrealdb/surrealdb:v3.2.4
+    container_name: surreal-docs
+    restart: unless-stopped
+    user: root                      # RocksDB dir is a host bind; run as root to avoid uid drift (single-tenant host)
+    command:
+      - start
+      - --bind
+      - 0.0.0.0:8000
+      - --log
+      - info
+      - rocksdb:/data/docs.db
+    environment:
+      SURREAL_USER: ${SURREAL_USER:?set SURREAL_USER in Coolify env}
+      SURREAL_PASS: ${SURREAL_PASS:?set SURREAL_PASS in Coolify env}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:8472:8000"   # ws://100.91.190.107:8472 - tailnet-only
+    volumes:
+      - /data/probata/volumes/surreal-docs:/data
+      - /data/probata/exchange/surreal-docs:/exchange
+    healthcheck:
+      test: ["CMD", "/surreal", "is-ready", "--endpoint", "http://127.0.0.1:8000"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - probata
+
+networks:
+  probata:
+    external: true
