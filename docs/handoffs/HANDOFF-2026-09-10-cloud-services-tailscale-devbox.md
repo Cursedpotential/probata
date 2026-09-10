@@ -1,6 +1,6 @@
 # HANDOFF — cloud services: Tailscale Services, OpenList drives, devbox v2 (2026-09-10)
 
-> _Byline: Claude Code · Opus 5 (1M) · 2026-09-10 — covers session 42902756 work of 2026-09-08 (written by Fable 5.1 turns), state re-verified live 2026-09-10 06:40 EDT_
+> _Byline: Claude Code · Opus 5 (1M) · 2026-09-10 — covers session 42902756 work of 2026-09-08 (written by Fable 5.1 turns), state re-verified live 2026-09-10 06:40 EDT; memory section added 06:55 EDT_
 
 STATUS: PARTIAL
 BUILD_STATUS: FAIL — devbox v2 image has never built successfully (6 failed Coolify builds); the running devbox is the 2026-09-08 morning image.
@@ -22,6 +22,8 @@ Re-checked 2026-09-10 06:40 EDT unless marked otherwise.
 | Desktop WebDAV | Scheduled task `desktop-webdav` disabled, processes stopped, port 8087 closed. |
 | Devbox container | `devbox-pd3xc78ahqkfswq12bpfqgy1-…` up 44 h, image built 2026-09-08 14:47Z, runs as kasm-user, persist-subset mount. Kasm :6901 answers 401. |
 | Devbox fixes | `deploy/devbox.yaml` + `deploy/docker/devbox/Dockerfile` STAGED, NOT COMMITTED, NOT DEPLOYED. |
+| Auto-memory store | MOVED 2026-09-10 06:50: `~/.claude/projects/E--AI-Workspace-Projects-the-platform-workspace-probata/memory` (191 memories, old path no longer on disk) → `E--AI-Workspace-Projects-Propria-Probata/memory`, the store sessions started in `Propria\Probata` load. Manifest 193 files / 633,355 bytes, copy verified path+size identical; original kept at the old slug's `stale/memory-moved-to-Propria-Probata-20260910`, pointer `MOVED.md` beside it. Sessions started inside `Probata\probata` would use slug `…-Propria-Probata-probata`, which has no store. |
+| Superpowers hooks | Off. All 6 superpowers plugins `false` in enabledPlugins; no settings or project settings wire a superpowers hook; `superpowers-chrome` not enabled and has no hooks.json; `~/.claude/hooks/polyglot-wrapper/run-hook.cmd` only borrows superpowers' cmd/bash trick. Resume SessionStart 2026-09-10 injected no superpowers text. Owner order 06:31 satisfied, no change needed. |
 
 ## Findings / work done
 
@@ -33,6 +35,17 @@ Re-checked 2026-09-10 06:40 EDT unless marked otherwise.
 6. **Rules added** to global `~/.claude/CLAUDE.md` and memory: every turn runs model router, then sequential thinking, lists always, running TODO file; owner `msalem` admin on every service; look up a named feature before building; no curling non-doc sites; verify the user-facing URL, never deployment status.
 7. **case-bible `cc_guard.py` hook** was removed by the owner on 2026-09-08 13:21 as too strict.
 
+## Memory locations (read before resuming)
+
+- **Canonical auto-memory:** `~/.claude/projects/E--AI-Workspace-Projects-Propria-Probata/memory/` (moved today, see table). Newest entries from this session: `look-up-the-feature-before-building` (Tailscale Services 3-step procedure), `coolify-no-repo-checkout-relative-binds-are-empty-dirs`, `running-todo-file-always-current`, `owner-admin-user-on-every-service`, `gateway-auth-and-subscriptions-next`, `discuss-before-building-not-after`.
+- **Casebible store, newer rulings 2026-09-09:** `~/.claude/projects/e--AI-Workspace-casebible/memory/`. Binding for this work:
+  - Fable never runs as a subagent; Opus is the ceiling; every Agent dispatch passes an explicit model (sonnet default, haiku for Smart Explore).
+  - Search via `ccc` and DuckDB, grep sweeps are the fallback.
+  - D-154/D-157/D-158: one shared agent memory for ALL agents on the VPS = SurrealDB Agent Memory `spectrond` (free self-hostable) in front of `surreal-case`; NIM for LLM+embeddings, Gemini allowed where spectrond fixes the embed model; all provider traffic through Portkey; never run local embedders on the desktop. Docs store stays local, embedded SurrealKV, no Docker. Never shut down Neo4j.
+  - Budget 2026-09-09 07:03: owner at 10% weekly usage left; no new agents without need.
+- **Parent-level plugin capture:** `E:\AI_Workspace\Projects\Propria\Probata\.claude\memories\project_memory.json` (claude-never-forgets realtime capture; held the 06:31 superpowers order).
+- **`.remember`:** `Propria\Probata\.remember	oday-2026-09-10.md` (session digest) and repo-level `probata\.rememberecent.md`.
+
 ## UNRESOLVED (mandatory)
 
 - **Devbox v2 build 7 never started.** WHY: session ended right after the scratch-container test passed. APPROACH: commit the two staged files, deploy Coolify app `pd3xc78ahqkfswq12bpfqgy1` once, poll. SHORTCOMINGS: only the two failing steps were tested in isolation; later steps (launchers, chown, USER switch with the new HOME handling) are untested. A seventh failure is possible.
@@ -42,6 +55,7 @@ Re-checked 2026-09-10 06:40 EDT unless marked otherwise.
 - **Devbox verification table** (root, whole-home mount, apt install survives restart, tool versions, Kasm/xrdp/Syncthing/glances, `claude --remote-control` flag) has not been run.
 - **Relative-bind audit:** `deploy/compose.yaml` still binds `./sql/bootstrap/schema_snapshot_20260907.sql` and `./docker/graphiti/config.yaml`. Not checked whether that stack is Coolify-rendered.
 - **Phase-2 plan not approved** by the owner. Nothing from P1–P8 has started.
+- **Memory for sessions started inside `Probata\probata`:** that cwd maps to slug `E--AI-Workspace-Projects-Propria-Probata-probata`, which has no store. WHY open: aliasing is ruled out (no-dual-execution 2026-09-06). Owner to decide the one working directory sessions start from; today that is `Propria\Probata`.
 - **Coolify status drift:** Coolify reported opencode-server exited / openlist restarting while containers were healthy. Not investigated.
 
 ## Pending owner decisions
