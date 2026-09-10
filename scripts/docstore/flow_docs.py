@@ -334,6 +334,37 @@ def _load_mapping() -> tuple[dict[str, DocMeta], str]:
 _METAS, _MAPPING_FINGERPRINT = _load_mapping()
 
 
+# Path rules for documents that have no mapping row (Claude Code - Opus 5 - 2026-09-10).
+# First matching prefix wins; filename keywords decide for anything else.
+_AUTO_RULES = (
+    ("docs/adr/", "decision"),
+    ("docs/handoffs/", "handoff"),
+    ("docs/COMPACT-SUMMARY", "handoff"),
+    ("docs/reviews/", "review"),
+    ("docs/reference/", "reference"),
+    ("docs/runbooks/", "reference"),
+    ("docs/tools/", "reference"),
+    ("docs/design/", "blueprint"),
+    ("docs/blueprint/", "blueprint"),
+    ("docs/plans/", "blueprint"),
+)
+
+
+def _auto_meta(source_path: str, body: str) -> DocMeta:
+    name = source_path.rsplit("/", 1)[-1].upper()
+    doc_type = next((t for prefix, t in _AUTO_RULES if source_path.startswith(prefix)), None)
+    if doc_type is None:
+        for keyword, kind in (("TODO", "todo"), ("DECISION", "decision"), ("HANDOFF", "handoff"),
+                              ("INFRASTRUCTURE", "infrastructure")):
+            if keyword in name:
+                doc_type = kind
+                break
+        else:
+            doc_type = "blueprint" if source_path.startswith("docs/planning/") else "reference"
+    title = next((line[2:].strip() for line in body.splitlines() if line.startswith("# ")), "") or source_path
+    return DocMeta(source_path, title[:300], doc_type, ("docs",), "unverified")
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -487,6 +518,25 @@ DOCSTORE_ENV = coco.Environment(
 )
 
 
+def _server_credentials(ns: str) -> dict[str, str]:
+    """Credentials for a REMOTE SurrealDB.
+
+    A root user signs in with username/password. A namespace-scoped user
+    (`DEFINE USER ... ON NAMESPACE`) must also send `namespace`, otherwise the
+    server answers "There was a problem with authentication". Set
+    SURREAL_SIGNIN_NS to sign in at namespace level; leave it unset for root.
+    cocoindex's ConnectionFactory forwards this dict verbatim to conn.signin().
+    """
+    creds = {
+        "username": os.environ["SURREAL_USER"],
+        "password": os.environ["SURREAL_PASS"],
+    }
+    signin_ns = os.environ.get("SURREAL_SIGNIN_NS")
+    if signin_ns:
+        creds["namespace"] = signin_ns
+    return creds
+
+
 def configure_environment() -> coco.Environment:
     """Provide this app's context keys on its OWN environment.
 
@@ -507,6 +557,10 @@ def configure_environment() -> coco.Environment:
     # SURREAL_BIND in .env is the single source of truth for host:port.
     bind = os.environ.get("SURREAL_BIND", "127.0.0.1:8462")
     url = os.environ.get("SURREAL_URL", f"ws://{bind}/rpc")
+    # `{REPO_ROOT}` in an embedded URL expands to this checkout's root, so a
+    # moved checkout does not leave .env pointing at a path that no longer
+    # exists (it did on 2026-09-09: the store looked empty when it was fine).
+    url = url.replace("{REPO_ROOT}", REPO_ROOT.as_posix())
 
     # EMBEDDED vs SERVER. An embedded URL (surrealkv:// / file:// / mem://) opens
     # the datastore IN-PROCESS -- no server, no port, nothing resident between
@@ -525,10 +579,7 @@ def configure_environment() -> coco.Environment:
             url=url,
             namespace=ns,
             database=db,
-            credentials={
-                "username": os.environ["SURREAL_USER"],
-                "password": os.environ["SURREAL_PASS"],
-            },
+            credentials=_server_credentials(ns),
         ),
     )
     provider.provide(
@@ -602,7 +653,7 @@ async def process_chunk(
 # ---------------------------------------------------------------------------
 
 
-@coco.fn(memo=True, version=5)
+@coco.fn(memo=True, version=6)
 async def process_file(
     file: FileLike,
     mapping_fingerprint: str,
@@ -616,13 +667,18 @@ async def process_file(
     # file_path.path is relative to DOCS_BASE (see the ContextKey note above).
     source_path = "docs/" + file.file_path.path.as_posix()
     meta = _METAS.get(source_path)
-    if meta is None:
-        # A markdown file under docs/ with no mapping row. Silent skips are how
-        # a whole run can report success and write nothing, so say so.
-        print(f"docstore: SKIP (no mapping row) {source_path}",
-              file=sys.stderr, flush=True)
+    if meta is None and source_path.startswith("docs/private/"):
+        # docs/private is gitignored on purpose; it is never indexed.
         return
     body = fold_non_bmp(await file.read_text(encoding="utf-8"))
+    if meta is None:
+        # No mapping row -- typically a document written after the CSV was
+        # generated. Skipping made every new handoff and TODO invisible to recall
+        # (10 real documents on 2026-09-10, incl. that day's handoffs), so classify
+        # from the path and mark it `unverified` until a curated row replaces it.
+        meta = _auto_meta(source_path, body)
+        print(f"docstore: AUTO-MAPPED {source_path} -> {meta.doc_type}/unverified",
+              file=sys.stderr, flush=True)
     doc_id = slug(source_path)
 
     doc_table.declare_record(

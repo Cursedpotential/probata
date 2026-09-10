@@ -11,12 +11,12 @@
 #
 # Example (local scratch, already applied by this pass):
 #   ./apply_memory_schema.sh \
-#     "E:/AI_Workspace/Projects/the-platform-workspace/probata/.docstore/.env" \
+#     "$REPO_ROOT/.docstore/.env" \
 #     "http://127.0.0.1:8462" scratch_memory memory
 #
 # VPS example (NOT run by this task -- endpoint given for the record only):
 #   ./apply_memory_schema.sh \
-#     "E:/AI_Workspace/Projects/the-platform-workspace/probata/.docstore/.env" \
+#     "$REPO_ROOT/.docstore/.env" \
 #     "http://100.91.190.107:8471" probata_memory memory
 
 set -euo pipefail

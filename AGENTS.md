@@ -298,6 +298,21 @@ Ollama (glm-5.1) → NVIDIA → Kimi → OpenRouter → Anthropic → OpenAI →
 First provider with valid credentials wins. Override via `DEFAULT_MODEL_PROVIDER`
 or `<PROVIDER>_MODEL_ID`. See `server/core/settings.py` for resolution rules.
 
+## Querying SurrealDB stores (every agent)
+
+> _Byline: Claude Code · Opus 5 · 2026-09-10 — owner order: everybody runs the same query format._
+
+Inspect any probata SurrealDB store through `scripts/docstore/sq.py`, never a one-off script that prints raw SDK objects.
+It normalises `RecordID`, datetimes, embeddings and bodies, then prints a DuckDB table; `--sql` runs DuckDB SQL over the result as table `r`.
+
+```bash
+C:/Users/matts/.local/bin/python3.exe scripts/docstore/sq.py "SELECT * FROM todo LIMIT 5;"
+C:/Users/matts/.local/bin/python3.exe scripts/docstore/sq.py "SELECT doc_type, status FROM document;" --sql "SELECT doc_type, count(*) n FROM r GROUP BY ALL"
+C:/Users/matts/.local/bin/python3.exe scripts/docstore/sq.py --target docs "INFO FOR DB;"
+```
+
+Full usage, flags and rules: `plugins/docstore/skills/query/SKILL.md`.
+
 ## Further Reading
 
 Before a non-trivial task, identify which of these are relevant and read them first:

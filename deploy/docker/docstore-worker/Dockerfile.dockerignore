@@ -1,0 +1,9 @@
+# Allowlist for the docstore-worker image only (BuildKit reads <Dockerfile>.dockerignore first).
+*
+!docs/
+!scripts/docstore/
+docs/private/
+**/__pycache__/
+**/*.bak*
+scripts/docstore/snapshots/
+scripts/docstore/rollouts/

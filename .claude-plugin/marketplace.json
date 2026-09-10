@@ -1,0 +1,18 @@
+{
+  "name": "probata",
+  "owner": {
+    "name": "Matt Salem"
+  },
+  "metadata": {
+    "description": "Probata repo-local plugins (Claude Code \u00b7 Opus 5 \u00b7 2026-09-10)",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "docstore",
+      "source": "./plugins/docstore",
+      "version": "0.2.0",
+      "description": "Cloud docstore (surreal-docs): recall/update commands, query skill, SurrealDB MCP, read/write gates"
+    }
+  ]
+}

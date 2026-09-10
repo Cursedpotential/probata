@@ -1,0 +1,59 @@
+# =============================================================================
+# DOCSTORE-WORKER - keeps the cloud docstore (surreal-docs) in sync with the repo and serves its API.
+# Owner orders 2026-09-10: run on the server on a cron; use CocoIndex change detection so only changed
+# files re-index and every re-index updates the database; add a reranker; expose an HTTP API for a
+# front end; build the document graph; always a bind-mount exchange folder.
+#
+# Byline: Claude Code · Opus 5 · 2026-09-10
+#
+# Coolify "Docker Compose" app on ovh-files, deployed from main like surreal-case / surreal-docs.
+# Watch paths: docs/**, scripts/docstore/**, deploy/docstore-worker.yaml, deploy/docker/docstore-worker/**
+#   -> a docs push rebuilds + restarts the worker, and its start-up sync pass is the change event.
+# Coolify scheduled task: python scripts/docstore/worker_sync.py (periodic resync, graph, health).
+# Coolify env: BIND_IP=100.91.190.107, SURREAL_DOCS_USER, SURREAL_DOCS_PASS, NVIDIA_API_KEY,
+#   VOYAGE_API_KEY, optional DOCSTORE_API_TOKEN. Never in this file.
+# API: http://100.91.190.107:8473 and https://docstore-api.tilapia-skilift.ts.net (svc:docstore-api).
+# HOST-PREP (once): install -d -m 0750 /data/probata/volumes/docstore-worker
+#                   install -d -m 0775 /data/probata/exchange/docstore-worker
+# =============================================================================
+
+services:
+  docstore-worker:
+    build:
+      context: .
+      dockerfile: deploy/docker/docstore-worker/Dockerfile
+    container_name: docstore-worker
+    restart: unless-stopped
+    environment:
+      SURREAL_DOCS_URL: ${SURREAL_DOCS_URL:-ws://100.91.190.107:8472}
+      SURREAL_DOCS_USER: ${SURREAL_DOCS_USER:?set SURREAL_DOCS_USER in Coolify env}
+      SURREAL_DOCS_PASS: ${SURREAL_DOCS_PASS:?set SURREAL_DOCS_PASS in Coolify env}
+      # flow_docs.py reads the SURREAL_* names
+      SURREAL_URL: ${SURREAL_DOCS_URL:-ws://100.91.190.107:8472}
+      SURREAL_USER: ${SURREAL_DOCS_USER:?set SURREAL_DOCS_USER in Coolify env}
+      SURREAL_PASS: ${SURREAL_DOCS_PASS:?set SURREAL_DOCS_PASS in Coolify env}
+      SURREAL_NS: probata
+      SURREAL_DB: docs
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:?set NVIDIA_API_KEY in Coolify env}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      DOCSTORE_API_TOKEN: ${DOCSTORE_API_TOKEN:-}
+      DOCSTORE_COCOINDEX_DB: /data/state/cocoindex_state.db
+      DOCSTORE_SYNC_LOCK: /data/state/sync.lock
+      DOCSTORE_MAX_RSS_MB: "3000"
+    ports:
+      - "${BIND_IP:-127.0.0.1}:8473:8000"   # http://100.91.190.107:8473 - tailnet-only
+    volumes:
+      - /data/probata/volumes/docstore-worker:/data/state
+      - /data/probata/exchange/docstore-worker:/exchange
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - probata
+
+networks:
+  probata:
+    external: true

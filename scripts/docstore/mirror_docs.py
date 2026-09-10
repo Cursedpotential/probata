@@ -54,6 +54,7 @@ import datetime
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -64,7 +65,11 @@ from typing import Optional
 # Defaults (this job's fixed locations)
 # ---------------------------------------------------------------------------
 
-REPO_ROOT = Path(r"E:/AI_Workspace/Projects/the-platform-workspace/probata")
+# Derived from this file's location, never hard-coded: the checkout was moved
+# (the-platform-workspace -> Propria/Probata) on 2026-09-09 and an absolute
+# literal here silently made every mapping source "missing" (503/503), which
+# reads as data loss rather than a stale path. scripts/docstore/ -> parents[2].
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCS_ROOT = REPO_ROOT / "docs"
 DEFAULT_MAPPING_CSV = Path(
     r"C:/Users/matts/.claude/jobs/68afe1c5/tmp/out/docs-ingest-mapping.csv"
@@ -831,11 +836,41 @@ def cmd_index_only(args) -> int:
 
 
 def git_mv(src: Path, dst: Path) -> None:
+    """Move a managed doc, preferring `git mv` so history follows the file.
+
+    Falls back to a plain filesystem move when git refuses. WHY: some managed
+    docs are deliberately untracked -- docs/INFRASTRUCTURE.md is gitignored by
+    name (.gitignore:95) because it carries credential-shaped lines, and its
+    tracked counterpart is INFRASTRUCTURE.template.md. `git mv` on such a file
+    exits non-zero, and with check=True that aborted the whole run partway
+    through, leaving a half-migrated tree with no rollback. Force-adding it
+    instead would put secrets into tracked history, which is the one hard line.
+    The fallback relocates the file so links still resolve, and leaves its git
+    status exactly as it was.
+    """
     dst.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["git", "mv", "--", winlong(src) if False else str(src), str(dst)],
-        cwd=str(REPO_ROOT), check=True,
+    result = subprocess.run(
+        ["git", "mv", "--", str(src), str(dst)],
+        cwd=str(REPO_ROOT), capture_output=True, text=True,
     )
+    if result.returncode == 0:
+        return
+    # NEVER overwrite. On Windows the filesystem is case-INSENSITIVE, so a
+    # destination can collide with a DIFFERENT row's not-yet-moved source:
+    # row 22 moves docs/INDEX.md -> docs/blueprint/INDEX.md while row 197's
+    # source is docs/blueprint/index.md -- the same path here. `git mv`
+    # refuses that, correctly. A blind shutil.move does not: on 2026-09-09 it
+    # clobbered blueprint/index.md ("# Platform Blueprint") with INDEX.md's
+    # text, and the next row carried the wrong content onward. Aborting keeps
+    # the tree recoverable, which is the whole point of refusing.
+    if dst.exists():
+        raise RuntimeError(
+            f"refusing to move {src} -> {dst}: destination already exists "
+            f"(case-insensitive collision with another row's source?). "
+            f"git mv said: {result.stderr.strip()}"
+        )
+    shutil.move(str(src), str(dst))
+    print(f"[apply] untracked/ignored, moved without git: {src.relative_to(REPO_ROOT)}")
 
 
 def cmd_apply(args) -> int:
