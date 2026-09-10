@@ -40,6 +40,11 @@ services:
     environment:
       SURREAL_USER: ${SURREAL_USER:?set SURREAL_USER in Coolify env}
       SURREAL_PASS: ${SURREAL_PASS:?set SURREAL_PASS in Coolify env}
+      # /mcp DNS-rebinding guard (SurrealDB >= 3.2.1): comma-separated exact hostnames; an entry
+      # without a port matches any port; a non-empty list REPLACES the loopback default, so
+      # localhost is re-added. Without it every /mcp call is 403 "Host header is not allowed"
+      # (verified 2026-09-10). Source: docs/reference/2026-09-09-surrealdb-native-http-mcp-brief.md
+      SURREAL_MCP_ALLOWED_HOSTS: ${SURREAL_MCP_ALLOWED_HOSTS:-surreal-docs.tilapia-skilift.ts.net,100.91.190.107,localhost,127.0.0.1}
     ports:
       - "${BIND_IP:-127.0.0.1}:8472:8000"   # ws://100.91.190.107:8472 - tailnet-only
     volumes:
