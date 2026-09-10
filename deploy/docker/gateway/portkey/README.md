@@ -20,6 +20,17 @@ Space) for the full as-built research this was built from.
 | `configs/embed-general.json` | Future/not-yet-dimension-locked knowledge-core collections | Gemini 4-key loadbalance primary, NVIDIA `nv-embed-v1` fallback. **See the dimension-truncation warning inside the file** — do not trust it blind. |
 | `configs/classify.json` | Cheap/fast triage calls | Gemini `gemini-flash-latest` 4-key loadbalance primary → Groq `llama-3.1-8b-instant` → Cerebras `gemma-4-31b` → OpenRouter `meta-llama/llama-3.1-8b-instruct` (valid-but-broke, see below) → NVIDIA `meta/llama-3.1-8b-instruct` → Mistral `mistral-small-latest` (paid, absolute-last fallback). Groq/Cerebras/OpenRouter/Mistral tiers added 2026-07-19 provider-key sweep. |
 | `configs/chat.json` | rag+chat (mid-to-heavy reasoning) | glm-5.1 (Ollama Cloud) primary → Gemini `gemini-flash-latest` 4-key loadbalance → Groq `llama-3.3-70b-versatile` → Cerebras `gpt-oss-120b` → OpenRouter `meta-llama/llama-3.3-70b-instruct` (valid-but-broke, see below) → NVIDIA `nemotron-3-super-120b-a12b` → Mistral `mistral-medium-latest` (paid, absolute-last fallback). Collapsed from separate rag/chat drafts — they came out identical; split again later if they ever need independent tuning. Groq/Cerebras/OpenRouter/Mistral tiers added 2026-07-19 provider-key sweep. |
+| `configs/rerank.json` | Rerank (`POST /v1/rerank`), added 2026-09-10 | Jina `jina-reranker-m0` primary (free tier, 10M tokens) → Voyage `rerank-2.5` fallback (free tier, ~3 requests/min). The NVIDIA `llama-nemotron-rerank-vl-1b-v2` reranker lives on a non-OpenAI retrieval endpoint and is not in this lane. **Send no `top_n`/`top_k`** — see below. |
+
+### Rerank lane — verified live 2026-09-10
+
+> _Byline: Claude Code · Opus 5 · 2026-09-10 — owner order "set it up in portkey" (Jina key), then the Voyage key._
+
+- **Keys:** `JINA_API_KEY` (`~/.secrets/jina.env`) and `VOYAGE_API_KEY` (`~/.secrets/voyage.env`) upserted into this app's Coolify env on 2026-09-10; read back, both rows match the local values. `memsearch.env` holds a second, different, also-working Voyage key.
+- **Primary:** the committed `rerank.json` (placeholders substituted) sent as `x-portkey-config` → HTTP 200 in 245 ms, `x-portkey-last-used-option-index: config.targets[0]`, model `jina-reranker-m0`, relevant passage ranked first (0.917 vs 0.282–0.345).
+- **Fallback:** same file with a deliberately invalid Jina key → HTTP 200 in 376 ms, `config.targets[1]`, model `rerank-2.5`, same passage first (0.711 vs 0.229–0.248). The fallback really engages.
+- **Gotcha — result count:** Jina takes `top_n`; Voyage takes `top_k` and answers **400 "Argument 'top_n' is not supported"**; gateway 1.15.2 does not translate between them. Callers send neither (both providers then return every document, sorted) and trim client-side. A `top_n` request fails exactly when the fallback is needed.
+- **Direct provider checks the same day:** Jina `jina-reranker-v2-base-multilingual` 200 (same order, weaker spread), `jina-embeddings-v3` 1024-d; `/v1/embeddings` with `x-portkey-provider: jina` 200 through this gateway.
 
 Each `$VAR` placeholder is substituted with a real secret value at request-construction time by
 whatever consumer builds the outgoing `x-portkey-config` header — Portkey itself does **not** read

@@ -1,0 +1,8 @@
+{
+  "_comment": "Added 2026-09-10 (Claude Code · Opus 5; owner order 'set it up in portkey'). Rerank lane for POST /v1/rerank. Jina jina-reranker-m0 primary (free tier, 10M tokens), Voyage rerank-2.5 fallback (free tier without a payment method is ~3 requests/min). The NVIDIA llama-nemotron-rerank-vl-1b-v2 reranker sits on a non-OpenAI retrieval endpoint and is not in this lane. $VAR placeholders are substituted by the caller, as for every config here. Live verification: README.md, 'Rerank lane'.",
+  "strategy": { "mode": "fallback" },
+  "targets": [
+    { "provider": "jina", "api_key": "$JINA_API_KEY", "override_params": { "model": "jina-reranker-m0" } },
+    { "provider": "voyage", "api_key": "$VOYAGE_API_KEY", "override_params": { "model": "rerank-2.5" } }
+  ]
+}
