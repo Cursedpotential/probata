@@ -21,7 +21,7 @@ Re-checked 2026-09-10 06:40 EDT unless marked otherwise.
 | OneDrive | Personal mattsalem85, rclone default client, OpenList `/onedrive/mattsalem85` (online refresh API off). |
 | Desktop WebDAV | Scheduled task `desktop-webdav` disabled, processes stopped, port 8087 closed. |
 | Devbox container | `devbox-pd3xc78ahqkfswq12bpfqgy1-…` up 44 h, image built 2026-09-08 14:47Z, runs as kasm-user, persist-subset mount. Kasm :6901 answers 401. |
-| Devbox fixes | `deploy/devbox.yaml` + `deploy/docker/devbox/Dockerfile` STAGED, NOT COMMITTED, NOT DEPLOYED. |
+| Devbox fixes | `deploy/devbox.yaml` + `deploy/docker/devbox/Dockerfile` modified in the working tree, NOT COMMITTED, NOT DEPLOYED. (Staged at 06:40; by 07:00 the shared index had been reset by another session, so re-stage by explicit path before committing.) |
 | Auto-memory store | MOVED 2026-09-10 06:50: `~/.claude/projects/E--AI-Workspace-Projects-the-platform-workspace-probata/memory` (191 memories, old path no longer on disk) → `E--AI-Workspace-Projects-Propria-Probata/memory`, the store sessions started in `Propria\Probata` load. Manifest 193 files / 633,355 bytes, copy verified path+size identical; original kept at the old slug's `stale/memory-moved-to-Propria-Probata-20260910`, pointer `MOVED.md` beside it. Sessions started inside `Probata\probata` would use slug `…-Propria-Probata-probata`, which has no store. |
 | Superpowers hooks | Off. All 6 superpowers plugins `false` in enabledPlugins; no settings or project settings wire a superpowers hook; `superpowers-chrome` not enabled and has no hooks.json; `~/.claude/hooks/polyglot-wrapper/run-hook.cmd` only borrows superpowers' cmd/bash trick. Resume SessionStart 2026-09-10 injected no superpowers text. Owner order 06:31 satisfied, no change needed. |
 
@@ -44,7 +44,7 @@ Re-checked 2026-09-10 06:40 EDT unless marked otherwise.
   - D-154/D-157/D-158: one shared agent memory for ALL agents on the VPS = SurrealDB Agent Memory `spectrond` (free self-hostable) in front of `surreal-case`; NIM for LLM+embeddings, Gemini allowed where spectrond fixes the embed model; all provider traffic through Portkey; never run local embedders on the desktop. Docs store stays local, embedded SurrealKV, no Docker. Never shut down Neo4j.
   - Budget 2026-09-09 07:03: owner at 10% weekly usage left; no new agents without need.
 - **Parent-level plugin capture:** `E:\AI_Workspace\Projects\Propria\Probata\.claude\memories\project_memory.json` (claude-never-forgets realtime capture; held the 06:31 superpowers order).
-- **`.remember`:** `Propria\Probata\.remember	oday-2026-09-10.md` (session digest) and repo-level `probata\.rememberecent.md`.
+- **`.remember`:** `Propria\Probata\.remember\today-2026-09-10.md` (session digest) and repo-level `probata\.remember\recent.md`.
 
 ## UNRESOLVED (mandatory)
 
@@ -67,7 +67,7 @@ Re-checked 2026-09-10 06:40 EDT unless marked otherwise.
 
 ## Next steps (work in order)
 
-1. From the repo root, confirm the staged devbox diff, then commit `deploy/devbox.yaml` and `deploy/docker/devbox/Dockerfile` by explicit path and push.
+1. From the repo root, review `git diff -- deploy/devbox.yaml deploy/docker/devbox/Dockerfile`, then stage and commit `deploy/devbox.yaml` and `deploy/docker/devbox/Dockerfile` by explicit path and push.
 2. Seed `/data/probata/volumes/devbox/home` on ovh-files with `cp -an` from `kasmweb/core-ubuntu-noble:1.17.0`'s `/home/kasm-user`, chown 1000:1000.
 3. Deploy devbox once; poll `get_deployment` to finished or failed. On failure, read the last log lines and fix only that step.
 4. After a green build, seed `/data/probata/volumes/devbox/linuxbrew` from `probata-devbox:latest` `/home/linuxbrew`, chown 1000:1000, restart the devbox container through Coolify.
