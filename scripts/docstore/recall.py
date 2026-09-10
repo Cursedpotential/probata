@@ -168,39 +168,46 @@ async def recall(query: str, kind: str = "doc", status: str = "active", k: int =
 
     db = await sq.connect("docs", "probata", "docs")
     embed_task = asyncio.create_task(asyncio.to_thread(embed, query))
-    kw = _rows(await db.query(
-        "SELECT id, text, search::score(1) AS score, (->chunk_of->document)[0] AS doc FROM chunk "
-        "WHERE text @1@ $q" + extra + " ORDER BY score DESC LIMIT 80;", params))
-    kw_mode = "all-terms"
-    terms = params["q"].split()
-    if len({str(c["doc"]) for c in kw if c.get("doc") is not None}) < 3 and len(terms) > 1:
+
+    # The keyword and vector legs run concurrently on the one connection: the server executes them in
+    # parallel (measured 2026-09-10: 2.9-3.4 s sequential -> 1.4-1.5 s, identical ids per query).
+    async def keyword_leg() -> tuple[list[dict], str]:
+        kw = _rows(await db.query(
+            "SELECT id, text, search::score(1) AS score, (->chunk_of->document)[0] AS doc FROM chunk "
+            "WHERE text @1@ $q" + extra + " ORDER BY score DESC LIMIT 80;", params))
+        terms = params["q"].split()
+        if len({str(c["doc"]) for c in kw if c.get("doc") is not None}) >= 3 or len(terms) < 2:
+            return kw, "all-terms"
         # The BM25 index ANDs every term; a single OR query scores ~10k chunks (4.4 s), so run each
-        # term separately (fast, indexed) and sum scores per chunk instead.
+        # term separately (indexed, concurrently) and sum scores per chunk instead.
         merged = {str(c["id"]): dict(c) for c in kw}
-        for term in terms:
-            for c in _rows(await db.query(
-                    "SELECT id, text, search::score(1) AS score, (->chunk_of->document)[0] AS doc FROM chunk "
-                    "WHERE text @1@ $t" + extra + " ORDER BY score DESC LIMIT 30;", dict(params, t=term))):
+        per_term = await asyncio.gather(*(db.query(
+            "SELECT id, text, search::score(1) AS score, (->chunk_of->document)[0] AS doc FROM chunk "
+            "WHERE text @1@ $t" + extra + " ORDER BY score DESC LIMIT 30;", dict(params, t=term)) for term in terms))
+        for result in per_term:
+            for c in _rows(result):
                 key = str(c["id"])
                 if key in merged:
                     merged[key]["score"] += c["score"]
                 else:
                     merged[key] = dict(c)
-        kw = list(merged.values())
-        kw_mode = "any-term"
-    params["v"] = await embed_task
-    if doc_type:
-        # HNSW with a doc_type filter took 4.6 s (measured 2026-09-10); one kind is a few hundred chunks, so
-        # exact cosine through the chunk_type index took 0.6 s and returned the same top 20 chunks.
-        # doc_type goes first so the planner picks chunk_type rather than the far larger chunk_status index.
-        exact = " AND ".join(["doc_type = $dt"] + [f for f in filters if f != "doc_type = $dt"])
-        vec = _rows(await db.query(
-            "SELECT id, text, 1 - vector::similarity::cosine(embedding, $v) AS dist, (->chunk_of->document)[0] AS doc "
-            "FROM chunk WHERE " + exact + " ORDER BY dist LIMIT 80;", params))
-    else:
-        vec = _rows(await db.query(
+        return list(merged.values()), "any-term"
+
+    async def vector_leg() -> list[dict]:
+        vparams = dict(params, v=await embed_task)
+        if doc_type:
+            # HNSW with a doc_type filter took 4.6 s (measured 2026-09-10); one kind is a few hundred chunks, so
+            # exact cosine through the chunk_type index took 0.6 s and returned the same top 20 chunks.
+            # doc_type goes first so the planner picks chunk_type rather than the far larger chunk_status index.
+            exact = " AND ".join(["doc_type = $dt"] + [f for f in filters if f != "doc_type = $dt"])
+            return _rows(await db.query(
+                "SELECT id, text, 1 - vector::similarity::cosine(embedding, $v) AS dist, (->chunk_of->document)[0] AS doc "
+                "FROM chunk WHERE " + exact + " ORDER BY dist LIMIT 80;", vparams))
+        return _rows(await db.query(
             "SELECT id, text, vector::distance::knn() AS dist, (->chunk_of->document)[0] AS doc FROM chunk "
-            "WHERE embedding <|80,200|> $v" + extra + " ORDER BY dist;", params))
+            "WHERE embedding <|80,200|> $v" + extra + " ORDER BY dist;", vparams))
+
+    (kw, kw_mode), vec = await asyncio.gather(keyword_leg(), vector_leg())
     t_search = time.perf_counter()
 
     def best(chunks, better):
