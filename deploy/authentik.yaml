@@ -1,21 +1,17 @@
 # ============================================================================
-# SUPERSEDED 2026-09-02 by D-133 - DO NOT DEPLOY AS WRITTEN.
+# OWNER CORRECTION 2026-09-12: AUTHENTIK WAS NOT REJECTED.
 #
-# Owner ruled Authentik integrates as an OIDC PROVIDER, not as a Traefik
-# forward-auth proxy: "Traefik is only for external-facing surfaces... OIDC is
-# the way to go, otherwise it just gets tailscale addresses."
+# The first deployment attempt was defective. The later claim that Authentik
+# or Traefik forward-auth had been rejected was generated without owner
+# authority and is superseded. Direct public HTTPS enters through the existing
+# Coolify Traefik reverse proxy; Authentik owns browser login, policy, session,
+# and the application launcher. The embedded outpost protects applications
+# that do not implement OIDC directly. OIDC-capable applications may use the
+# authorization-code flow behind the same shared identity boundary.
 #
-# Everything below that assumes forward auth must be reworked:
-#   - AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS (hard-fails without Traefik)
-#   - the traefik.* router labels and letsencrypt cert resolver
-#   - the /outpost.goauthentik.io/ outpost router (single-app forward auth)
-#
-# Target shape: Authentik on the tailnet (optionally its own tsnet identity per
-# D-132); each service an OIDC client validating JWTs in-process against the
-# JWKS endpoint; browser surfaces use the authorization-code flow. No reverse
-# proxy, no outpost, no public hostname for internal services.
-#
-# This file is retained for its Postgres/secret wiring, which is still useful.
+# No Cloudflare Tunnel or Cloudflare Access is part of this architecture.
+# Existing Tailscale routes remain unchanged as the owner's unfettered,
+# full-access private path; they are not forced through Authentik.
 # ============================================================================
 # =============================================================================
 # AUTHENTIK IDENTITY PROVIDER -- standalone Coolify Docker Compose application
