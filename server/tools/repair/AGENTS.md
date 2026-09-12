@@ -85,7 +85,7 @@ out smaller.
 
 `registry.load_builtin_tools()` walks `server/tools/` **recursively** and
 imports every module whose final path segment does not start with `_`. That
-walk also runs inside the dep-light `docker/tools` facade, which mounts the
+walk also runs inside the dep-light `deploy/docker/tool-runtime` facade, which includes the
 whole `server/` tree but installs almost none of its dependencies.
 
 A module-level `import lxml` anywhere here would FATAL-loop the facade — the
@@ -210,4 +210,3 @@ Rules, in force everywhere:
 The test before adding or editing anything here: *could this be scheduled on its own,
 retried, wrapped as an n8n node, and reasoned about in isolation?* If not, it is not
 finished.
-

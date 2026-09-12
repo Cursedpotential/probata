@@ -194,7 +194,7 @@ func TestValidateToolIDRejectsUnsafeIDs(t *testing.T) {
 
 func TestRunSurfacesToolFailure(t *testing.T) {
 	resolve, _ := sealObject(t, []byte("data"))
-	g := newGateway(t, resolve, &fakeRunner{err: errors.New("platform-tools \"repair.detect\" returned 404")})
+	g := newGateway(t, resolve, &fakeRunner{err: errors.New("tool-runtime \"repair.detect\" returned 404")})
 	_, err := g.Run(context.Background(), "repair.detect", proffer.Ref("upload://abc"), nil)
 	if err == nil || !strings.Contains(err.Error(), "returned 404") {
 		t.Fatalf("expected the tool error to surface, got %v", err)

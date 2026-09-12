@@ -76,7 +76,7 @@ analytics/      ~~standalone Evidence.dev reporting projects, one subdir each~~
                 platform-owned Evidence project has been re-established yet. Do not read the
                 absence of analytics/ as the tool having been dropped.
 deploy/         ONE compose file per Coolify application (S10, 2026-08-10, D-043): exec, gateway,
-                contextforge, platform-tools, sandbox, desktop, portkey, coolify-mcp, data-pg,
+                contextforge, tool-runtime, sandbox, desktop, portkey, coolify-mcp, data-pg,
                 data-neo4j, data-graphiti, data-graphiti-case, data-vector, data-weaviate,
                 librechat, librechat-mongo, nocodb, workbench (.yaml each) — plus host-prep +
                 security-fix history. Old root paths compose.<name>.yaml are dead on main;
@@ -106,7 +106,7 @@ server/contracts/
 Promoted out of `server/evidence/normalize.py` (Option A, owner-confirmed) because 15+ parser
 modules + evidence internals + tests + the facade all import it — it's the platform's cross-domain
 record contract, not an evidence-private type. Must stay import-light: the dep-light
-`docker/tools` facade imports every parser, and every parser imports this. `server/core/` was
+`deploy/docker/tool-runtime` facade imports every parser, and every parser imports this. `server/core/` was
 disqualified as the new home because `server/core/__init__.py` eagerly imports
 `server.core.session` (sqlalchemy/agno/duckdb). See `server/contracts/AGENTS.md` and ADR-0035.
 
@@ -139,7 +139,7 @@ server/tools/
                            pkgutil.walk_packages, recursive since ADR-0035 — over server.tools)
   _common.py               shared helpers (underscore prefix = NOT a tool; skipped by auto-discovery)
   _chatminer_adapter.py    ChatMiner -> NormalizedRecord bridge (underscore-prefixed)
-  _sbv_client.py           SBV (SMS Backup & Restore) session-cookie REST client — shared by sbv_sms.py and the docker/tools facade
+  _sbv_client.py           SBV (SMS Backup & Restore) session-cookie REST client — shared by sbv_sms.py and the tool-runtime facade
   parsers/
     messaging/              imessage_*, sms_xml, sbv_sms, facebook_*, messaging_{csv,transcript}
     ai_chat/                 chatgpt_*, claude_*, gemini_*, perplexity_*
@@ -152,14 +152,15 @@ server/tools/
 Full file inventory, the capability model, and "how to add a parser" live in
 `server/tools/AGENTS.md` — not restated here.
 
-The `docker/tools` platform-tools facade (`docker/tools/tools/facade.py`) volume-mounts the
-**whole `server/` tree** read-only at `/opt/tools/server` (`compose.yaml`/`deploy/exec.yaml`:
-`./server:/opt/tools/server:ro`) — not just `server/tools/` — because `server.tools.*` has real
+The `tool-runtime` facade (`deploy/docker/tool-runtime/tools/facade.py`) includes the
+**whole `server/` tree** at `/opt/tools/server` — not just `server/tools/` — because
+`server.tools.*` has real
 transitive deps outside itself (`server.contracts.records` for the record schema,
 `server.vendored.chatminer` for the parser core; both lightweight, no sqlalchemy/agno at import
-time). With `/opt/tools` on `sys.path`, the facade imports it as plain `server.tools.registry` /
-`server.tools._sbv_client` — the same import path the main app uses — see the facade's module
-docstring for the full mount<->import contract.
+time). The tree is baked into the image so Coolify deployments do not depend on relative bind
+mounts. With `/opt/tools` on `sys.path`, the facade imports it as plain
+`server.tools.registry` / `server.tools._sbv_client` — the same import path the main app uses —
+see the facade's module docstring for the full image/import contract.
 
 ## Placement rules (where does X go?)
 

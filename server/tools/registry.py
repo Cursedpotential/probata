@@ -212,13 +212,13 @@ class ToolRegistry:
         ]
 
     def contract_manifest(self) -> list[dict[str, Any]]:
-        """Canonical deterministic declarations exposed by the platform-tools facade.
+        """Canonical deterministic declarations exposed by the tool-runtime facade.
 
         Declared quality values are selector ranks only, not observed output-quality
         scores. Execution success, completeness, and observed quality require separate
         version-pinned receipts.
         Direct consumers, including the Go engine, call the facade rather than
-        duplicating tool implementations outside Platform Tools.
+        duplicating tool implementations outside the tool runtime.
         """
         return [
             {
@@ -307,8 +307,8 @@ def load_builtin_tools() -> int:
     Sub-package __init__ modules register nothing, so they're skipped too.
 
     Package-name-AGNOSTIC on purpose (walks tools_pkg.__name__, not a hardcoded
-    "server.tools"): this same tree is also volume-mounted into the docker/tools
-    platform-tools facade container — see docker/tools/tools/facade.py's module
+    "server.tools"): this same tree is also included in the tool-runtime
+    facade container — see deploy/docker/tool-runtime/tools/facade.py's module
     docstring for the mount<->import contract.
 
     Memoized after the first successful walk: re-imports were always no-ops,

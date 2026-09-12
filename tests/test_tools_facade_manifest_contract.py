@@ -1,18 +1,28 @@
-"""Format-neutral declaration contract for the platform-tools facade.
+"""Format-neutral declaration contract for the tool-runtime facade.
 
 _Byline: Codex · GPT-5 · 2026-08-29._
 """
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 from dataclasses import FrozenInstanceError
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from deploy.docker.tools.tools import facade
 from server.tools import registry as registry_module
 from server.tools.registry import FunctionTool, ToolRegistry, register
+
+
+_FACADE_PATH = Path(__file__).resolve().parents[1] / "deploy" / "docker" / "tool-runtime" / "tools" / "facade.py"
+_FACADE_SPEC = importlib.util.spec_from_file_location("tool_runtime_facade", _FACADE_PATH)
+assert _FACADE_SPEC is not None and _FACADE_SPEC.loader is not None
+facade = importlib.util.module_from_spec(_FACADE_SPEC)
+sys.modules[_FACADE_SPEC.name] = facade
+_FACADE_SPEC.loader.exec_module(facade)
 
 
 def _tool(tool_id: str, **overrides) -> FunctionTool:

@@ -36,7 +36,7 @@ runtime context they share. Imports `evidence/`, `tools/`, `analysis/`, `core/`
 - ADR-0006 — two-layer team topology (root Router over coordinate families)
 - ADR-0033 — `server/` repack (this package's current home, was top-level `agents/`)
 - `docs/planning/facade-collapse-plan.md` — why `gateway_tools`/`sbv_tools` exist as
-  agno `@tool`s alongside (not instead of) the `docker/tools` facade (superseded banner
+  agno `@tool`s alongside (not instead of) the `deploy/docker/tool-runtime` facade (superseded banner
   explains the corrected architecture — read it before touching this area)
 
 ---
@@ -90,4 +90,3 @@ Rules, in force everywhere:
 The test before adding or editing anything here: *could this be scheduled on its own,
 retried, wrapped as an n8n node, and reasoned about in isolation?* If not, it is not
 finished.
-

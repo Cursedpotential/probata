@@ -1,6 +1,6 @@
 """agents/tools/sbv_tools.py — agno ``@tool`` wrappers over ``SBVClient``
 (``server/tools/_sbv_client.py``), the SBV REST API (``:8085``). Mirrors the
-old facade's ``/sbv/*`` proxy surface (``docker/tools/tools/facade.py:198-296``)
+old facade's ``/sbv/*`` proxy surface (``deploy/docker/tool-runtime/tools/facade.py``)
 plus ``sbv_hashes`` (forensic H1/H3 custody chain — used internally by the
 SBV client but never exposed as its own route by the facade; the custody
 chain is the whole point of the SBV fork, so it belongs in the toolkit).
@@ -133,7 +133,7 @@ def sbv_hashes(import_id: str = "latest") -> dict[str, Any]:
 def sbv_export(format: str = "json", address: str | None = None, include_calls: bool = True) -> Any:
     """Export-as-a-function. SBV's deployed build has no server-side
     /api/export (export is client-side in the GUI); this synthesizes the
-    export from messages+calls, porting docker/tools/tools/facade.py:270-296
+    export from messages+calls, porting deploy/docker/tool-runtime/tools/facade.py
     so that logic isn't lost when the facade is removed."""
     client = _sbv()
     messages = client.all_messages(address=address)

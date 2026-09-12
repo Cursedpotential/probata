@@ -1,5 +1,5 @@
 # =============================================================================
-# PLATFORM-TOOLS — consolidated tool containers (SBV GUI + parsers/extractors
+# TOOL-RUNTIME — consolidated tool runtime (SBV GUI + parsers/extractors
 # facade), split out of the exec-tier bundle (compose.exec.yaml), owner order
 # 2026-07-19: "separate anything that can be separated." Mirrors the proven
 # data-tier split (commit 18c42d2): one compose file per Coolify app, shared
@@ -7,40 +7,44 @@
 # bind mount — zero data migration.
 #
 # DEPLOY AS its own Coolify "Docker Compose" app on OVH-1 (server
-# fmuao9enq3nxk8qw5hqjzzce), app `exec-platform-tools`. Build context is the
+# fmuao9enq3nxk8qw5hqjzzce), app `probata-tool-runtime`. Build context is the
 # REPO ROOT and every Dockerfile COPY is repo-root-relative — set the Coolify
 # app's base directory to "/". Env: BIND_IP.
 # ~~SBV built from vendored/sbv/~~ CORRECTED 2026-09-05: the SBV binary is
 # lifted from the fork's CI-built image by immutable digest; no SBV source is
-# needed in the build context (see deploy/docker/tools/Dockerfile).
+# needed in the build context (see deploy/docker/tool-runtime/Dockerfile).
 #
 # agentos-api / agentos-mcp (the rump exec-tier bundle) reach this over the
-# shared `probata` network via SBV_BASE_URL=http://platform-tools:8085 — SAME
-# value as before the split; it now resolves via `agno` docker DNS instead
-# of the old single-app "agentos" local network.
+# shared `probata` network via SBV_BASE_URL=http://tool-runtime:8085. The
+# transitional `platform-tools` network alias keeps existing callers working
+# while their configuration moves to the canonical name.
 #
-# CUTOVER (doors policy): old bundle's platform-tools container stays up
-# until this is deployed + verified (per its healthcheck/port), THEN the
-# platform-tools: block is removed from compose.exec.yaml AND agentos-api/mcp
-# join the `probata` network too (batched into the final cutover commit).
-# Reversible: revert compose.exec.yaml + delete the exec-platform-tools app.
+# RENAME CUTOVER (2026-09-12): this is the canonical manifest for the existing
+# application UUID e1mshujml6bv8ldtoe8n7je0, renamed in place from
+# `exec-platform-tools`. No second application or duplicate runtime is created.
+# Reversible: point the same application record back to the prior manifest and
+# name while the compatibility alias remains present.
 # =============================================================================
 
 services:
-  platform-tools:
+  tool-runtime:
     build:
       # Coolify runs `docker compose --project-directory <repo root> -f
-      # <repo root>/deploy/platform-tools.yaml build`, so `context: .` is the
+      # <repo root>/deploy/tool-runtime.yaml build`, so `context: .` is the
       # REPO ROOT and `dockerfile:` must be repo-root-relative. Corrected
       # 2026-09-05: this said `docker/tools/Dockerfile`, a path that stopped
       # existing in the 2026-09-01 restructure, so any redeploy would have
-      # failed the build and taken platform-tools down. Same pattern as the
+      # failed the build and taken the tool runtime down. Same pattern as the
       # working deploy/proffer-worker.yaml.
       context: .
-      dockerfile: deploy/docker/tools/Dockerfile
-    image: agno-platform-tools:latest
-    container_name: platform-tools
+      dockerfile: deploy/docker/tool-runtime/Dockerfile
+    image: probata-tool-runtime:latest
+    container_name: tool-runtime
     restart: unless-stopped
+    environment:
+      # Direct/private callers still materialize by locator; the runtime never
+      # gets arbitrary host paths and has no host-shell access.
+      TOOL_RUNTIME_ALLOWED_READ_ROOTS_JSON: '["/r2", "/data/toolgw/materialize"]'
     ports:
       - "${BIND_IP:-127.0.0.1}:8085:8085"   # SBV GUI — tailnet-only
       - "${BIND_IP:-127.0.0.1}:8090:8090"   # parsers/extractors facade — tailnet-only
@@ -63,17 +67,25 @@ services:
           expected={'xml','html','json','ndjson','csv','pdf','image'};
           ready={row['format'] for row in result['engines'] if row['ready']};
           missing=sorted(expected-ready);
-          assert not missing,(missing,result)"
+          assert not missing,(missing,result);
+          request=urllib.request.Request('http://127.0.0.1:8090/tools/engine.poppler-inspect/run',
+          data=b'{\"expected_profile_id\":\"poppler-linux-amd64\",\"expected_package_version\":\"22.12.0-2+deb12u3\"}',
+          headers={'Content-Type':'application/json'},method='POST');
+          profile=json.load(urllib.request.urlopen(request,timeout=5));
+          assert profile['ready'],profile"
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
     networks:
-      - probata
+      probata:
+        aliases:
+          # Compatibility only. Remove after every caller uses `tool-runtime`.
+          - platform-tools
 
 networks:
   probata:
-    external: true   # shared cross-app network on OVH-1 — agentos-api/mcp reach platform-tools:8085 here
+    external: true   # shared cross-app network on OVH-1
 
 volumes:
   # Cloudflare R2 bucket "nexus" via the rclone volume plugin (same driver
@@ -86,3 +98,4 @@ volumes:
       vfs_cache_mode: "writes"
 
 # Byline: Claude Code · Sonnet · 2026-07-19 (split out of compose.exec.yaml, exec-tier split, owner order 2026-07-19)
+# Byline amendment: Codex · GPT-5 · 2026-09-12 (`platform-tools` -> `tool-runtime`, owner ruling)

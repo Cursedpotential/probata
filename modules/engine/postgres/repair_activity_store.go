@@ -23,7 +23,7 @@ import (
 )
 
 // RepairActivityStore is the sole durable repair Activity store. Roots are
-// shared, read-only source paths visible to both this runtime and platform-tools.
+// shared, read-only source paths visible to both this runtime and tool-runtime.
 type RepairActivityStore struct {
 	db           DB
 	allowedRoots []string
@@ -49,7 +49,7 @@ func NewRepairActivityStore(db DB, allowedRoots []string) (*RepairActivityStore,
 }
 
 // REMOVED 2026-09-05 (D-132): ResolveOriginalPath yielded a HOST PATH, which the
-// repair Activity then posted to platform-tools running on a DIFFERENT host —
+// repair Activity then posted to tool-runtime running on a DIFFERENT host —
 // the exact defect the tool gateway exists to eliminate. The retained original
 // is now addressed by LOCATOR and materialized by the gateway. Do not
 // reintroduce a path-yielding method on this store.

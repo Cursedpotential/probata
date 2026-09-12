@@ -15,7 +15,7 @@
 //   - VARIABLES travel as Inputs — bounded scalars a flow needs to do its job
 //     (a format, a sample limit, a mode).
 //   - FUNCTIONS are reached by the flow itself through the tool gateway, which
-//     already exposes the whole platform-tools registry behind one uniform,
+//     already exposes the whole tool-runtime registry behind one uniform,
 //     locator-addressed contract (D-132).
 //
 // Byline: Claude Code · Opus 5 · 2026-09-03.

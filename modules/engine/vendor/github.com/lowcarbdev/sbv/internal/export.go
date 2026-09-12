@@ -4,7 +4,7 @@ package internal
 //
 // Upstream SBV has no server-side export route (the GUI exports client-side);
 // today the Python tools-facade synthesizes an export from /sbv/messages +
-// /sbv/calls (docker/tools/tools/facade.py: sbv_export). This makes that same
+// /sbv/calls (deploy/docker/tool-runtime/tools/facade.py: sbv_export). This makes that same
 // export NATIVE and headless, and — because SBV is where custody is computed —
 // stamps the export with the H1/H3 custody summary so an exported bundle carries
 // its own chain-of-custody anchor. The NormalizedRecord mapping that Python does

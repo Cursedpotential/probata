@@ -19,8 +19,8 @@ discovered).
 ## The one hard rule: MUST stay dependency-free
 
 `server/contracts/__init__.py` is deliberately empty of heavy imports (no
-sqlalchemy / agno / duckdb) — **do not change that.** Why: the `docker/tools`
-platform-tools facade is a dep-light container that mounts the whole `server/` tree
+sqlalchemy / agno / duckdb) — **do not change that.** Why: the `docker/tool-runtime`
+facade is a dep-light container that mounts the whole `server/` tree
 and imports every parser to build its registry; every parser imports
 `server.contracts.records`. If this package's `__init__` ever pulls in a heavy
 dependency, the facade FATAL-loops on startup — the exact failure mode ADR-0033
@@ -94,4 +94,3 @@ Rules, in force everywhere:
 The test before adding or editing anything here: *could this be scheduled on its own,
 retried, wrapped as an n8n node, and reasoned about in isolation?* If not, it is not
 finished.
-

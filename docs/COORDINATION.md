@@ -575,3 +575,16 @@ explicitly requests a mockup. Root coordinates; the least-expensive subagent cap
 reliable completion executes each bounded task, with escalation for complexity or risk.
 Resume documents: `docs/MASTER-TODO-2026-08-18.md` (entire application) and
 `docs/HANDOFF-2026-08-18-evidence-operations-desk-mvp.md` (immediate MVP).
+
+## 2026-09-12 — tool-runtime rename lane
+
+> _Byline: Codex · GPT-5 · 2026-09-12._
+
+| Lane | Ownership | State |
+|---|---|---|
+| `tool-runtime` in-place rename | `deploy/tool-runtime.yaml`, `deploy/docker/tool-runtime/**`, runtime client/config compatibility, current naming docs, targeted tests, and the existing Coolify application UUID `e1mshujml6bv8ldtoe8n7je0` | In progress — code and local verification first; deployment and live proof pending |
+
+Boundary: preserve the orphaned Poppler/profile/read-root changes; do not create a second app;
+do not rename the separate `parser-runtime`; retain the old Docker DNS and ContextForge
+publication names only as explicit compatibility aliases. Receipt:
+`docs/reviews/2026-09-12-tool-runtime-rename.md`.

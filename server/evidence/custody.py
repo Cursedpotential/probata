@@ -134,7 +134,7 @@ class AIChatEvidenceDenied(RuntimeError):
 #    different lane, which never sets a "workflow" key at all). Mirrors the
 #    heuristic workbench/api/app/service/detect.py already uses to CLASSIFY a
 #    staged upload as a chat export — kept as an independent, dependency-light
-#    copy because this module must stay import-light (docker/tools facade
+#    copy because this module must stay import-light (tool-runtime facade
 #    container, per the evidence/AGENTS.md invariant) and cannot import the
 #    separately-deployed workbench app.
 _AI_CHAT_WORKFLOW_MARKERS = frozenset({"chat-transcript"})

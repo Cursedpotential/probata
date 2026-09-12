@@ -6,7 +6,7 @@ WHY EVERY THIRD-PARTY IMPORT IN THIS PACKAGE IS FUNCTION-LOCAL
 -------------------------------------------------------------
 `reference.load_builtin_tools()` walks `server/tools/` RECURSIVELY and imports
 every module whose final path segment does not start with `_`. That walk also
-runs inside the dep-light `docker/tools` facade container, which volume-mounts
+runs inside the dep-light `deploy/docker/tool-runtime` facade container, which includes
 the whole `server/` tree but installs almost none of its dependencies.
 
 A module-level `import lxml` anywhere under `server/tools/repair/` would

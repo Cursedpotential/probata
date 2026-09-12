@@ -43,12 +43,12 @@ import uuid
 from typing import Any
 
 # Defaults match the deployed container (SBV listens on :8085 inside
-# platform-tools). Override via env for local/proxy use.
+# tool-runtime). Override via env for local/proxy use.
 SBV_BASE_URL = os.getenv("SBV_BASE_URL", "http://localhost:8085").rstrip("/")
 SBV_API = f"{SBV_BASE_URL}/api"
 
 # Service-account credentials. The integration registers/logs-in this account
-# to obtain a session cookie. Override in the platform-tools env at cutover.
+# to obtain a session cookie. Override in the tool-runtime env at cutover.
 SBV_SERVICE_USER = os.getenv("SBV_SERVICE_USER", "mcp_service")
 SBV_SERVICE_PASS = os.getenv("SBV_SERVICE_PASS", "")  # set in env at cutover
 

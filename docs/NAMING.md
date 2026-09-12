@@ -1,6 +1,7 @@
 # Naming Canon
 
 > _Byline: Claude Code · Fable 5.1 · 2026-09-05._
+> _Byline amendment: Codex · GPT-5 · 2026-09-12 (`tool-runtime` owner ruling)._
 
 This is the canonical naming register for the product rename ruled 2026-09-05
 (D-137 through D-141). It is the single source of truth for old→new names across
@@ -44,6 +45,7 @@ belongs to.
 | Product UI + API shell | `workbench` | `modules/workbench/` (FastAPI + Next.js) | D-131 |
 | Parser execution surface | `parser-runtime` | Tool-gateway-adjacent parser execution | D-131 |
 | Cross-domain tool registry | `tool-gateway` | `server/tools/` gateway | D-131 |
+| Tool execution runtime | `tool-runtime` | Deployed SBV + registry-backed parser/extractor/repair capability host; formerly `platform-tools` | Owner ruling 2026-09-12 |
 | Format decoder library | `decode` | SBV-donor-derived decoder set, destined for `modules/engine/decode/` | D-131 |
 | Import lane (was `uiw`) | `proffer` | Custody-preserving ingest lane — Go package `proffer`, worker binary `proffer-worker`, starter binary `proffer-starter`, Temporal task queue `proffer-v1`, workflow type `ProfferWorkflow`, Python package `server/proffer/` | D-140 |
 | Operator client (desktop ingest) | `intake` | The D-123 desktop ingest client | ruled D-150 (2026-09-06)|
@@ -60,6 +62,7 @@ belongs to.
 | Case Bible / Vault (product name) | **consignatio** (product name only) | Product/brand name | D-141. `casebible-*` R2 buckets, the `casebible` database / `ai.casebible_*` table prefix (not a PG schema), the `cb-*` command family, and the catalog skill are **NOT renamed** — same reservation as D-138 item 2, restated in D-141. |
 | `Legal-Workspace` (product name) | **advocatio** (product name only) | Product/brand name | D-138. The `Legal-Workspace` repository itself is **NOT renamed yet.** |
 | (analysis engine, previously undifferentiated inside this repo) | **Indagatio Veri** / `indagatio` | New product identity, split-off pending | D-139. Nothing has physically split out of this repo yet; see §1. |
+| `platform-tools` / `exec-platform-tools` / `agno-platform-tools` | `tool-runtime` / `probata-tool-runtime` | Compose service + container, Coolify application, local image, manifest and Dockerfile directory | Owner ruling 2026-09-12. The existing Coolify application is renamed in place. `platform-tools` remains only as a bounded Docker-network compatibility alias during caller cutover; `tool-gateway` and the separate `parser-runtime` are unchanged. |
 
 ## 4. Rejected names, with collision reasons
 

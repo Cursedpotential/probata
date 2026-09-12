@@ -14,7 +14,7 @@ domain, so it's a top-level sibling of `evidence/`, not nested inside it.
 registry.py              capability registry (@register, load_builtin_tools)
 _common.py                shared parser helpers (underscore = NOT a tool, skipped)
 _chatminer_adapter.py     ChatMiner -> NormalizedRecord bridge (underscore-prefixed)
-_sbv_client.py            SBV REST client, shared by sbv_sms.py + the docker/tools facade
+_sbv_client.py            SBV REST client, shared by sbv_sms.py + the tool-runtime facade
 parsers/
   messaging/               imessage_{html,txt,pdf}, sms_xml, sbv_sms, facebook_{html,json},
                             messaging_{csv,transcript}
@@ -53,9 +53,9 @@ Wrapped as agno `@tool`s in `server/agents/tools/gateway_tools.py`. This was
 `server/evidence/tool_finder/` before ADR-0035; it is a registry **consumer**, never
 itself a registered tool, and is excluded from `load_builtin_tools()` discovery.
 
-## Facade mount<->import contract
+## Facade image/import contract
 
-`docker/tools/tools/facade.py` (the dep-light platform-tools container) volume-mounts
+`deploy/docker/tool-runtime/tools/facade.py` (the dep-light tool-runtime container) includes
 the **whole `server/` tree**, not just `server/tools/` — parsers transitively import
 `server.contracts.records` (the record schema) and `server.vendored.chatminer` (the
 parser core), both deliberately lightweight (no sqlalchemy/agno at import time).
@@ -120,4 +120,3 @@ Rules, in force everywhere:
 The test before adding or editing anything here: *could this be scheduled on its own,
 retried, wrapped as an n8n node, and reasoned about in isolation?* If not, it is not
 finished.
-

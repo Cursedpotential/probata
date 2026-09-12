@@ -1,11 +1,12 @@
-// tool-gateway is the locator-addressed front end for the Python platform-tools
+// tool-gateway is the locator-addressed front end for the Python tool-runtime
 // registry (D-132).
 //
 // It gets its OWN Tailscale identity via tsnet, so callers address the gateway
-// by a stable tailnet name and which physical host it — or platform-tools —
+// by a stable tailnet name and which physical host it — or tool-runtime —
 // happens to run on stops mattering. That is the durable fix for the defect
-// found live on 2026-09-02: the Proffer worker (ovh-files) handed platform-tools
-// (ovh-app) a worker-local filesystem path, and platform-tools 404'd with the
+// found live on 2026-09-02: the Proffer worker (ovh-files) handed tool-runtime
+// (then named platform-tools, on ovh-app) a worker-local filesystem path, and
+// the runtime 404'd with the
 // path as the response body because the file was not there.
 //
 // Source bytes cross hosts through the object store, never a shared disk
@@ -55,6 +56,17 @@ func requireEnv(name string) (string, error) {
 	return "", fmt.Errorf("%s is required", name)
 }
 
+func requireToolRuntimeURL() (string, error) {
+	if value := env("TOOL_RUNTIME_BASE_URL"); value != "" {
+		return value, nil
+	}
+	if value := env("PLATFORM_TOOLS_BASE_URL"); value != "" {
+		slog.Warn("PLATFORM_TOOLS_BASE_URL is deprecated; use TOOL_RUNTIME_BASE_URL")
+		return value, nil
+	}
+	return "", errors.New("TOOL_RUNTIME_BASE_URL is required")
+}
+
 // readSecretFile reads a mounted secret. The VALUE is never logged — only
 // whether it was present and its length, per the platform's secret-handling
 // rule.
@@ -67,7 +79,7 @@ func readSecretFile(path string) (string, error) {
 }
 
 func run() error {
-	toolsBaseURL, err := requireEnv("PLATFORM_TOOLS_BASE_URL")
+	runtimeBaseURL, err := requireToolRuntimeURL()
 	if err != nil {
 		return err
 	}
@@ -76,10 +88,10 @@ func run() error {
 		return err
 	}
 	if !filepath.IsAbs(materializeDir) {
-		return errors.New("TOOL_GATEWAY_MATERIALIZE_DIR must be an absolute path shared with platform-tools")
+		return errors.New("TOOL_GATEWAY_MATERIALIZE_DIR must be an absolute path shared with tool-runtime")
 	}
 
-	runner, err := runtimeapi.NewPlatformToolsClient(toolsBaseURL)
+	runner, err := runtimeapi.NewToolRuntimeClient(runtimeBaseURL)
 	if err != nil {
 		return err
 	}
@@ -95,7 +107,7 @@ func run() error {
 			Resolve:        resolver,
 			MaterializeDir: materializeDir,
 		},
-		Index: toolIndexFunc(toolsBaseURL),
+		Index: toolIndexFunc(runtimeBaseURL),
 	}
 	if path := env("TOOL_GATEWAY_SERVICE_TOKEN_FILE"); path != "" {
 		token, err := readSecretFile(path)
@@ -134,7 +146,7 @@ func run() error {
 
 	slog.Info("tool gateway listening",
 		"address", describe,
-		"platform_tools", toolsBaseURL,
+		"tool_runtime", runtimeBaseURL,
 		"materialize_dir", materializeDir,
 		"resolver_schemes", strings.Join(schemes, ","))
 
@@ -300,7 +312,7 @@ func buildListener() (net.Listener, string, func(), error) {
 	return listener, "tsnet:" + hostname + ":" + port, func() { _ = srv.Close() }, nil
 }
 
-// toolIndexFunc proxies the platform-tools registry so callers discover tools
+// toolIndexFunc proxies the tool-runtime registry so callers discover tools
 // on the same surface they invoke them on.
 func toolIndexFunc(baseURL string) func() (json.RawMessage, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -316,7 +328,7 @@ func toolIndexFunc(baseURL string) func() (json.RawMessage, error) {
 			return nil, fmt.Errorf("tool gateway: read tool index: %w", err)
 		}
 		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("tool gateway: platform-tools index returned %d", resp.StatusCode)
+			return nil, fmt.Errorf("tool gateway: tool-runtime index returned %d", resp.StatusCode)
 		}
 		return json.RawMessage(body), nil
 	}

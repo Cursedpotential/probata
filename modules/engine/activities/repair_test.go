@@ -149,7 +149,7 @@ func TestResolveSourceRepairInjectsManualApprovalOnlyAfterStoredDecision(t *test
 
 // TestAssessSourceRepairAddressesSourceByLocatorNotHostPath pins the D-132
 // contract: the Activity names a locator and never a filesystem path, because
-// the worker and platform-tools are on different hosts.
+// the worker and tool-runtime are on different hosts.
 func TestAssessSourceRepairAddressesSourceByLocatorNotHostPath(t *testing.T) {
 	client := &repairClientStub{}
 	store := &repairStoreStub{assessment: RepairPersistenceResult{ResultRef: "assessment", ReceiptRef: "receipt"}}

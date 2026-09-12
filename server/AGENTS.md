@@ -44,7 +44,7 @@ api/         <- outermost. Mounts agents/ + evidence/ + tools/ into FastAPI/Agen
 ```
 
 Never import upward (e.g. `contracts/` must never import `evidence/` or `agents/`) —
-`contracts/` in particular is imported by the dep-light `docker/tools` facade
+`contracts/` in particular is imported by the dep-light `docker/tool-runtime` facade
 container, so a heavy import there FATAL-loops that container (ADR-0035).
 
 ## Relevant ADRs
@@ -114,4 +114,3 @@ Rules, in force everywhere:
 The test before adding or editing anything here: *could this be scheduled on its own,
 retried, wrapped as an n8n node, and reasoned about in isolation?* If not, it is not
 finished.
-

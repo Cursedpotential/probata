@@ -1,4 +1,4 @@
-# tool-gateway — the locator-addressed front end for platform-tools (D-132).
+# tool-gateway — the locator-addressed front end for tool-runtime (D-132).
 #
 # Hermetic vendored build, same contract as the other engine services:
 # modules/engine/vendor/ snapshots the full module graph (now including
@@ -25,7 +25,7 @@ RUN CGO_ENABLED=1 go build \
 FROM debian:bookworm-slim
 
 # /data/toolgw/materialize MUST be bind-mounted to the same absolute path in the
-# platform-tools container: the gateway hands that path to the tool, and the
+# tool-runtime container: the gateway hands that path to the tool, and the
 # whole point of this service is that the path resolves on the other side.
 # /data/toolgw/seal holds objects fetched from R2/B2 before materialization.
 # /data/toolgw/tsnet holds the tsnet node state (its machine identity) and must

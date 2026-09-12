@@ -21,7 +21,7 @@ own hashes; capturing them for context is a later, optional enrichment.
 
 Depends on `server.tools._sbv_client` (analysis -> tools is the allowed
 dependency direction, server/AGENTS.md). SBV service URL comes from
-`SBV_BASE_URL` (in-cluster `http://platform-tools:8085`; off-box use the
+`SBV_BASE_URL` (in-cluster `http://tool-runtime:8085`; off-box use the
 tailnet `http://100.72.169.40:8085`); auth is the client's service account
 (`SBV_SERVICE_USER`/`SBV_SERVICE_PASS`), handled transparently.
 """

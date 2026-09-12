@@ -1,10 +1,10 @@
 // ToolGatewayClient is the ONLY sanctioned way an Activity reaches a platform
 // tool (D-132).
 //
-// It speaks the gateway contract, not the raw platform-tools contract: a
+// It speaks the gateway contract, not the raw tool-runtime contract: a
 // LOCATOR plus tool-specific args. It never sends a host path, because handing
 // a path across a host boundary is the defect the gateway exists to remove —
-// the Proffer worker runs on ovh-files, platform-tools on ovh-app, and a
+// the Proffer worker runs on ovh-files, tool-runtime on ovh-app, and a
 // worker-local path simply does not exist over there.
 //
 // The gateway authenticates callers with a bearer service token in addition to

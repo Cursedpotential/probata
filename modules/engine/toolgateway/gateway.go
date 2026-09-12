@@ -1,14 +1,14 @@
 // Package toolgateway is the locator-addressed front end for the Python
-// platform-tools registry.
+// tool-runtime registry.
 //
 // WHY THIS EXISTS (D-132, ruled 2026-09-02)
 //
 // The Python tools take a local filesystem path and do exactly one thing with
 // it. That contract is correct and stays (D-130 rule 1). The defect was that
 // callers were handing those tools a path from a DIFFERENT HOST: the Proffer worker
-// runs on ovh-files, platform-tools runs on ovh-app, and
+// runs on ovh-files, tool-runtime runs on ovh-app, and
 // `assess_source_repair_activity` passed a worker-local path straight through.
-// platform-tools answered 404 with the path as the body, because the file
+// tool-runtime answered 404 with the path as the body, because the file
 // genuinely was not there.
 //
 // This gateway fixes the class, not the call site. It accepts LOCATORS
@@ -18,7 +18,7 @@
 // can actually read them, and only then calls the tool with a path that
 // genuinely exists.
 //
-// A same-day expedient (a second platform-tools co-located with the worker) was
+// A same-day expedient (a second tool-runtime co-located with the worker) was
 // explicitly rejected by the owner: "it becomes temporary-permanent."
 //
 // ATOMICITY (D-130): one Run call is one bounded, retryable unit of work — no
@@ -46,18 +46,18 @@ import (
 	"github.com/Cursedpotential/probata/engine/proffer"
 )
 
-// ToolRunner is the minimal platform-tools surface this package depends on, so
+// ToolRunner is the minimal tool-runtime surface this package depends on, so
 // tests substitute a fake instead of a live service.
 type ToolRunner interface {
 	Run(ctx context.Context, toolID string, payload map[string]any) (json.RawMessage, error)
 }
 
-// Gateway resolves locators and dispatches to platform-tools.
+// Gateway resolves locators and dispatches to tool-runtime.
 //
-// MaterializeDir MUST be visible to the platform-tools process at the same
+// MaterializeDir MUST be visible to the tool-runtime process at the same
 // absolute path. That is a deployment requirement, not a suggestion: the whole
 // point of this component is that the path it hands over resolves on the other
-// side. Deploy the gateway alongside platform-tools sharing this directory.
+// side. Deploy the gateway alongside tool-runtime sharing this directory.
 //
 // SOURCE BYTES CROSS HOSTS VIA THE OBJECT STORE, NOT A SHARED DISK (owner,
 // 2026-09-02: "you can object store but use b2 / mount an object if you need
@@ -86,7 +86,7 @@ func (g *Gateway) validate() error {
 		return errors.New("tool gateway: gateway is nil")
 	}
 	if g.Runner == nil {
-		return errors.New("tool gateway: platform-tools runner is required")
+		return errors.New("tool gateway: tool-runtime runner is required")
 	}
 	if g.Resolve == nil {
 		return errors.New("tool gateway: acquisition resolver is required")

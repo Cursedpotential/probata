@@ -85,11 +85,10 @@ services:
       R2_ENDPOINT_URL: ${R2_ENDPOINT_URL:-}
       # SBV toolkit (facade-collapse plan Batch A, §2.3) — server/agents/tools/
       # sbv_tools.py talks to SBV directly over the agentos docker network
-      # (platform-tools:8085 — same service name/port as the exec-tier
-      # compose.exec.yaml), not through the tools-facade proxy. No
+      # (tool-runtime:8085), not through the tools-facade proxy. No
       # agentos-mcp service exists in this local/dev compose file (only
       # compose.exec.yaml runs it), so only agentos-api needs this here.
-      SBV_BASE_URL: ${SBV_BASE_URL:-http://platform-tools:8085}
+      SBV_BASE_URL: ${SBV_BASE_URL:-http://tool-runtime:8085}
       SBV_SERVICE_USER: ${SBV_SERVICE_USER:-mcp_service}
       # SBV_PRIMARY_ENABLED removed 2026-08-10 (owner call): dead knob. The
       # 2026-08-02 demotion was LIFTED by PR #18 (aacf21c) -> SBV is PRIMARY again
@@ -110,18 +109,18 @@ services:
   # Under the "tools" profile until first build is verified:
   #   docker compose --profile tools up -d --build
   # ---------------------------------------------------------------------------
-  platform-tools:
+  tool-runtime:
     build:
-      # Context "." = the deploy/ directory (compose-spec: relative to this
-      # file). The Dockerfile's COPYs (docker/tools/...) resolve against it.
+      # Context ".." = repository root. The Dockerfile COPYs both the runtime
+      # files and `server/`, so a deploy-directory-only context cannot work.
       # SBV is NOT built from source here - the Dockerfile lifts the binary
       # from the digest-pinned ghcr.io/cursedpotential/sbv-forensic CI image;
       # the sbv working checkout now lives at modules/forks/sbv (own repo,
       # gitignored). Comment corrected 2026-09-01 (owner restructure).
-      context: .
-      dockerfile: docker/tools/Dockerfile
-    image: agno-platform-tools:latest
-    container_name: platform-tools
+      context: ..
+      dockerfile: deploy/docker/tool-runtime/Dockerfile
+    image: probata-tool-runtime:latest
+    container_name: tool-runtime
     profiles: ["tools"]
     restart: unless-stopped
     ports:
@@ -130,11 +129,13 @@ services:
     volumes:
       - sbv_data:/opt/sbv/data        # SBV uses CWD-relative ./data
       - r2-nexus:/r2
-      # NOTE: the `server` package is BAKED into the image (docker/tools/Dockerfile
+      # NOTE: the `server` package is BAKED into the image (docker/tool-runtime/Dockerfile
       # `COPY server/`), NOT mounted — Coolify ignores relative bind mounts and the
       # image is rebuilt on every deploy, so the facade is self-contained.
     networks:
-      - agentos
+      agentos:
+        aliases:
+          - platform-tools  # temporary compatibility alias for old callers
 
   sandbox:
     build:

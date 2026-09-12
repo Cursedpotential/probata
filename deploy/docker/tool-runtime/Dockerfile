@@ -1,5 +1,5 @@
 # =============================================================================
-# platform-tools — ONE container for all platform tools (owner decision 2026-06-10)
+# tool-runtime — one container hosting Probata's executable tool capabilities
 # =============================================================================
 # Hosts, under supervisord:
 #   - SBV (SMS Backup & Restore viewer/extractor) — binary LIFTED from the fork's
@@ -17,12 +17,12 @@
 # because the compose spec resolves a relative `context:` against the compose
 # file's directory. Coolify does NOT run compose that way: its deployment log
 # shows `docker compose --project-directory <repo root> -f <repo root>/deploy/
-# platform-tools.yaml build`, so `context: .` is the repo root. The file was
+# tool-runtime.yaml build`, so `context: .` is the repo root. The file was
 # also internally inconsistent — it mixed `COPY docker/tools/...` (deploy/
 # context) with `COPY server/...` (repo-root context), and no single context
 # satisfied both. Every COPY below is now repo-root-relative, matching the
 # working reference deploy/proffer-worker.yaml.
-#   deploy/docker/tools/...   this dir's facade + supervisord
+#   deploy/docker/tool-runtime/...   this dir's facade + supervisord
 #   server/                   the platform server package
 # =============================================================================
 
@@ -50,10 +50,11 @@ FROM ghcr.io/cursedpotential/sbv-forensic@sha256:18a2a21cceb22433ad2ec9a458b0fd0
 # LD_LIBRARY_PATH=/opt/sbv-libs. (These three COPYs are unchanged from the
 # ghcr-image version — only the SBV *source* changed, not this layout.)
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145c85b262bb63dc0c7522254
+ARG POPPLER_UTILS_VERSION=22.12.0-2+deb12u3
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg libheif1 nodejs npm supervisor curl \
-        poppler-utils tesseract-ocr \
+        poppler-utils=${POPPLER_UTILS_VERSION} tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=sbv /app /opt/sbv
@@ -62,8 +63,8 @@ COPY --from=sbv /usr/lib /opt/sbv-libs
 
 # tools facade (parsers/extractors API) — registry-backed. The `server` package
 # is BAKED IN at build (COPY server/ below), NOT bind-mounted: Coolify does not
-# honor relative bind mounts, and the exec tier rebuilds this image on every push
-# to main anyway, so a self-contained image is strictly better than a runtime
+# honor relative bind mounts, and the runtime app rebuilds this image from its
+# scoped watch paths, so a self-contained image is strictly better than a runtime
 # mount. facade.py imports `server.tools.registry` + `load_builtin_tools()`,
 # which resolves from the baked /opt/tools/server tree.
 # pydantic = NormalizedRecord schema dep for the parser tools. Repair and
@@ -72,7 +73,7 @@ COPY --from=sbv /usr/lib /opt/sbv-libs
 # keeps this capability image small and prevents an optional local model stack
 # from arriving through an unrelated extra.
 WORKDIR /opt/tools
-COPY deploy/docker/tools/tools/ /opt/tools/
+COPY deploy/docker/tool-runtime/tools/ /opt/tools/
 # The whole server tree: server.tools.registry pulls in server.contracts.records
 # (the NormalizedRecord schema, ADR-0035) + server.tools/parsers/* +
 # server.tools._sbv_client + server.vendored.chatminer transitively.
@@ -97,8 +98,11 @@ RUN pip install --no-cache-dir \
     && python -c "from server.tools.repair.engines import manifest; expected={'xml','html','json','ndjson','csv','pdf','image'}; rows=manifest(); ready={row['format'] for row in rows if row['ready']}; missing=sorted(expected-ready); assert not missing, f'repair engines unavailable: {missing}; manifest={rows}'" \
     && python -c "import pikepdf; assert pikepdf.__version__" \
     && command -v tesseract >/dev/null \
-    && command -v pdftoppm >/dev/null
+    && command -v pdftoppm >/dev/null \
+    && python -c "from server.tools.engine_profiles import inspect_poppler; result=inspect_poppler({'expected_profile_id':'poppler-linux-amd64','expected_package_version':'${POPPLER_UTILS_VERSION}'}); assert result['ready'], result"
 
-COPY deploy/docker/tools/supervisord.conf /etc/supervisor/conf.d/platform-tools.conf
-EXPOSE 8080 8090
+COPY deploy/docker/tool-runtime/supervisord.conf /etc/supervisor/conf.d/tool-runtime.conf
+EXPOSE 8085 8090
 CMD ["supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+
+# Byline amendment: Codex · GPT-5 · 2026-09-12 (`platform-tools` -> `tool-runtime`)

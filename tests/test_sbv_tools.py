@@ -5,7 +5,7 @@ Mocks SBVClient entirely (module has no live-network dependency at import
 time; SBVClient.__init__ doesn't connect) via the module-level ``_client``
 singleton, so these run with no live SBV service. Covers: the `sbv_export`
 CSV/JSON shape (the one piece of business logic being ported from
-docker/tools/tools/facade.py:270-296, not just re-plumbed — this is its
+deploy/docker/tool-runtime/tools/facade.py, not just re-plumbed — this is its
 regression test so the port is provably faithful), the `sbv_upload` wait
 behavior, and that `SBVError` propagates uncaught (OQ-8: agno's own
 Function.execute() converts an uncaught exception into a structured

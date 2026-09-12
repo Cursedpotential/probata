@@ -21,9 +21,9 @@ var allowedDerivedRepairTools = map[string]bool{
 	"repair.pdf-derived":   true,
 }
 
-// RepairToolClient executes an already-registered platform-tools capability
+// RepairToolClient executes an already-registered tool-runtime capability
 // THROUGH THE TOOL GATEWAY (D-132). The source is named by LOCATOR, never by a
-// host path: this Activity and platform-tools run on different hosts, and a
+// host path: this Activity and tool-runtime run on different hosts, and a
 // worker-local path is exactly the defect the gateway was built to remove.
 // Results are persisted by RepairActivityStore and never returned to Temporal.
 type RepairToolClient interface {
@@ -91,7 +91,7 @@ func (a RepairActivities) attempt(ctx context.Context) int32 {
 
 func (a RepairActivities) validate() error {
 	if a.Client == nil {
-		return errors.New("repair activities: platform-tools client is required")
+		return errors.New("repair activities: tool-runtime client is required")
 	}
 	if a.Store == nil {
 		return errors.New("repair activities: store is required")
@@ -136,7 +136,7 @@ func (a RepairActivities) AssessSourceRepair(ctx context.Context, req proffer.St
 	// The repair engines take the STRUCTURAL format the detector found ("xml",
 	// "json", …), not the platform format tag the boundary declared
 	// ("sms_xml"). Live rehearsal 2026-09-05 (rehearsal-20260905-r2d-1788611759):
-	// passing DeclaredFormat made platform-tools answer 422 "no engine for
+	// passing DeclaredFormat made tool-runtime answer 422 "no engine for
 	// format 'sms_xml'". Omitting it lets the engine auto-detect.
 	previewArgs := map[string]any{"sample_limit": 25}
 	if structural := repairDetectionFormat(detection); structural != "" {

@@ -1,21 +1,21 @@
-"""platform-tools facade — one HTTP/OpenAPI surface over the platform tools.
+"""tool-runtime facade — one HTTP/OpenAPI surface over Probata tool capabilities.
 
 Two surfaces, ONE FastAPI app (so ContextForge REST-wraps a single OpenAPI):
 
   1. REGISTRY-BACKED parsers (/tools/...) — the cross-domain server/tools/
-     package (registry + atomic tool modules, D-026) is volume-mounted at
-     /opt/tools/server/tools (compose: `./server:/opt/tools/server:ro`);
+     package (registry + atomic tool modules, D-026) is baked into the image at
+     /opt/tools/server/tools;
      every parser module self-registers via load_builtin_tools(), so the
      inventory + execution surface stay in sync with the registry.
-     MOUNT<->IMPORT CONTRACT: the WHOLE `server/` tree mounts at
+     IMAGE/IMPORT CONTRACT: the WHOLE `server/` tree is copied to
      /opt/tools/server (not just server/tools/) because server.tools.* has
      real transitive deps outside itself — server.contracts.records (the
      NormalizedRecord schema, ADR-0035; every parser imports it) and
      server.vendored.chatminer (the parser core) — both deliberately
      lightweight (no sqlalchemy/agno at import time; server.contracts is the
      import-light contracts package created precisely so the parser import
-     graph stays facade-safe), so this is cheap. The mount already covers
-     server/contracts/, so no compose change was needed. With /opt/tools on
+     graph stays facade-safe), so this is cheap. The image also contains
+     server/contracts/. With /opt/tools on
      sys.path (below), `server` resolves as a real top-level package inside
      the container exactly as it does in-repo, so the imports below are plain
      `server.tools.*` — no special container-only import alias needed. Since
@@ -24,7 +24,7 @@ Two surfaces, ONE FastAPI app (so ContextForge REST-wraps a single OpenAPI):
      load_builtin_tools() walks them recursively. Porting a parser = adding
      one module under server/tools/parsers/, nothing to edit here.
      GET /tools is the canonical declaration contract for direct consumers,
-     including the Go engine. Implementations remain here in Platform Tools;
+     including the Go engine. Implementations remain here in the tool runtime;
      consumers must not duplicate parser/extractor/chunker implementations.
 
   2. SBV PROXY (/sbv/...) — proxies the session-authenticated SBV REST API
@@ -33,9 +33,9 @@ Two surfaces, ONE FastAPI app (so ContextForge REST-wraps a single OpenAPI):
      service-account session so callers never deal with the cookie.
 
 ROBUSTNESS (the 2-day FATAL fix): the OLD facade did `from evidence.registry
-import ...` at module top, so an empty/missing evidence mount crashed uvicorn
+import ...` at module top, so an empty/missing evidence tree crashed uvicorn
 -> supervisord FATAL-looped -> the WHOLE container's tool surface was down. Now
-the registry load is wrapped: a bad mount DEGRADES the /tools endpoints (503)
+the registry load is wrapped: a bad image/import DEGRADES the /tools endpoints (503)
 but the app still starts and the /sbv proxy still works. We also pin
 /opt/tools onto sys.path so `import server.*` resolves regardless of how
 uvicorn is launched.
@@ -53,15 +53,15 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-# Belt-and-suspenders: ensure the WORKDIR (parent of the mounted server/
-# tree, see MOUNT<->IMPORT CONTRACT above) is importable no matter how the
+# Belt-and-suspenders: ensure the WORKDIR (parent of the baked server/
+# tree, see IMAGE/IMPORT CONTRACT above) is importable no matter how the
 # process was launched.
 _TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _TOOLS_DIR not in sys.path:
     sys.path.insert(0, _TOOLS_DIR)
 
 app = FastAPI(
-    title="platform-tools facade",
+    title="tool-runtime facade",
     description="Registry-backed evidence parsers + SBV (SMS Backup Viewer) REST proxy. "
     "One OpenAPI surface for ContextForge to REST-wrap into MCP tools.",
     version="1.1.0",
@@ -81,7 +81,7 @@ try:
     TOOL_COUNT = load_builtin_tools()
     registry = _registry
     REGISTRY_OK = True
-except Exception as exc:  # empty/missing server mount, import error, etc.
+except Exception as exc:  # incomplete image, import error, etc.
     REGISTRY_ERROR = f"{type(exc).__name__}: {exc}"
     # Do NOT raise — the app must still start so the SBV proxy works and
     # supervisord doesn't FATAL-loop. /tools/* will report the degradation.
@@ -92,7 +92,7 @@ def _require_registry():
         raise HTTPException(
             status_code=503,
             detail=f"registry unavailable — server.tools not importable ({REGISTRY_ERROR}). "
-            "Likely the ./server mount is empty; redeploy with the server/ tree present.",
+            "The runtime image is missing or cannot import its server/ tree; rebuild and redeploy it.",
         )
 
 
@@ -143,8 +143,8 @@ async def run_tool(tool_id: str, payload: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Surface 2: SBV proxy (/sbv/...) — every SBV function over the facade
 # ---------------------------------------------------------------------------
-# Import the shared SBV client. It normally lives in the mounted server/
-# tools/ package; if the mount is empty we degrade the SBV surface the same way.
+# Import the shared SBV client from the server/tools package baked into the
+# runtime image; if that tree is incomplete we degrade the SBV surface the same way.
 SBV_OK = False
 SBV_IMPORT_ERROR = ""
 try:
@@ -169,7 +169,7 @@ def _get_sbv() -> "SBVClient":
     if not SBV_OK:
         raise HTTPException(
             status_code=503,
-            detail=f"SBV client unavailable ({SBV_IMPORT_ERROR}). The server mount is likely empty.",
+            detail=f"SBV client unavailable ({SBV_IMPORT_ERROR}). The runtime image is incomplete.",
         )
     if _sbv_client_singleton is None:
         _sbv_client_singleton = SBVClient()

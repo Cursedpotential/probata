@@ -1,7 +1,7 @@
 # =============================================================================
 # agent-sandbox — isolated code-execution space for agents (2026-06-10)
 # =============================================================================
-# Deliberately SEPARATE from platform-tools: untrusted code runs here.
+# Deliberately SEPARATE from tool-runtime: untrusted code runs here.
 #   - non-root user, NO secrets in env, no volume mounts to repo/data
 #   - resource-capped in compose (cpus/mem), network confined to the
 #     agentos network (no published ports)
