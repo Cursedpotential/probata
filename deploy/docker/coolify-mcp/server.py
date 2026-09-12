@@ -478,26 +478,39 @@ def upsert_application_envs(
     """
     if not isinstance(envs, dict) or not envs:
         raise ToolExecutionError("INVALID_ARGUMENT", "envs must be a non-empty dict", recoverable=True)
+    # Coolify 4.1.2 bulk upsert requires {"data": [...]} with is_preview.
+    # The former {"envs": [...]} body is rejected and its POST fallback cannot
+    # update compose-created keys because that endpoint is create-only.
     entries = [
-        {"key": k, "value": str(v), "is_runtime": is_runtime, "is_buildtime": is_buildtime, "is_literal": True}
+        {"key": k, "value": str(v), "is_preview": False}
         for k, v in envs.items()
     ]
-    # try bulk PATCH first
     try:
-        r = _client.request("PATCH", f"/applications/{application_uuid}/envs/bulk", json={"envs": entries})
+        r = _client.request("PATCH", f"/applications/{application_uuid}/envs/bulk", json={"data": entries})
         if r.status_code < 400:
             return {"method": "bulk", "updated": len(entries), "failed": []}
-    except httpx.HTTPError:
-        pass
-    # fallback: per-key POST
+        bulk_error = f"{r.status_code}: {r.text[:500]}"
+    except httpx.HTTPError as ex:
+        bulk_error = str(ex)
+    # Fallback remains create-only for older Coolify variants.
     updated, failed = 0, []
     for e in entries:
         try:
-            _request("POST", f"/applications/{application_uuid}/envs", json_body=e)
+            _request(
+                "POST",
+                f"/applications/{application_uuid}/envs",
+                json_body={
+                    "key": e["key"],
+                    "value": e["value"],
+                    "is_runtime": is_runtime,
+                    "is_buildtime": is_buildtime,
+                    "is_literal": True,
+                },
+            )
             updated += 1
         except ToolExecutionError as ex:
             failed.append({"key": e["key"], "error": str(ex)})
-    return {"method": "per-key", "updated": updated, "failed": failed}
+    return {"method": "per-key", "updated": updated, "failed": failed, "bulk_error": bulk_error}
 
 
 @mcp.tool()
