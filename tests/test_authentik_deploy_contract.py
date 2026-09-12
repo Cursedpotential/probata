@@ -19,10 +19,17 @@ WORKBENCH_PATH = Path("deploy/workbench.yaml")
 AUTHENTIK_IMAGE = (
     "ghcr.io/goauthentik/server:2026.8.0@sha256:7421753cfea67e89a6d295a1f0173ccea3866b33768c88dad90453b151cdcfd5"
 )
+AUTHENTIK_RUNTIME_IMAGE = "probata-authentik:2026.8.0"
+AUTHENTIK_DOCKERFILE = Path("deploy/docker/authentik/Dockerfile")
+AUTHENTIK_BLUEPRINT = Path("deploy/docker/authentik/blueprints/probata-workbench.yaml")
 POSTGRES_IMAGE = (
     "docker.io/library/postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2"
 )
-EXACT_PROXY_SETTING = "${TRAEFIK_PROXY_CIDR:?exact Traefik proxy CIDR required}"
+AUTHENTIK_EXACT_PROXY_SETTING = "${TRAEFIK_PROXY_CIDR:?exact Traefik proxy CIDR required}"
+# Coolify 4.1.2 renders Compose's `:?message` form as the literal message when
+# the variable is absent. Workbench uses plain substitution and its own auth
+# boundary rejects an empty or malformed value at runtime.
+WORKBENCH_EXACT_PROXY_SETTING = "${TRAEFIK_PROXY_CIDR}"
 FORWARD_AUTH_ADDRESS = "http://authentik-server:9000/outpost.goauthentik.io/auth/traefik"
 
 
@@ -51,8 +58,14 @@ class TestAuthentikProvider:
 
     def test_images_are_exact_tag_and_digest_pinned(self) -> None:
         services = _load(AUTHENTIK_PATH)["services"]
-        assert services["authentik-server"]["image"] == AUTHENTIK_IMAGE
-        assert services["authentik-worker"]["image"] == AUTHENTIK_IMAGE
+        for name in ("authentik-server", "authentik-worker"):
+            assert services[name]["image"] == AUTHENTIK_RUNTIME_IMAGE
+            assert services[name]["build"] == {
+                "context": ".",
+                "dockerfile": "deploy/docker/authentik/Dockerfile",
+            }
+        dockerfile = AUTHENTIK_DOCKERFILE.read_text(encoding="utf-8")
+        assert f"FROM {AUTHENTIK_IMAGE}" in dockerfile
         assert services["authentik-postgres"]["image"] == POSTGRES_IMAGE
 
     def test_redis_removed_from_current_contract(self) -> None:
@@ -70,7 +83,7 @@ class TestAuthentikProvider:
             "AUTHENTIK_POSTGRESQL__NAME": "authentik",
             "AUTHENTIK_POSTGRESQL__PASSWORD": ("file:///run/secrets/authentik/postgres-password"),
             "AUTHENTIK_SECRET_KEY": "file:///run/secrets/authentik/secret-key",
-            "AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS": EXACT_PROXY_SETTING,
+            "AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS": AUTHENTIK_EXACT_PROXY_SETTING,
         }
         for name in ("authentik-server", "authentik-worker"):
             assert services[name]["environment"] == expected
@@ -86,6 +99,14 @@ class TestAuthentikProvider:
                 assert mount.endswith(":ro")
         for name in ("authentik-server", "authentik-worker"):
             assert len(_secret_mounts(services[name])) == 2
+
+    def test_empty_host_templates_do_not_shadow_packaged_templates(self) -> None:
+        services = _load(AUTHENTIK_PATH)["services"]
+        for name in ("authentik-server", "authentik-worker"):
+            assert all(
+                not str(mount).split(":", maxsplit=1)[0].endswith("/templates")
+                for mount in services[name].get("volumes", [])
+            )
 
     def test_official_authentik_healthcheck_is_used(self) -> None:
         services = _load(AUTHENTIK_PATH)["services"]
@@ -127,6 +148,13 @@ class TestAuthentikProvider:
         assert "authentik-workbench-outpost.priority=15" in labels
         assert "authentik-workbench-outpost.service=authentik" in labels
 
+    def test_blueprint_pins_single_app_provider_and_embedded_outpost(self) -> None:
+        text = AUTHENTIK_BLUEPRINT.read_text(encoding="utf-8")
+        assert "mode: forward_single" in text
+        assert "external_host: https://workbench.int.mitechconsult.com" in text
+        assert "name: authentik Embedded Outpost" in text
+        assert "- !KeyOf probata-workbench-provider" in text
+
 
 class TestWorkbenchConsumer:
     def test_private_tailscale_door_is_loopback_only_and_port_translated(self) -> None:
@@ -136,7 +164,7 @@ class TestWorkbenchConsumer:
 
     def test_exact_proxy_boundary_is_required_in_manifest(self) -> None:
         service = _load(WORKBENCH_PATH)["services"]["workbench"]
-        assert service["environment"]["TRUSTED_AUTH_PROXY_CIDRS"] == EXACT_PROXY_SETTING
+        assert service["environment"]["TRUSTED_AUTH_PROXY_CIDRS"] == WORKBENCH_EXACT_PROXY_SETTING
         text = WORKBENCH_PATH.read_text(encoding="utf-8")
         assert 'TRUSTED_AUTH_PROXY_CIDRS: "10.0.0.0/8' not in text
         assert 'TRUSTED_AUTH_PROXY_CIDRS: "172.16.0.0/12' not in text
@@ -154,6 +182,7 @@ class TestWorkbenchConsumer:
     def test_https_router_targets_workbench(self) -> None:
         labels = _labels(_load(WORKBENCH_PATH)["services"]["workbench"])
         assert "Host(`workbench.int.mitechconsult.com`)" in labels
+        assert "traefik.http.routers.workbench.priority=10" in labels
         assert "entrypoints=https" in labels
         assert "loadbalancer.server.port=8020" in labels
 

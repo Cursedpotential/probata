@@ -150,6 +150,9 @@ services:
       - traefik.enable=true
       - traefik.docker.network=xjbuo6drbwjfby75lalk8bk7
       - traefik.http.routers.workbench.rule=Host(`workbench.int.mitechconsult.com`)
+      # Authentik's single-app forward-auth contract pairs the application
+      # router at priority 10 with its more-specific outpost router at 15.
+      - traefik.http.routers.workbench.priority=10
       - traefik.http.routers.workbench.entrypoints=https
       - traefik.http.routers.workbench.tls=true
       - traefik.http.routers.workbench.tls.certresolver=letsencrypt

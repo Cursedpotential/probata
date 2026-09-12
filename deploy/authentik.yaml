@@ -23,7 +23,7 @@
 # Coolify watch path: deploy/authentik.yaml
 #
 # Host preparation (once, before first deployment):
-#   sudo install -d -m 0750 /data/probata/volumes/authentik/{postgres,data,templates}
+#   sudo install -d -m 0750 /data/probata/volumes/authentik/{postgres,data}
 #   sudo install -d -m 0700 /data/probata/secrets/authentik
 #   sudo install -m 0400 /dev/null /data/probata/secrets/authentik/postgres-password
 #   sudo install -m 0400 /dev/null /data/probata/secrets/authentik/secret-key
@@ -57,7 +57,10 @@ x-authentik-environment: &authentik-environment
 
 x-authentik-volumes: &authentik-volumes
   - /data/probata/volumes/authentik/data:/data
-  - /data/probata/volumes/authentik/templates:/templates
+  # Do not mount the empty host templates directory over Authentik's packaged
+  # templates. The root-owned 0750 directory made error rendering fail with
+  # EACCES and hid the underlying routing response. Add a custom-template
+  # mount only with an explicit readable ownership/mode contract.
   - /data/probata/secrets/authentik/postgres-password:/run/secrets/authentik/postgres-password:ro
   - /data/probata/secrets/authentik/secret-key:/run/secrets/authentik/secret-key:ro
 
@@ -121,6 +124,8 @@ services:
       # Single-application forward auth requires the outpost path on the
       # protected application's host to resolve to the embedded outpost.
       - traefik.http.routers.authentik-workbench-outpost.rule=Host(`workbench.int.mitechconsult.com`) && PathPrefix(`/outpost.goauthentik.io/`)
+      # Paired with the Workbench router's explicit priority 10. The callback
+      # path must win and route directly to the embedded outpost.
       - traefik.http.routers.authentik-workbench-outpost.priority=15
       - traefik.http.routers.authentik-workbench-outpost.entrypoints=https
       - traefik.http.routers.authentik-workbench-outpost.tls=true

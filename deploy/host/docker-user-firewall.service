@@ -1,6 +1,7 @@
 # Byline: Claude Code · Fable 5.1 · 2026-09-07 — re-applies deploy/host/docker-user-firewall.sh after docker starts.
+# Byline amendment: Codex · GPT-5 · 2026-09-12 — preserves one public Traefik ingress.
 [Unit]
-Description=Tailnet-only forwarding for published container ports (DOCKER-USER)
+Description=Default-deny container forwarding with public Traefik ingress (DOCKER-USER)
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target
