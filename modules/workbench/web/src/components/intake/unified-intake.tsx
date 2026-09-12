@@ -7,26 +7,30 @@
 "use client";
 
 import { AppLink as Link } from "@/lib/router-compat";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
   ChevronRight,
   ArrowLeft,
   FileText,
-  FolderOpen,
   Loader2,
-  RotateCcw,
   Scale,
   ShieldCheck,
   Upload,
 } from "lucide-react";
 
 import { AtomicTools } from "@/components/tools/atomic-tools";
+import { ContextFlowRail } from "@/components/intake/context-flow-rail";
+import { MatterModeSelector } from "@/components/intake/matter-mode-selector";
+import { ParserSelectionPanel } from "@/components/intake/parser-selection-panel";
+import { SourceExplorer } from "@/components/intake/source-explorer";
 import { Button } from "@/components/ui/button";
 import {
   ApiError,
+  createProfferPreviewEventSource,
   createProfferSourceContext,
+  decideProfferHandler,
   decideProfferRepair,
   getProfferPreview,
   inspectProfferSource,
@@ -35,7 +39,9 @@ import {
   uploadProfferSource,
 } from "@/lib/api-client";
 import type {
+  ProfferPreviewEvent,
   ProfferPreviewResponse,
+  ProfferParserCandidate,
   ProfferHumanSourceAssertions,
   ProfferSourceContextReceipt,
   ProfferStartResponse,
@@ -45,13 +51,14 @@ import type {
   ProfferSourceObject,
 } from "@/lib/shared/types";
 import { useFixedCase } from "@/lib/fixed-case-context";
+import { profferContextFlowComplete } from "@/lib/proffer-context-checkpoints";
 import { cn } from "@/lib/utils";
 
-type IntakePhase = "choose" | "ready" | "starting" | "repair_review" | "review" | "complete" | "error";
+type IntakePhase = "choose" | "ready" | "starting" | "handler_review" | "repair_review" | "review" | "complete" | "error";
 type PreviewTab = "source" | "metadata" | "parser";
 type OperatorTab = "intake" | "atomic_tools";
 
-const LOCAL_FILE_ACCEPT = ".md,.json,.docx,.html,.htm,.pdf,.png,.jpg,.jpeg,.gif,.tif,.tiff,.bmp";
+const LOCAL_FILE_ACCEPT = ".xml,.json,.txt,.csv,.md,.html,.htm,.pdf,.docx,.zip,.tar,.tgz,.gz,.7z,.rar,.png,.jpg,.jpeg,.gif,.tif,.tiff,.bmp";
 
 const EMPTY_ASSERTIONS: ProfferHumanSourceAssertions = {
   source_class: "unknown",
@@ -93,6 +100,11 @@ function declaredFormat(source: { name: string }) {
     html: "html",
     htm: "html",
     zip: "archive",
+    tar: "archive",
+    tgz: "archive",
+    gz: "archive",
+    "7z": "archive",
+    rar: "archive",
   };
   return formats[extension ?? ""] ?? "unknown_binary";
 }
@@ -103,14 +115,21 @@ function bytes(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const terminalPreviewPhases = new Set(["awaiting_repair_decision", "awaiting_decision", "approved", "rejected", "timed_out"]);
+const terminalPreviewPhases = new Set(["awaiting_handler_selection", "awaiting_repair_decision", "awaiting_decision", "approved", "rejected", "timed_out", "failed"]);
 
-async function waitForPreview(previewHandle: string, attempts = 80, ignoredTerminalPhases: ReadonlySet<string> = new Set()) {
+async function waitForPreview(
+  previewHandle: string,
+  mode: "TEST" | "REAL",
+  attempts = 80,
+  ignoredTerminalPhases: ReadonlySet<string> = new Set(),
+  onState?: (state: ProfferPreviewResponse) => void,
+) {
   let lastState: ProfferPreviewResponse | null = null;
   let lastError: unknown = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      lastState = await getProfferPreview(previewHandle);
+      lastState = await getProfferPreview(previewHandle, mode);
+      onState?.(lastState);
       lastError = null;
       if (terminalPreviewPhases.has(lastState.phase) && !ignoredTerminalPhases.has(lastState.phase)) return lastState;
     } catch (requestError) {
@@ -132,6 +151,15 @@ async function fileDigest(file: File) {
 }
 
 export function UnifiedIntake() {
+  const { mode } = useFixedCase();
+  return <UnifiedIntakeMode key={mode} mode={mode} />;
+}
+
+function parserCandidateKey(candidate: ProfferParserCandidate) {
+  return [candidate.handler_id, candidate.handler_version, candidate.execution_path, candidate.compatibility_ref].join("\u0000");
+}
+
+function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
   const { matter, primaryCourtCase, loading: scopeLoading, error: scopeError } = useFixedCase();
   const [file, setFile] = useState<File | null>(null);
   const [remote, setRemote] = useState<ProfferSourceObject | null>(null);
@@ -139,8 +167,10 @@ export function UnifiedIntake() {
   const [inspectionLoading, setInspectionLoading] = useState(false);
   const [inspectionError, setInspectionError] = useState<string | null>(null);
   const [sources, setSources] = useState<ProfferSourceBrowserResponse | null>(null);
+  const [sourceRootId, setSourceRootId] = useState("");
   const [sourcePrefix, setSourcePrefix] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [sourceFileTypes, setSourceFileTypes] = useState<string[]>([]);
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [sourcesError, setSourcesError] = useState<string | null>(null);
   const [digest, setDigest] = useState("");
@@ -149,6 +179,8 @@ export function UnifiedIntake() {
   const [upload, setUpload] = useState<ProfferUploadResponse | null>(null);
   const [run, setRun] = useState<ProfferStartResponse | null>(null);
   const [preview, setPreview] = useState<ProfferPreviewResponse | null>(null);
+  const [workflowEvents, setWorkflowEvents] = useState<ProfferPreviewEvent[]>([]);
+  const [checkpointStreamError, setCheckpointStreamError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewTab, setPreviewTab] = useState<PreviewTab>("source");
   const [operatorTab, setOperatorTab] = useState<OperatorTab>("intake");
@@ -158,6 +190,10 @@ export function UnifiedIntake() {
   const [assertions, setAssertions] = useState<ProfferHumanSourceAssertions>(EMPTY_ASSERTIONS);
   const [sourceContextReceipt, setSourceContextReceipt] = useState<ProfferSourceContextReceipt | null>(null);
   const [intakeRequestId, setIntakeRequestId] = useState<string | null>(null);
+  const [selectedHandlerKey, setSelectedHandlerKey] = useState("");
+  const [handlerDecisionRef, setHandlerDecisionRef] = useState<string | null>(null);
+  const [handlerSubmitting, setHandlerSubmitting] = useState(false);
+  const intakeGenerationRef = useRef(0);
 
   function updateAssertion<K extends keyof ProfferHumanSourceAssertions>(key: K, value: ProfferHumanSourceAssertions[K]) {
     setAssertions((current) => ({ ...current, [key]: value }));
@@ -166,9 +202,12 @@ export function UnifiedIntake() {
   }
 
   useEffect(() => {
+    intakeGenerationRef.current += 1;
     let cancelled = false;
     const timer = setTimeout(() => {
-      listProfferSources({ prefix: sourcePrefix, filter: sourceFilter, pageSize: 100 })
+      setSourcesLoading(true);
+      setSourcesError(null);
+      listProfferSources({ mode, rootId: sourceRootId || undefined, prefix: sourcePrefix, filter: sourceFilter, fileTypes: sourceFileTypes, pageSize: 100 })
         .then((response) => {
           if (!cancelled) {
             setSources(response);
@@ -186,13 +225,50 @@ export function UnifiedIntake() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [sourcePrefix, sourceFilter]);
+  }, [sourcePrefix, sourceFilter, sourceFileTypes, sourceRootId, mode]);
+
+  useEffect(() => {
+    if (!run?.preview_handle) return;
+    const source = createProfferPreviewEventSource(run.preview_handle, mode);
+    const onEvent = (raw: MessageEvent<string>) => {
+      try {
+        const event = JSON.parse(raw.data) as ProfferPreviewEvent;
+        if (event.preview_handle !== run.preview_handle) throw new Error("Checkpoint event did not match this import.");
+        if (event.matter_mode !== mode) throw new Error("Checkpoint event crossed the active TEST/REAL boundary.");
+        setWorkflowEvents((current) => [...current.filter((item) => item.event_id !== event.event_id), event]
+          .sort((left, right) => left.event_id - right.event_id)
+          .slice(-100));
+        setCheckpointStreamError(null);
+      } catch {
+        setCheckpointStreamError("Live checkpoint updates are unavailable. Snapshot polling continues.");
+      }
+    };
+    source.addEventListener("proffer.preview", onEvent as EventListener);
+    source.onerror = () => setCheckpointStreamError("Live checkpoint updates are unavailable. Snapshot polling continues.");
+    return () => {
+      source.removeEventListener("proffer.preview", onEvent as EventListener);
+      source.close();
+    };
+  }, [run?.preview_handle, mode]);
 
   const lines = useMemo(() => textPreview.split(/\r?\n/).filter(Boolean).slice(0, 12), [textPreview]);
+  const runtimeParserCandidates = preview?.phase === "awaiting_handler_selection" && preview.recommended_handler
+    ? [preview.recommended_handler, ...(preview.alternative_handlers ?? [])]
+    : [];
+  const selectedParser = runtimeParserCandidates.find((candidate) => parserCandidateKey(candidate) === selectedHandlerKey) ?? null;
 
   function changeSourcePrefix(nextPrefix: string) {
     setSourcesLoading(true);
     setSourcePrefix(nextPrefix);
+  }
+
+  function changeSourceRoot(nextRootId: string) {
+    setSourceRootId(nextRootId);
+    setSourcePrefix("");
+    setSourceFilter("");
+    setSourceFileTypes([]);
+    setSources(null);
+    setSourcesLoading(true);
   }
 
   function changeSourceFilter(nextFilter: string) {
@@ -201,6 +277,8 @@ export function UnifiedIntake() {
   }
 
   async function selectFile(selected: File | null) {
+    intakeGenerationRef.current += 1;
+    const generation = intakeGenerationRef.current;
     setFile(selected);
     setRemote(null);
     setInspection(null);
@@ -211,10 +289,14 @@ export function UnifiedIntake() {
     setUpload(null);
     setRun(null);
     setPreview(null);
+    setWorkflowEvents([]);
+    setCheckpointStreamError(null);
     setError(null);
     setPreviewTab("source");
     setRepairChoice(null);
     setRepairDecisionRef(null);
+    setSelectedHandlerKey("");
+    setHandlerDecisionRef(null);
     if (!selected) {
       setDigest("");
       setTextPreview("");
@@ -228,11 +310,14 @@ export function UnifiedIntake() {
         ? selected.text()
         : Promise.resolve(""),
     ]);
+    if (generation !== intakeGenerationRef.current) return;
     setDigest(nextDigest);
     setTextPreview(nextText.slice(0, 250_000));
   }
 
   async function selectRemote(selected: ProfferSourceObject) {
+    intakeGenerationRef.current += 1;
+    const generation = intakeGenerationRef.current;
     const sameSelection = remote?.key === selected.key;
     setRemote(selected);
     setFile(null);
@@ -249,50 +334,66 @@ export function UnifiedIntake() {
     setUpload(null);
     setRun(null);
     setPreview(null);
+    setWorkflowEvents([]);
+    setCheckpointStreamError(null);
     setError(null);
     setPreviewTab("source");
     setRepairChoice(null);
     setRepairDecisionRef(null);
+    setSelectedHandlerKey("");
+    setHandlerDecisionRef(null);
     setPhase("ready");
     try {
-      const inspected = await inspectProfferSource(selected);
+      const activeRootId = sourceRootId || sources?.active_root_id;
+      if (!activeRootId) throw new Error("The selected source has no confirmed R2 source location.");
+      const inspected = await inspectProfferSource(selected, mode, activeRootId);
+      if (generation !== intakeGenerationRef.current) return;
       if (inspected.key !== selected.key) throw new Error("The inspected source did not match the selection.");
       setInspection(inspected);
       setDigest(inspected.sha256);
       setTextPreview(inspected.preview_text);
     } catch (requestError) {
+      if (generation !== intakeGenerationRef.current) return;
       setInspectionError(errorText(requestError));
     } finally {
-      setInspectionLoading(false);
+      if (generation === intakeGenerationRef.current) setInspectionLoading(false);
     }
   }
 
   async function loadMoreSources() {
     if (!sources?.continuation_token) return;
+    const generation = intakeGenerationRef.current;
     setSourcesLoading(true);
     try {
       const next = await listProfferSources({
+        mode,
+        rootId: sourceRootId || undefined,
         prefix: sourcePrefix,
         filter: sourceFilter,
+        fileTypes: sourceFileTypes,
         continuationToken: sources.continuation_token,
         pageSize: sources.page_size,
       });
+      if (generation !== intakeGenerationRef.current) return;
       setSources({ ...next, prefixes: [...sources.prefixes, ...next.prefixes], objects: [...sources.objects, ...next.objects] });
     } catch (requestError) {
+      if (generation !== intakeGenerationRef.current) return;
       setSourcesError(errorText(requestError));
     } finally {
-      setSourcesLoading(false);
+      if (generation === intakeGenerationRef.current) setSourcesLoading(false);
     }
   }
 
   async function start() {
     if ((!file && !remote) || !matter || !primaryCourtCase) return;
+    const generation = intakeGenerationRef.current;
     setPhase("starting");
     setError(null);
     setRepairChoice(null);
     setRepairDecisionRef(null);
     try {
-      const sealed = file ? await uploadProfferSource(file) : null;
+      const sealed = file ? await uploadProfferSource(file, mode) : null;
+      if (generation !== intakeGenerationRef.current) return;
       setUpload(sealed);
       const selected = file ?? remote;
       if (!selected) return;
@@ -325,23 +426,34 @@ export function UnifiedIntake() {
           acquired_at: assertions.acquired_at ? new Date(assertions.acquired_at).toISOString() : null,
         },
         change_reason: "Operator supplied source context during intake",
+        matter_mode: mode,
       });
+      if (generation !== intakeGenerationRef.current) return;
       setSourceContextReceipt(sourceContext);
       const started = await startProffer({
         request_id: requestId,
         source_ref: sourceRef,
         declared_format: declaredFormat(selected),
-        parser_options_ref: "parser-options://default-v1",
+        parser_options_ref: "pending-handler-selection/v1",
         matter_id: matter.id,
         court_case_id: primaryCourtCase.id,
         source_context_ref: sourceContext.source_context_ref,
+        matter_mode: mode,
       });
+      if (generation !== intakeGenerationRef.current) return;
       setRun(started);
+      setWorkflowEvents([]);
+      setCheckpointStreamError(null);
 
-      const state = await waitForPreview(started.preview_handle);
+      const state = await waitForPreview(started.preview_handle, mode, 80, new Set(), (next) => {
+        if (generation === intakeGenerationRef.current) setPreview(next);
+      });
+      if (generation !== intakeGenerationRef.current) return;
       setPreview(state);
       setPhase(phaseForPreview(state));
+      if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
     } catch (requestError) {
+      if (generation !== intakeGenerationRef.current) return;
       setError(errorText(requestError));
       setPhase("error");
     }
@@ -350,29 +462,69 @@ export function UnifiedIntake() {
   async function confirmRepairDecision() {
     if (!run || !preview?.repair_assessment?.review_required || repairChoice !== "original") return;
     setRepairSubmitting(true);
+    const generation = intakeGenerationRef.current;
     setError(null);
     try {
-      const decision = await decideProfferRepair(run.preview_handle, {
+      const decision = await decideProfferRepair(run.preview_handle, mode, {
         approved: true,
         apply_repair: false,
       });
+      if (generation !== intakeGenerationRef.current) return;
       if (decision.preview_handle !== run.preview_handle) {
         throw new Error("The repair decision response did not match this preview.");
       }
       setRepairDecisionRef(decision.decision_ref);
       setPhase("starting");
-      const state = await waitForPreview(run.preview_handle, 80, new Set(["awaiting_repair_decision"]));
+      const state = await waitForPreview(run.preview_handle, mode, 80, new Set(["awaiting_repair_decision"]), (next) => {
+        if (generation === intakeGenerationRef.current) setPreview(next);
+      });
+      if (generation !== intakeGenerationRef.current) return;
       setPreview(state);
       setPhase(phaseForPreview(state));
+      if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
     } catch (requestError) {
+      if (generation !== intakeGenerationRef.current) return;
       setError(errorText(requestError));
       setPhase("repair_review");
     } finally {
-      setRepairSubmitting(false);
+      if (generation === intakeGenerationRef.current) setRepairSubmitting(false);
+    }
+  }
+
+  async function confirmHandlerSelection() {
+    if (!run || preview?.phase !== "awaiting_handler_selection" || !preview.handler_recommendation_ref || !selectedParser) return;
+    const generation = intakeGenerationRef.current;
+    setHandlerSubmitting(true);
+    setError(null);
+    try {
+      const decision = await decideProfferHandler(run.preview_handle, mode, {
+        recommendation_ref: preview.handler_recommendation_ref,
+        handler_id: selectedParser.handler_id,
+        handler_version: selectedParser.handler_version,
+        execution_path: selectedParser.execution_path,
+        compatibility_ref: selectedParser.compatibility_ref,
+      });
+      if (generation !== intakeGenerationRef.current) return;
+      setHandlerDecisionRef(decision.decision_ref);
+      setPhase("starting");
+      const state = await waitForPreview(run.preview_handle, mode, 80, new Set(["awaiting_handler_selection"]), (next) => {
+        if (generation === intakeGenerationRef.current) setPreview(next);
+      });
+      if (generation !== intakeGenerationRef.current) return;
+      setPreview(state);
+      setPhase(phaseForPreview(state));
+      if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
+    } catch (requestError) {
+      if (generation !== intakeGenerationRef.current) return;
+      setError(errorText(requestError));
+      setPhase("handler_review");
+    } finally {
+      if (generation === intakeGenerationRef.current) setHandlerSubmitting(false);
     }
   }
 
   function reset() {
+    intakeGenerationRef.current += 1;
     setFile(null);
     setRemote(null);
     setInspection(null);
@@ -383,6 +535,8 @@ export function UnifiedIntake() {
     setUpload(null);
     setRun(null);
     setPreview(null);
+    setWorkflowEvents([]);
+    setCheckpointStreamError(null);
     setError(null);
     setPreviewTab("source");
     setRepairChoice(null);
@@ -390,13 +544,15 @@ export function UnifiedIntake() {
     setAssertions(EMPTY_ASSERTIONS);
     setSourceContextReceipt(null);
     setIntakeRequestId(null);
+    setSelectedHandlerKey("");
+    setHandlerDecisionRef(null);
     setPhase("choose");
   }
 
-  const activeStep = phase === "choose" || phase === "ready" ? 1 : phase === "starting" ? 2 : phase === "repair_review" || phase === "review" ? 3 : 4;
   const selectedSource = file ?? remote;
   const selectedSize = file?.size ?? remote?.byte_length ?? 0;
-  const selectedSourceRef = upload?.acquisition_ref ?? inspection?.source_ref ?? (remote ? `r2://casebible-sorted/${remote.key}` : null);
+  const selectedSourceRef = upload?.acquisition_ref ?? inspection?.source_ref ?? remote?.source_ref ?? null;
+  const contextFlowComplete = profferContextFlowComplete(preview?.receipts, preview?.checkpoints);
 
   return (
     <div className="min-h-full">
@@ -411,31 +567,27 @@ export function UnifiedIntake() {
       <section className="border-b bg-card px-6 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="platform-kicker mb-1">Evidence operations desk</p>
+            <p className="platform-kicker mb-1">Context operations desk</p>
             <h1 className="text-xl font-semibold tracking-tight">Import source context</h1>
             <p className="mt-1 text-sm text-muted-foreground">Choose a source, inspect it, then start the context-only workflow for the fixed case.</p>
           </div>
-          <div className="flex items-center gap-2 border bg-background px-3 py-2 text-xs text-muted-foreground">
-            <ShieldCheck className="h-4 w-4" /> PostgreSQL authority preserved
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <MatterModeSelector />
+            <div className="flex items-center gap-2 border bg-background px-3 py-2 text-xs text-muted-foreground">
+              <ShieldCheck className="h-4 w-4" /> PostgreSQL authority preserved
+            </div>
           </div>
         </div>
       </section>
 
-      <ol className="grid grid-cols-4 border-b bg-card px-6 py-4" aria-label="Intake progress">
-        {["Choose source", "Seal and start", "Review selection", "Read receipt"].map((label, index) => {
-          const step = index + 1;
-          const complete = step < activeStep;
-          const active = step === activeStep;
-          return (
-            <li key={label} className="relative flex min-w-0 items-center gap-3 after:absolute after:left-11 after:right-3 after:top-5 after:h-px after:bg-border last:after:hidden">
-              <span className={`relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border font-mono text-sm ${complete ? "border-[#2f9d67] bg-[#2f9d67] text-white" : active ? "border-primary bg-primary text-primary-foreground" : "bg-card"}`}>
-                {complete ? <Check className="h-4 w-4" /> : step}
-              </span>
-              <span className="relative z-10 hidden bg-card pr-3 text-xs font-semibold sm:block">{label}</span>
-            </li>
-          );
-        })}
-      </ol>
+      <ContextFlowRail
+        started={Boolean(run)}
+        phase={preview?.phase ?? (phase === "error" ? "failed" : undefined)}
+        receipts={preview?.receipts}
+        checkpoints={preview?.checkpoints}
+        events={workflowEvents}
+      />
+      {checkpointStreamError && run && <p className="border-b bg-card px-6 py-2 text-xs text-muted-foreground" role="status">{checkpointStreamError}</p>}
 
       {(scopeError || error) && (
         <div className="flex items-center gap-2 border-b border-[#b5433b] bg-[#fbe9e7] px-6 py-3 text-sm text-[#8f302a]" role="alert">
@@ -483,30 +635,26 @@ export function UnifiedIntake() {
           )}
 
           {!file && !remote ? (
-            <div className="platform-panel mx-auto max-w-3xl overflow-hidden">
-              <div className="border-b px-5 py-4">
-                <p className="platform-kicker mb-1">Default ingestion point</p>
-                <h2 className="text-xl font-semibold">Case Bible Sorted</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Browse the canonical sorted bucket. Provider and bucket scope are fixed by the Platform.</p>
-              </div>
-              <div className="flex gap-2 border-b p-4">
-                {sourcePrefix && <Button variant="outline" onClick={() => changeSourcePrefix(sourcePrefix.replace(/[^/]+\/$/, ""))}>Up</Button>}
-                <input className="h-10 min-w-0 flex-1 border bg-background px-3 text-sm" value={sourceFilter} onChange={(event) => changeSourceFilter(event.target.value)} placeholder="Filter this folder" aria-label="Filter Case Bible Sorted" />
-              </div>
-              <div className="min-h-[260px] divide-y">
-                {sourcesLoading ? <div className="flex items-center gap-2 p-5 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading Case Bible Sorted</div> : sourcesError ? <div className="p-5 text-sm text-[#8f302a]">{sourcesError}</div> : (
-                  <>
-                    {sources?.prefixes.map((item) => <button key={item.prefix} type="button" onClick={() => changeSourcePrefix(item.prefix)} className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-accent"><FolderOpen className="h-4 w-4" /><span className="text-sm font-medium">{item.name}</span></button>)}
-                    {sources?.objects.map((item) => <button key={item.key} type="button" onClick={() => void selectRemote(item)} className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-accent"><FileText className="h-4 w-4" /><span className="min-w-0 flex-1 truncate text-sm">{item.name}</span><span className="text-xs text-muted-foreground">{bytes(item.byte_length)}</span></button>)}
-                    {!sources?.prefixes.length && !sources?.objects.length && <div className="p-8 text-center text-sm text-muted-foreground">No sorted sources match this view.</div>}
-                    {sources?.is_truncated && <div className="p-4 text-center"><Button variant="outline" onClick={() => void loadMoreSources()}>Load more</Button></div>}
-                  </>
-                )}
-              </div>
-              <div className="border-t bg-accent/30 px-5 py-4 text-sm">
+            <div className="space-y-4">
+              <SourceExplorer
+                response={sources}
+                loading={sourcesLoading}
+                error={sourcesError}
+                rootId={sourceRootId}
+                prefix={sourcePrefix}
+                query={sourceFilter}
+                fileTypes={sourceFileTypes}
+                onRootChange={changeSourceRoot}
+                onPrefixChange={changeSourcePrefix}
+                onQueryChange={changeSourceFilter}
+                onFileTypesChange={setSourceFileTypes}
+                onSelect={(source) => void selectRemote(source)}
+                onLoadMore={() => void loadMoreSources()}
+              />
+              <div className="platform-panel mx-auto max-w-[1180px] px-5 py-4 text-sm">
                 <span className="text-muted-foreground">Or add a source from this device: </span>
                 <label className="cursor-pointer font-semibold text-primary hover:underline"><Upload className="mr-1 inline h-4 w-4" />Choose local file<input accept={LOCAL_FILE_ACCEPT} className="sr-only" type="file" onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} /></label>
-                <span className="ml-2 text-xs text-muted-foreground">Markdown, JSON, Word, or HTML</span>
+                <span className="ml-2 text-xs text-muted-foreground">XML, JSON, text, CSV, Markdown, HTML, PDF, Word, or ZIP/archive</span>
               </div>
             </div>
           ) : (
@@ -564,9 +712,11 @@ export function UnifiedIntake() {
                     <dl className="grid gap-px border bg-border sm:grid-cols-2">
                       <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Name</dt><dd className="mt-1 break-words text-sm font-semibold">{selectedSource.name}</dd></div>
                       <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Declared format</dt><dd className="mt-1 font-mono text-xs">{declaredFormat(selectedSource)}</dd></div>
-                      <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Source location</dt><dd className="mt-1 text-sm">{remote ? "Case Bible Sorted" : "This device"}</dd></div>
+                      <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Source location</dt><dd className="mt-1 text-sm">{remote ? `${remote.source_location.toUpperCase()} · ${remote.bucket}` : "This device"}</dd></div>
                       <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Declared size</dt><dd className="mt-1 text-sm">{bytes(selectedSize)}</dd></div>
-                      <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Preview checksum</dt><dd className="mt-1 break-all font-mono text-[11px]">{inspectionLoading ? "Reading and hashing now" : upload?.sha256 || digest || "Computing preview"}</dd><p className="mt-2 text-[11px] leading-5 text-muted-foreground">Read-only preview identity. Acquisition recomputes and receipts the custody checksum before promotion.</p></div>
+                      {remote && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">File kind</dt><dd className="mt-1 text-sm">{remote.file_kind}{remote.archive_format ? ` · ${remote.archive_format}` : ""}</dd></div>}
+                      {remote && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Media type</dt><dd className="mt-1 text-sm">{remote.media_type || "Not reported"}</dd></div>}
+                      <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Preview checksum</dt><dd className="mt-1 break-all font-mono text-[11px]">{inspectionLoading ? "Reading and hashing now" : upload?.sha256 || digest || "Computing preview"}</dd><p className="mt-2 text-[11px] leading-5 text-muted-foreground">Read-only preview identity. The context workflow verifies the source bytes independently before processing.</p></div>
                       {remote?.last_modified && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Object modified</dt><dd className="mt-1 text-sm">{new Date(remote.last_modified).toLocaleString()}</dd></div>}
                       {selectedSourceRef && <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Acquisition reference</dt><dd className="mt-1 break-all font-mono text-[11px]">{selectedSourceRef}</dd></div>}
                     </dl>
@@ -630,36 +780,34 @@ export function UnifiedIntake() {
                 )}
 
                 {previewTab === "parser" && (
-                  <section aria-label="Parser selection">
-                    <p className="platform-rule-title mb-3">Parser route</p>
-                    {preview ? (
-                      <div className="border bg-accent/30 p-5">
-                        <div className="flex flex-wrap items-center justify-between gap-3"><strong className="capitalize">{preview.phase.replaceAll("_", " ")}</strong><span className="border bg-card px-2 py-1 text-[10px] uppercase text-muted-foreground">Temporal read-back</span></div>
-                        <dl className="mt-5 grid gap-4 text-xs">
-                          <div><dt className="text-muted-foreground">Parser</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.parser ? `${preview.parser.parser_id} · ${preview.parser.parser_version}` : "Selection has not been recorded yet"}</dd></div>
-                          {preview.parser && <div><dt className="text-muted-foreground">Parser config digest</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.parser.config_digest}</dd></div>}
-                          {preview.reason && <div><dt className="text-muted-foreground">Runtime reason</dt><dd className="mt-1">{preview.reason}</dd></div>}
-                        </dl>
-                      </div>
-                    ) : inspection ? (
-                      <div className="border bg-accent/30 p-5 text-sm"><div className="flex flex-wrap items-center justify-between gap-3"><strong>{inspection.parser_preflight.route_label}</strong><span className="border bg-card px-2 py-1 text-[10px] uppercase text-muted-foreground">Preflight</span></div><dl className="mt-4 grid gap-3 text-xs"><div><dt className="text-muted-foreground">Declared format</dt><dd className="mt-1 font-mono">{inspection.parser_preflight.declared_format}</dd></div><div><dt className="text-muted-foreground">Basis</dt><dd className="mt-1">Filename extension; the durable workflow records the final parser identity and version.</dd></div></dl></div>
-                    ) : (
-                      <div className="border bg-background px-5 py-12 text-center text-sm leading-6 text-muted-foreground">{inspectionLoading ? "Inspecting the source and preparing its parser route." : "Choose a source to inspect its expected parser route."}</div>
-                    )}
-                  </section>
+                  <ParserSelectionPanel
+                    inspection={inspection}
+                    preview={preview}
+                    selectedCandidateKey={selectedHandlerKey}
+                    handlerDecisionRef={handlerDecisionRef}
+                    submitting={handlerSubmitting}
+                    onSelect={(candidate) => setSelectedHandlerKey(parserCandidateKey(candidate))}
+                    onRecordDecision={() => void confirmHandlerSelection()}
+                  />
                 )}
               </div>
 
               <div className="flex flex-col gap-3 border-t bg-card px-5 py-4 sm:flex-row sm:items-center">
-                {phase === "review" && run ? (
+                {phase === "starting" && run ? (
+                  <><div className="flex-1 text-xs leading-5 text-muted-foreground" role="status">The workflow is processing the source and updating the six context checkpoints. It will pause here if an explicit handler or repair decision is needed.</div><Button disabled><Loader2 className="h-4 w-4 animate-spin" /> Processing context</Button></>
+                ) : phase === "handler_review" && run ? (
+                  <><div className="flex-1 text-xs leading-5 text-muted-foreground">The durable workflow is waiting for the confirmed parser decision. Review and record it in the Parser tab.</div><Button type="button" onClick={() => setPreviewTab("parser")}>Open parser decision</Button></>
+                ) : phase === "review" && run && contextFlowComplete ? (
                   <>
                     <div className="flex-1 text-xs leading-5 text-muted-foreground">Review the normalized messages, provenance locators, and required receipts before deciding. Decisions are available only in the correlated pipeline preview.</div>
-                    <Button asChild><Link href={`/evidence/preview?preview_handle=${encodeURIComponent(run.preview_handle)}`}>Review messages and decide <ChevronRight className="h-4 w-4" /></Link></Button>
+                    <Button asChild><Link data-testid="open-proffer-preview" href={`/evidence/preview?mode=${mode}&preview_handle=${encodeURIComponent(run.preview_handle)}`}>Review messages and decide <ChevronRight className="h-4 w-4" /></Link></Button>
                   </>
+                ) : phase === "review" && run ? (
+                  <><div className="flex-1 text-xs leading-5 text-muted-foreground" role="status">The full preview is locked until all six context-processing checkpoints are complete.</div><Button disabled>Full preview locked</Button></>
                 ) : phase === "complete" ? (
                   <><div className="flex-1 text-sm"><strong className="capitalize">{preview?.phase ?? "Decision signaled"}</strong><p className="text-xs text-muted-foreground">The result below was read back from the durable workflow.</p></div><Button variant="outline" onClick={reset}>Start another intake</Button></>
                 ) : (
-                  <><div className="flex-1 text-xs text-muted-foreground">{matter && !primaryCourtCase ? "The fixed case needs its primary proceeding restored before context intake can start." : "Previewing is read-only. Intake creates the governed acquisition and decision receipts."}</div><Button disabled={!matter || !primaryCourtCase || phase === "starting" || inspectionLoading || Boolean(remote && !inspection)} onClick={() => void start()} className="min-w-56">{phase === "starting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Confirm and start context intake <ChevronRight className="h-4 w-4" /></Button></>
+                  <><div className="flex-1 text-xs text-muted-foreground">{matter && !primaryCourtCase ? "The fixed case needs its primary proceeding restored before context intake can start." : !file && !remote ? "Choose a local file or an R2 source to begin." : remote && !inspection ? "The selected R2 source must finish inspection before intake can start." : `Ready to start in ${mode} mode. The workflow will inspect content and pause for explicit handler selection.`}</div><Button disabled={!matter || !primaryCourtCase || (!file && !remote) || phase === "starting" || inspectionLoading || Boolean(remote && !inspection)} onClick={() => void start()} className="min-w-56">{phase === "starting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Start {mode} context intake <ChevronRight className="h-4 w-4" /></Button></>
                 )}
               </div>
 
@@ -674,9 +822,11 @@ export function UnifiedIntake() {
                     <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Source</dt><dd className="mt-1 break-words text-xs">{selectedSource?.name}</dd></div>
                     <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Authority boundary</dt><dd className="mt-1 text-xs">Context only; not evidence</dd></div>
                   </dl>
-                  <Button asChild variant="outline" className="mt-4">
-                    <Link href={`/evidence/preview?preview_handle=${encodeURIComponent(run.preview_handle)}`}>Open pipeline preview</Link>
-                  </Button>
+                  {contextFlowComplete ? (
+                    <Button asChild variant="outline" className="mt-4">
+                      <Link href={`/evidence/preview?mode=${mode}&preview_handle=${encodeURIComponent(run.preview_handle)}`}>Open pipeline preview</Link>
+                    </Button>
+                  ) : <p className="mt-4 text-xs text-muted-foreground" role="status">The full preview remains locked until all six context-processing checkpoints are complete.</p>}
                 </section>
               )}
             </div>
@@ -706,7 +856,7 @@ export function UnifiedIntake() {
 
           <section className="border-b py-5">
             <p className="platform-rule-title mb-3">Workflow receipt</p>
-            {run ? <dl className="space-y-3 text-xs"><div><dt className="text-muted-foreground">Preview handle</dt><dd className="break-all font-mono text-[10px]">{run.preview_handle}</dd></div><div><dt className="text-muted-foreground">Phase</dt><dd className="capitalize">{preview?.phase.replaceAll("_", " ") ?? phase}</dd></div>{repairDecisionRef && <div><dt className="text-muted-foreground">Repair decision</dt><dd className="break-all font-mono text-[10px]">{repairDecisionRef}</dd></div>}</dl> : <p className="text-xs leading-5 text-muted-foreground">A receipt appears only after the server seals the source and the durable workflow accepts the request.</p>}
+            {run ? <dl className="space-y-3 text-xs"><div><dt className="text-muted-foreground">Preview handle</dt><dd className="break-all font-mono text-[10px]">{run.preview_handle}</dd></div><div><dt className="text-muted-foreground">Phase</dt><dd className="capitalize">{preview?.phase.replaceAll("_", " ") ?? phase}</dd></div>{repairDecisionRef && <div><dt className="text-muted-foreground">Repair decision</dt><dd className="break-all font-mono text-[10px]">{repairDecisionRef}</dd></div>}</dl> : <p className="text-xs leading-5 text-muted-foreground">A receipt appears after the server accepts the context import and starts its durable workflow.</p>}
           </section>
 
           <section className="pt-5">
@@ -724,7 +874,9 @@ export function UnifiedIntake() {
 }
 
 function phaseForPreview(state: ProfferPreviewResponse): IntakePhase {
+  if (state.phase === "awaiting_handler_selection") return "handler_review";
   if (state.phase === "awaiting_repair_decision" && state.repair_assessment?.review_required) return "repair_review";
   if (state.phase === "awaiting_decision") return "review";
+  if (state.phase === "failed") return "error";
   return "complete";
 }

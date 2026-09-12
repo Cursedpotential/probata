@@ -20,7 +20,7 @@ from app.service.source_context import create_source_context
 from app.service.proffer import ProfferError
 from app.types.source_context import SourceContextCreateRequest, SourceContextReceipt
 from app.types.source_inspection import SourceInspectionRequest, SourceInspectionResponse
-from app.types.proffer import ProfferDecisionActor
+from app.types.proffer import MatterMode, ProfferDecisionActor
 
 
 router = APIRouter(prefix="/api/proffer", tags=["proffer"])
@@ -39,29 +39,42 @@ def _actor(request: Request) -> ProfferDecisionActor:
 
 
 @router.post("/source-inspection", response_model=SourceInspectionResponse)
-def source_inspection_endpoint(body: SourceInspectionRequest):
+def source_inspection_endpoint(
+    body: SourceInspectionRequest,
+    mode: Annotated[MatterMode, Query()],
+    root_id: Annotated[str, Query(min_length=1, max_length=64)],
+):
+    if body.root_id != root_id:
+        raise HTTPException(status_code=409, detail="root_id in the source-inspection body must match the query")
     try:
-        return inspect_source(body)
+        return inspect_source(body, mode=mode)
+    except ProfferError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from None
     except SourceInspectionError as error:
         raise _translate(error) from None
 
 
 @router.post("/source-contexts", response_model=SourceContextReceipt, status_code=201)
-async def source_context_endpoint(body: SourceContextCreateRequest, request: Request):
+async def source_context_endpoint(
+    body: SourceContextCreateRequest,
+    request: Request,
+    mode: Annotated[MatterMode, Query()],
+):
     try:
-        return await create_source_context(body, _actor(request))
+        return await create_source_context(body, _actor(request), mode=mode)
     except ProfferError as error:
         raise HTTPException(status_code=error.status_code, detail=error.detail) from None
 
 
 @router.get("/source-content")
 def source_content_endpoint(
+    root_id: Annotated[str, Query(min_length=1, max_length=64)],
     key: Annotated[str, Query(min_length=1, max_length=1024)],
     etag: Annotated[str, Query(min_length=1, max_length=512)],
     range_header: Annotated[str | None, Header(alias="Range")] = None,
 ):
     try:
-        content = open_source_content(key, etag, range_header)
+        content = open_source_content(root_id, key, etag, range_header)
     except SourceInspectionError as error:
         raise _translate(error) from None
     headers = {

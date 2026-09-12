@@ -1,59 +1,23 @@
-// Package postgres — this file implements the PostgreSQL/pg_duckdb boundary
-// for activities.ExecuteStructuredELT (BUILD LANE E1 / Tweak 4 / H-07 /
-// D-080 / D-123). Structured (CSV, NDJSON) sources are read entirely inside
-// PostgreSQL via pg_duckdb's duckdb.query() table function — httpfs/R2
-// access happens in the database process, never in this Go worker — and
-// landed into raw.raw_csv with one set-based INSERT..SELECT per source. No
-// row-at-a-time Go loop ever touches a source record.
-//
-// content_hash / content_canon (READ BEFORE CHANGING): this Activity hashes the
-// DuckDB-DECODED row - SHA-256 over the UTF-8 bytes of row_to_json() - so the
-// value is a canonical, deterministic, POST-decode digest. It is therefore a
-// CONTEXT FINGERPRINT, not custody H2: the custody contract
-// (docs/reference/HASH-TAXONOMY-2026-08-29.md; custodyhash.CanonH2
-// "h2-rawelement-v1") is SHA-256 of the exact raw span BEFORE decoding, and
-// D-124 (2026-09-02) + D-149 item 1 (2026-09-06) place custody H1/H2/H3 at
-// governed PROMOTION, computed from the vault original; intake carries
-// fingerprints only, and a fingerprint is never H-named. D-149 item 6 makes
-// read_xml/ELT the slow lane that re-parses at promotion, so no byte spans are
-// required here.
-//
-// History: until 2026-09-07 this constant was "h2-rawelement-duckdb-json-v1" -
-// a deliberate, reported deviation from the BUILD LANE E1 task text, which had
-// named the literal custody tag (two constructions must never share one tag:
-// the h3-chain-v1 lesson, AGENT_MEMORY custody-h3-two-chains-not-one). The h2-
-// prefix itself still violated the taxonomy ("a context fingerprint is never
-// labeled H1/H2/H3"), so on 2026-09-07 the tag was renamed into the sql/0048
-// fingerprint family and the raw.<format>.content_canon defaults were moved off
-// 'h2-rawelement-v1' in the schema snapshot and applied LIVE by the 2026-09-07
-// rebuild from sql/bootstrap/schema_snapshot_20260907.sql (owner 02:58: rebuild
-// and move on; no more hash work until promotion is being built). No live row carried the old tag; if any ever
-// does, it is never restamped - disambiguate by parser_version. content_canon
-// is plain TEXT with no CHECK (live-confirmed 2026-09-02).
-//
-// Byline: Claude Code · Sonnet 5 · 2026-09-02
+// Package postgres implements the PostgreSQL-hosted DuckDB row-stream
+// boundary. Queries read shared object storage and return source-native rows;
+// the Activity writes those rows to the standard immutable parser bundle.
+// This repository never inserts raw records directly.
 package postgres
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/Cursedpotential/probata/engine/activities"
+	"github.com/Cursedpotential/probata/engine/proffer"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// eltContextFingerprintCanon is this Activity's content_canon tag: a member of
-// the sql/0048 context-fingerprint family (see the package comment above for
-// why it is a fingerprint and not custody H2). Renamed 2026-09-07 from
-// "h2-rawelement-duckdb-json-v1".
-const eltContextFingerprintCanon = "context-rawrecord-fingerprint-duckdb-json-v1"
-
-// eltParserVersion tags every row this Activity writes so it is trivially
-// distinguishable from parser-produced raw rows sharing the same table.
-const eltParserVersion = "elt-duckdb-v1"
 
 // eltDuckDBQuoteTag is the dollar-quote tag wrapping the inner DuckDB SQL
 // text passed to duckdb.query(). A distinctive tag (rather than bare "$$")
@@ -61,9 +25,21 @@ const eltParserVersion = "elt-duckdb-v1"
 // source URL.
 const eltDuckDBQuoteTag = "elt_duckdb_sql"
 
-// StructuredELTRepository implements activities.StructuredELTRepository.
+// StructuredELTRepository implements activities.StructuredELTRowRepository.
 type StructuredELTRepository struct {
-	db DB
+	acquire func(context.Context) (structuredELTSession, error)
+}
+
+// structuredELTSession is a leased PostgreSQL connection. pg_duckdb keeps
+// extension load state on that backend session, so Webbed must be loaded and
+// the DuckDB query must execute through the same lease. A transaction is not
+// used: the R2 read can be slow and must not hold an open PostgreSQL
+// transaction while it streams.
+type structuredELTSession interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+	QueryRow(context.Context, string, ...any) pgx.Row
+	Release()
 }
 
 // NewStructuredELTRepository constructs a repository. db must reach a
@@ -71,194 +47,315 @@ type StructuredELTRepository struct {
 // provisioned (server.core.session.ensure_duckdb_r2_secret at API startup,
 // or server.api.runtime_support.ensure_duckdb_r2_secret); this repository
 // never provisions a secret itself.
-func NewStructuredELTRepository(db DB) (*StructuredELTRepository, error) {
-	if db == nil {
+func NewStructuredELTRepository(pool *pgxpool.Pool) (*StructuredELTRepository, error) {
+	if pool == nil {
 		return nil, errors.New("postgres structured elt repository: database is required")
 	}
-	return &StructuredELTRepository{db: db}, nil
+	return newStructuredELTRepository(func(ctx context.Context) (structuredELTSession, error) {
+		return pool.Acquire(ctx)
+	}), nil
 }
 
-// ExecuteStructuredELT implements activities.StructuredELTRepository. The
-// DuckDB read and the INSERT execute as one bounded PostgreSQL transaction:
-// the httpfs/R2 read happens server-side inside a single SQL statement, so
-// this transaction never spans slow client-observed I/O (D-089).
-func (r *StructuredELTRepository) ExecuteStructuredELT(ctx context.Context, spec activities.StructuredELTSpec) (activities.StructuredELTResult, error) {
-	sourceID, err := uuid.Parse(spec.SourceID)
-	if err != nil {
-		return activities.StructuredELTResult{}, fmt.Errorf("structured elt source_id: %w", err)
-	}
-	ingestRunID, err := uuid.Parse(spec.IngestRunID)
-	if err != nil {
-		return activities.StructuredELTResult{}, fmt.Errorf("structured elt ingest_run_id: %w", err)
-	}
-	if err := validateOptionalUUID(spec.DeviceID, "device_id"); err != nil {
-		return activities.StructuredELTResult{}, err
-	}
-	if err := validateOptionalUUID(spec.AcquisitionID, "acquisition_id"); err != nil {
-		return activities.StructuredELTResult{}, err
-	}
+func newStructuredELTRepository(acquire func(context.Context) (structuredELTSession, error)) *StructuredELTRepository {
+	return &StructuredELTRepository{acquire: acquire}
+}
 
-	readerExpr, err := duckDBReaderExpr(spec.Format, spec.SourceURL)
-	if err != nil {
-		return activities.StructuredELTResult{}, err
+// OpenStructuredELTRows implements activities.StructuredELTRowRepository.
+// It resolves the canonical acquisition locator from context.source.source_key
+// because a retained file:// copy belongs to the worker host and is not
+// necessarily visible inside PostgreSQL. Current R2 locators are translated to
+// DuckDB's s3:// filesystem after workflow/source ownership is proven.
+func (r *StructuredELTRepository) OpenStructuredELTRows(
+	ctx context.Context, req proffer.StageRequest, format activities.StructuredELTFormat,
+) (activities.StructuredELTRowReader, error) {
+	if strings.TrimSpace(req.RequestID) == "" || req.SourceVersionRef == "" {
+		return nil, errors.New("structured elt row query requires request and source version references")
 	}
-
-	tx, err := r.db.BeginTx(ctx, pgx.TxOptions{})
+	sourceID, err := uuid.Parse(string(req.SourceVersionRef))
 	if err != nil {
-		return activities.StructuredELTResult{}, fmt.Errorf("begin structured elt transaction: %w", err)
+		return nil, fmt.Errorf("structured elt source version reference: %w", err)
 	}
-	committed := false
+	originalRef := req.Refs["original"]
+	if strings.TrimSpace(string(originalRef)) == "" {
+		return nil, errors.New("structured elt row query requires original reference")
+	}
+	originalID, err := uuid.Parse(string(originalRef))
+	if err != nil {
+		return nil, fmt.Errorf("structured elt original reference: %w", err)
+	}
+	if r.acquire == nil {
+		return nil, errors.New("structured elt row query requires a PostgreSQL session acquirer")
+	}
+	session, err := r.acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acquire structured elt PostgreSQL session: %w", err)
+	}
+	releaseSession := true
 	defer func() {
-		if !committed {
-			_ = tx.Rollback(context.WithoutCancel(ctx))
+		if releaseSession {
+			session.Release()
 		}
 	}()
 
-	// Idempotent-replay guard: a repeated Temporal attempt for the same
-	// ingest_run_id must not double-insert. This is a lightweight,
-	// column-only guard against raw.raw_csv itself — NOT the platform's
-	// context.activity_execution/activity_receipt idempotency contract used
-	// by the parser/raw pipelines (RawPipelineRepository etc.). raw.raw_csv
-	// is a plain landing table with no receipt wiring of its own; promoting
-	// this guard to the full receipt-keyed contract is future scope, not
-	// this lane's (no schema change is required for what is implemented
-	// here).
-	var alreadyInserted int64
-	if err := tx.QueryRow(ctx,
-		`SELECT count(*) FROM raw.raw_csv WHERE ingest_run_id = $1::uuid`,
-		ingestRunID,
-	).Scan(&alreadyInserted); err != nil {
-		return activities.StructuredELTResult{}, fmt.Errorf("check structured elt idempotency: %w", err)
+	var sourceKey, workflowID, sourceStatus, declaredFormat string
+	if err := session.QueryRow(ctx, `
+		SELECT source.source_key, version.workflow_id, version.status, version.declared_format
+		FROM context.source_version version
+		JOIN context.source source ON source.id = version.source_id
+		WHERE version.id = $1::uuid AND version.original_object_id = $2::uuid`,
+		sourceID, originalID,
+	).Scan(&sourceKey, &workflowID, &sourceStatus, &declaredFormat); err != nil {
+		return nil, fmt.Errorf("resolve structured elt source locator: %w", err)
 	}
-
-	sourceRows, err := r.countSourceRows(ctx, tx, readerExpr)
+	if workflowID != req.RequestID || sourceStatus != "retained" {
+		return nil, errors.New("structured elt source is not retained by this workflow")
+	}
+	if declaredFormat != req.DeclaredFormat {
+		return nil, errors.New("structured elt declared format does not match retained source")
+	}
+	sourceURL, err := duckDBSourceURL(sourceKey)
 	if err != nil {
-		return activities.StructuredELTResult{}, err
+		return nil, err
 	}
-
-	if alreadyInserted > 0 {
-		if err := tx.Commit(ctx); err != nil {
-			return activities.StructuredELTResult{}, fmt.Errorf("commit structured elt idempotent replay: %w", err)
+	if structuredELTRequiresWebbed(format) {
+		if err := ensureWebbedLoaded(ctx, session); err != nil {
+			return nil, err
 		}
-		committed = true
-		return activities.StructuredELTResult{RowsInserted: alreadyInserted, SourceRows: sourceRows, Skipped: true}, nil
 	}
-
-	// raw is built server-side via row_to_json() over the DuckDB result set;
-	// content_hash is SHA-256 (pgcrypto digest(), see sql/0001_init_extensions.sql)
-	// over that same canonical JSON text — see the package comment for
-	// exactly what bytes this hashes and why content_canon is a context
-	// fingerprint tag, NOT
-	// 'h2-rawelement-v1'.
-	insertSQL := fmt.Sprintf(`
-WITH source_rows AS (
-	SELECT row_to_json(t) AS row_data
-	FROM duckdb.query($%[2]s$%[1]s$%[2]s$) AS t
-),
-numbered AS (
-	SELECT row_data, (row_number() OVER () - 1)::int AS record_index
-	FROM source_rows
-),
-inserted AS (
-	INSERT INTO raw.raw_csv (
-		source_id, device_id, acquisition_id, medium, record_index,
-		raw, raw_text, content_hash, content_canon, parser_version, ingest_run_id
+	innerSQL, err := structuredELTQuery(format, sourceURL)
+	if err != nil {
+		return nil, err
+	}
+	query := fmt.Sprintf(
+		`SELECT stored_bytes, native_fields, native_metadata FROM duckdb.query($%[1]s$%[2]s$%[1]s$) AS elt`,
+		eltDuckDBQuoteTag, innerSQL,
 	)
-	SELECT
-		$1::uuid,
-		NULLIF($2, '')::uuid,
-		NULLIF($3, '')::uuid,
-		COALESCE(NULLIF($4, ''), 'export')::evidence.record_medium,
-		record_index,
-		row_data::jsonb,
-		NULL,
-		encode(digest(convert_to(row_data::text, 'UTF8'), 'sha256'), 'hex'),
-		%[3]s,
-		%[4]s,
-		$5::uuid
-	FROM numbered
-	RETURNING 1
-)
-SELECT count(*)::bigint FROM inserted;`,
-		readerExpr, eltDuckDBQuoteTag, sqlStringLiteral(eltContextFingerprintCanon), sqlStringLiteral(eltParserVersion),
-	)
-
-	var rowsInserted int64
-	if err := tx.QueryRow(ctx, insertSQL,
-		sourceID, spec.DeviceID, spec.AcquisitionID, spec.Medium, ingestRunID,
-	).Scan(&rowsInserted); err != nil {
-		return activities.StructuredELTResult{}, fmt.Errorf("execute structured elt insert..select: %w", err)
+	rows, err := session.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query DuckDB structured rows: %w", err)
 	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return activities.StructuredELTResult{}, fmt.Errorf("commit structured elt: %w", err)
-	}
-	committed = true
-
-	return activities.StructuredELTResult{RowsInserted: rowsInserted, SourceRows: sourceRows}, nil
+	releaseSession = false
+	return &structuredELTRows{rows: rows, release: session.Release}, nil
 }
 
-// countSourceRows is the Tweak 4 reconciliation's independent second count:
-// a fresh duckdb.query() over the same reader expression, never derived from
-// the INSERT's own row count.
-func (r *StructuredELTRepository) countSourceRows(ctx context.Context, tx pgx.Tx, readerExpr string) (int64, error) {
-	countSQL := fmt.Sprintf(
-		`SELECT * FROM duckdb.query($%[2]s$SELECT count(*) AS row_count FROM (%[1]s) elt_src$%[2]s$) AS c`,
-		readerExpr, eltDuckDBQuoteTag,
-	)
-	var count int64
-	if err := tx.QueryRow(ctx, countSQL).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count structured elt source rows: %w", err)
-	}
-	return count, nil
+func structuredELTRequiresWebbed(format activities.StructuredELTFormat) bool {
+	return format == activities.StructuredELTFormatSMSXML
 }
 
-// duckDBReaderExpr builds the inner DuckDB SQL text passed to duckdb.query().
-// The source URL cannot be bound as a normal PostgreSQL parameter (it lives
-// inside a nested SQL string DuckDB itself parses), so it is escaped as a
-// SQL string literal (doubled single quotes) before being embedded — the
-// same escaping DuckDB's own SQL dialect uses for single-quoted strings.
-//
-// CSV reads pass all_varchar=true. raw.raw_csv's own live table comment is
-// "Verbatim and never edited" (confirmed against the deployed schema, not
-// just the sql/ bootstrap file, 2026-09-02): read_csv_auto's default type
-// sniffing would coerce e.g. "4.0" to a numeric JSON value or reformat
-// dates, which is a decode/normalization step this landing table's own
-// contract forbids happening before the row is stored. all_varchar defers
-// every type decision to the (separate, later) normalization stage, exactly
-// like the platform's H1->H2->H3->normalize hash ordering. NDJSON is not
-// given the same treatment: unlike CSV, JSON already carries the source's
-// own explicit per-value typing (a JSON number was authored as a number),
-// so read_json_auto has no equivalent verbatim-vs-inferred ambiguity to
-// correct for.
-func duckDBReaderExpr(format activities.StructuredELTFormat, url string) (string, error) {
-	if strings.TrimSpace(url) == "" {
-		return "", errors.New("structured elt requires a non-empty source url")
+// ensureWebbedLoaded performs an explicit, idempotent load and then verifies
+// the extension from DuckDB itself. It intentionally runs on the exact same
+// leased PostgreSQL connection that will execute read_xml; a global autoload
+// flag cannot prove per-session readiness for a community extension.
+func ensureWebbedLoaded(ctx context.Context, session structuredELTSession) error {
+	if _, err := session.Exec(ctx, `SELECT duckdb.load_extension('webbed')`); err != nil {
+		return fmt.Errorf("load DuckDB Webbed extension on extraction session: %w", err)
 	}
-	escaped := strings.ReplaceAll(url, "'", "''")
-	switch format {
-	case activities.StructuredELTFormatCSV:
-		return fmt.Sprintf("SELECT * FROM read_csv_auto('%s', all_varchar=true)", escaped), nil
-	case activities.StructuredELTFormatNDJSON:
-		return fmt.Sprintf("SELECT * FROM read_json_auto('%s', format='newline_delimited')", escaped), nil
-	default:
-		return "", fmt.Errorf("structured elt format %q is not csv or ndjson", format)
+	var loaded bool
+	if err := session.QueryRow(ctx, `
+		SELECT loaded
+		FROM duckdb.query($webbed_status$
+			SELECT loaded FROM duckdb_extensions() WHERE extension_name = 'webbed'
+		$webbed_status$) AS extension_status`).Scan(&loaded); err != nil {
+		return fmt.Errorf("verify DuckDB Webbed extension on extraction session: %w", err)
 	}
-}
-
-// sqlStringLiteral quotes a Go-controlled constant for direct embedding in
-// generated SQL text. Only ever called with the two package-level constants
-// above — never with caller input.
-func sqlStringLiteral(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
-}
-
-func validateOptionalUUID(s, name string) error {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	if _, err := uuid.Parse(s); err != nil {
-		return fmt.Errorf("structured elt %s: %w", name, err)
+	if !loaded {
+		return errors.New("DuckDB Webbed extension is installed but not loaded on extraction session")
 	}
 	return nil
+}
+
+type structuredELTRows struct {
+	rows    pgx.Rows
+	release func()
+	closed  bool
+}
+
+func (r *structuredELTRows) Next(ctx context.Context) (activities.StructuredELTRow, error) {
+	if err := ctx.Err(); err != nil {
+		return activities.StructuredELTRow{}, err
+	}
+	if !r.rows.Next() {
+		if err := r.rows.Err(); err != nil {
+			_ = r.Close()
+			return activities.StructuredELTRow{}, err
+		}
+		_ = r.Close()
+		return activities.StructuredELTRow{}, io.EOF
+	}
+	var storedBytes, nativeFields, nativeMetadata string
+	if err := r.rows.Scan(&storedBytes, &nativeFields, &nativeMetadata); err != nil {
+		return activities.StructuredELTRow{}, err
+	}
+	return activities.StructuredELTRow{
+		StoredBytes: []byte(storedBytes), NativeFields: []byte(nativeFields),
+		NativeMetadata: []byte(nativeMetadata),
+	}, nil
+}
+
+func (r *structuredELTRows) Close() error {
+	if r.closed {
+		return nil
+	}
+	r.closed = true
+	r.rows.Close()
+	if r.release != nil {
+		r.release()
+	}
+	return nil
+}
+
+// duckDBSourceURL maps only locators that the PostgreSQL-hosted DuckDB can
+// resolve. upload:// and retained worker-local file:// references fail closed;
+// callers must first retain the source at a shared object-store locator.
+func duckDBSourceURL(sourceKey string) (string, error) {
+	trimmed := strings.TrimSpace(sourceKey)
+	if strings.Contains(trimmed, "$"+eltDuckDBQuoteTag+"$") {
+		return "", errors.New("structured elt source locator contains the reserved DuckDB quote tag")
+	}
+	switch {
+	case strings.HasPrefix(trimmed, "r2://"):
+		return "s3://" + strings.TrimPrefix(trimmed, "r2://"), nil
+	case strings.HasPrefix(trimmed, "s3://"), strings.HasPrefix(trimmed, "https://"):
+		return trimmed, nil
+	default:
+		return "", fmt.Errorf("structured elt source locator %q is not PostgreSQL/DuckDB-readable", sourceKey)
+	}
+}
+
+// structuredELTQuery returns one query with the exact three-column wire shape
+// consumed by structuredELTRows. Each template preserves source-native data in
+// stored_bytes/native_metadata and projects the common native fields needed by
+// the existing generic normalizer. No template writes a database table.
+func structuredELTQuery(format activities.StructuredELTFormat, sourceURL string) (string, error) {
+	if strings.TrimSpace(sourceURL) == "" {
+		return "", errors.New("structured elt requires a non-empty DuckDB source url")
+	}
+	url := strings.ReplaceAll(sourceURL, "'", "''")
+	switch format {
+	case activities.StructuredELTFormatCSV:
+		return fmt.Sprintf(`
+			WITH source_rows AS (
+				SELECT to_json(row_value)::VARCHAR AS raw_json
+				FROM read_csv_auto('%s', all_varchar=true) AS row_value
+			)
+			SELECT raw_json AS stored_bytes,
+				json_object('record_kind', 'row', 'body', raw_json)::VARCHAR AS native_fields,
+				json_object('duckdb_template', 'csv_v1', 'source_row', raw_json::JSON)::VARCHAR AS native_metadata
+			FROM source_rows`, url), nil
+	case activities.StructuredELTFormatNDJSON:
+		return fmt.Sprintf(`
+			WITH source_rows AS (
+				SELECT to_json(row_value)::VARCHAR AS raw_json
+				FROM read_json_auto('%s', format='newline_delimited') AS row_value
+			)
+			SELECT raw_json AS stored_bytes,
+				json_object('record_kind', 'object', 'body', raw_json)::VARCHAR AS native_fields,
+				json_object('duckdb_template', 'ndjson_v1', 'source_row', raw_json::JSON)::VARCHAR AS native_metadata
+			FROM source_rows`, url), nil
+	case activities.StructuredELTFormatSMSXML:
+		return fmt.Sprintf(`
+			WITH source_rows AS (
+				SELECT 'sms' AS source_kind, to_json(row_value)::JSON AS source_row
+				FROM read_xml('%[1]s', record_element := 'sms', all_varchar := true) AS row_value
+				UNION ALL
+				SELECT 'mms' AS source_kind, to_json(row_value)::JSON AS source_row
+				FROM read_xml('%[1]s', record_element := 'mms', all_varchar := true) AS row_value
+			), projected AS (
+				SELECT *,
+					json_extract_string(source_row, '$."@address"') AS address,
+					json_extract_string(source_row, '$."@type"') AS message_type,
+					json_extract_string(source_row, '$."@date"') AS date_ms,
+					coalesce(
+						nullif(json_extract_string(source_row, '$."@body"'), 'null'),
+						json_extract_string(source_row, '$.parts.part[0]."@text"'),
+						json_extract_string(source_row, '$.parts.part."@text"'),
+						''
+					) AS body
+				FROM source_rows
+			)
+			SELECT source_row::VARCHAR AS stored_bytes,
+				json_object(
+					'record_kind', 'message', 'body', body,
+					'sender', CASE WHEN message_type = '2' THEN 'self' ELSE address END,
+					'recipients', CASE WHEN message_type = '2' THEN json_array(address) ELSE json_array('self') END,
+					'participants', json_array('self', address)
+				)::VARCHAR AS native_fields,
+				json_object(
+					'duckdb_template', 'sms_xml_v1', 'source_kind', source_kind,
+					'date_ms', date_ms, 'source_row', source_row
+				)::VARCHAR AS native_metadata
+			FROM projected
+			ORDER BY try_cast(date_ms AS BIGINT), source_kind`, url), nil
+	case activities.StructuredELTFormatChatGPTJSON:
+		return fmt.Sprintf(`
+			WITH source_document AS (
+				SELECT content::JSON AS document FROM read_text('%s')
+			), conversations AS (
+				SELECT try_cast(conversation.key AS BIGINT) AS conversation_index,
+					conversation.value AS conversation
+				FROM source_document, json_each(document) AS conversation
+			), nodes AS (
+				SELECT conversation_index, conversation, node.key AS node_id,
+					json_extract(node.value, '$.message') AS message
+				FROM conversations, json_each(json_extract(conversation, '$.mapping')) AS node
+			), messages AS (
+				SELECT *, json_extract_string(message, '$.author.role') AS role,
+					coalesce(json_extract_string(message, '$.content.parts[0]'), '') AS body,
+					coalesce(
+						try_cast(json_extract_string(message, '$.create_time') AS DOUBLE),
+						try_cast(json_extract_string(conversation, '$.create_time') AS DOUBLE)
+					) AS created_at
+				FROM nodes WHERE json_type(message) = 'OBJECT'
+			)
+			SELECT message::VARCHAR AS stored_bytes,
+				json_object(
+					'record_kind', 'message', 'body', body, 'sender', role,
+					'participants', json_array(role)
+				)::VARCHAR AS native_fields,
+				json_object(
+					'duckdb_template', 'chatgpt_json_array_v1',
+					'conversation_index', conversation_index,
+					'conversation_id', json_extract_string(conversation, '$.id'),
+					'conversation_title', json_extract_string(conversation, '$.title'),
+					'node_id', node_id, 'created_at', created_at
+				)::VARCHAR AS native_metadata
+			FROM messages WHERE length(trim(body)) > 0
+			ORDER BY conversation_index, created_at, node_id`, url), nil
+	case activities.StructuredELTFormatIMessageText:
+		return fmt.Sprintf(`
+			WITH source_document AS (
+				SELECT regexp_split_to_array(content, '\r?\n\r?\n+') AS record_blocks
+				FROM read_text('%s')
+			), blocks AS (
+				SELECT generate_subscripts(record_blocks, 1) AS block_index,
+					unnest(record_blocks) AS raw_block
+				FROM source_document
+			), parsed AS (
+				SELECT *, regexp_split_to_array(raw_block, '\r?\n') AS lines
+				FROM blocks WHERE length(trim(raw_block)) > 0
+			), projected AS (
+				SELECT *,
+					CASE WHEN array_length(lines) >= 2 AND length(trim(list_extract(lines, 2))) > 0
+						THEN trim(list_extract(lines, 2)) ELSE 'system' END AS sender,
+					CASE WHEN array_length(lines) >= 3
+						THEN array_to_string(list_slice(lines, 3, array_length(lines)), '\n')
+						ELSE regexp_replace(raw_block, '^[^\r\n]*[AP]M\s*', '') END AS body
+				FROM parsed
+			)
+			SELECT raw_block AS stored_bytes,
+				json_object(
+					'record_kind', 'message', 'body', trim(body),
+					'sender', CASE WHEN lower(sender) IN ('me', 'you') THEN 'self' ELSE sender END,
+					'participants', CASE WHEN lower(sender) IN ('me', 'you')
+						THEN json_array('self') ELSE json_array('self', sender) END
+				)::VARCHAR AS native_fields,
+				json_object(
+					'duckdb_template', 'imessage_text_v1', 'block_index', block_index,
+					'raw_timestamp', regexp_extract(raw_block, '^([^\r\n]+?[AP]M)', 1),
+					'sender_label', sender
+				)::VARCHAR AS native_metadata
+			FROM projected ORDER BY block_index`, url), nil
+	default:
+		return "", fmt.Errorf("structured elt format %q has no query template", format)
+	}
 }

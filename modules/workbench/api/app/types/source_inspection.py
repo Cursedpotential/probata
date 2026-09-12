@@ -10,6 +10,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
+from app.types.matter_mode import MatterMode
+
 
 SourceKey = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1024)]
 OpaqueETag = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=512)]
@@ -19,6 +21,8 @@ Sha256Digest = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
 class SourceInspectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    root_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)]
+    source_ref: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2048)]
     key: SourceKey
     expected_byte_length: Annotated[int, Field(ge=0)]
     expected_etag: OpaqueETag | None = None
@@ -38,7 +42,12 @@ class ParserPreflight(BaseModel):
 class SourceInspectionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    source: Literal["casebible-sorted"] = "casebible-sorted"
+    source: str
+    root_id: str
+    active_root_id: str
+    matter_mode: MatterMode
+    source_location: Literal["r2"] = "r2"
+    bucket: str
     key: SourceKey
     source_ref: str
     name: str

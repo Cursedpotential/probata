@@ -34,10 +34,22 @@ type Registrations struct {
 	EmbeddedObservation   activities.SourceObservationActivities
 	N8N                   platformtemporal.N8NActivities
 	Hash                  activities.HashActivities
+	StructuredELT         activities.StructuredELTActivities
+	HandlerSelection      HandlerSelectionActivities
 	Raw                   activities.RawPipelineActivities
 	Normalized            activities.NormalizedPipelineActivities
 	Repair                activities.RepairActivities
 	Preview               activities.PreviewProjectionActivity
+}
+
+// HandlerSelectionActivities is the production integration seam for the
+// content-backed recommendation and actor-bound decision-validation stores.
+// Their implementations belong with runtime persistence, not workflow
+// orchestration. Both must be supplied together before new-version workflows
+// are enabled in a deployed worker.
+type HandlerSelectionActivities struct {
+	Recommend func(context.Context, proffer.StageRequest) (proffer.HandlerRecommendationResult, error)
+	Validate  func(context.Context, proffer.StageRequest) (proffer.HandlerSelectionValidationResult, error)
 }
 
 // RegisterAll installs the one workflow plus every exact stagegraph name on
@@ -54,6 +66,14 @@ func RegisterAll(registrar interface {
 	activities.RegisterEmbeddedMetadataActivity(registrar, registrations.EmbeddedObservation)
 	registrar.RegisterActivityWithOptions(registrations.N8N.SelectParser, activity.RegisterOptions{Name: string(stagegraph.SelectParser)})
 	registrar.RegisterActivityWithOptions(registrations.N8N.ExecuteParser, activity.RegisterOptions{Name: string(stagegraph.ExecuteParser)})
+	activities.RegisterStructuredELTActivities(registrar, registrations.StructuredELT)
+	if registrations.HandlerSelection.Recommend != nil || registrations.HandlerSelection.Validate != nil {
+		if registrations.HandlerSelection.Recommend == nil || registrations.HandlerSelection.Validate == nil {
+			panic("proffer worker: handler recommendation and validation activities must be registered together")
+		}
+		registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Recommend, activity.RegisterOptions{Name: proffer.RecommendHandlerActivityName})
+		registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Validate, activity.RegisterOptions{Name: proffer.ValidateHandlerSelectionActivityName})
+	}
 	activities.RegisterRawPipelineActivities(registrar, registrations.Raw)
 	activities.RegisterNormalizedPipelineActivities(registrar, registrations.Normalized)
 	activities.RegisterRepairActivities(registrar, registrations.Repair)
@@ -187,6 +207,22 @@ func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
 	if err != nil {
 		return Registrations{}, err
 	}
+	structuredELTRepo, err := platformpostgres.NewStructuredELTRepository(pool)
+	if err != nil {
+		return Registrations{}, err
+	}
+	handlerSelectionStore, err := platformpostgres.NewHandlerSelectionStore(pool, openObject)
+	if err != nil {
+		return Registrations{}, err
+	}
+	parserBundleFactory, err := runtimeapi.NewFilesystemBundleFactory(pool, cfg.ParserBundleDir)
+	if err != nil {
+		return Registrations{}, err
+	}
+	parserStore, err := platformpostgres.NewParserStore(pool, parserBundleFactory)
+	if err != nil {
+		return Registrations{}, err
+	}
 	rawRepo, err := platformpostgres.NewRawPipelineRepository(pool, openObject)
 	if err != nil {
 		return Registrations{}, err
@@ -228,10 +264,27 @@ func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
 		EmbeddedObservation:   activities.NewSourceObservationActivities(embeddedExtractor, nil, observationRepo),
 		N8N:                   platformtemporal.N8NActivities{Client: n8nClient},
 		Hash:                  activities.NewHashActivities(hashRepo),
-		Raw:                   activities.NewRawPipelineActivities(rawRepo),
-		Normalized:            activities.NewNormalizedPipelineActivities(normalizedRepo, normalize.GenericMessageNormalizer{}),
-		Repair:                activities.NewRepairActivities(toolsClient, repairStore),
-		Preview:               activities.PreviewProjectionActivity{Store: previewStore},
+		StructuredELT:         activities.NewStructuredELTActivities(structuredELTRepo, parserStore),
+		HandlerSelection: HandlerSelectionActivities{
+			Recommend: func(ctx context.Context, req proffer.StageRequest) (proffer.HandlerRecommendationResult, error) {
+				attempt := activity.GetInfo(ctx).Attempt
+				if attempt < 1 {
+					attempt = 1
+				}
+				return handlerSelectionStore.RecommendHandler(ctx, req, attempt)
+			},
+			Validate: func(ctx context.Context, req proffer.StageRequest) (proffer.HandlerSelectionValidationResult, error) {
+				attempt := activity.GetInfo(ctx).Attempt
+				if attempt < 1 {
+					attempt = 1
+				}
+				return handlerSelectionStore.ValidateHandlerSelection(ctx, req, attempt)
+			},
+		},
+		Raw:        activities.NewRawPipelineActivities(rawRepo),
+		Normalized: activities.NewNormalizedPipelineActivities(normalizedRepo, normalize.GenericMessageNormalizer{}),
+		Repair:     activities.NewRepairActivities(toolsClient, repairStore),
+		Preview:    activities.PreviewProjectionActivity{Store: previewStore},
 	}, nil
 }
 

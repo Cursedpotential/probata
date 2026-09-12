@@ -1192,6 +1192,20 @@ COMMENT ON FUNCTION canon.route_tier(p_canonical_table_id uuid, p_confidence num
 
 
 --
+-- Name: forbid_mutation(); Type: FUNCTION; Schema: context; Owner: -
+--
+
+CREATE FUNCTION context.forbid_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION 'context.% is append-only: % blocked (corrections are new rows)',
+        TG_TABLE_NAME, TG_OP;
+END
+$$;
+
+
+--
 -- Name: guard_hash_batch_insert(); Type: FUNCTION; Schema: context; Owner: -
 --
 
@@ -7840,7 +7854,7 @@ CREATE TABLE context.proffer_preview_receipt (
     recorded_at timestamp with time zone NOT NULL,
     CONSTRAINT proffer_preview_receipt_digest_check CHECK (((digest IS NULL) OR (octet_length(digest) = 32))),
     CONSTRAINT proffer_preview_receipt_receipt_ref_check CHECK ((length(btrim(receipt_ref)) > 0)),
-    CONSTRAINT proffer_preview_receipt_receipt_type_check CHECK ((receipt_type = ANY (ARRAY['custody'::text, 'parser_selection'::text, 'parser_execution'::text, 'normalization'::text, 'storage'::text, 'completeness'::text]))),
+    CONSTRAINT proffer_preview_receipt_receipt_type_check CHECK ((receipt_type = ANY (ARRAY['raw_source_verification'::text, 'parser_selection'::text, 'parser_execution'::text, 'normalization'::text, 'storage'::text, 'completeness'::text]))),
     CONSTRAINT proffer_preview_receipt_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'completed'::text, 'failed'::text, 'skipped'::text])))
 );
 
@@ -8090,6 +8104,106 @@ CREATE TABLE context.relative_time_anchor (
 --
 
 COMMENT ON TABLE context.relative_time_anchor IS 'Append-only reviewed fallback placement when an authoritative primary timestamp is unavailable. JSON payloads are presentation only; typed link tables are authority.';
+
+
+--
+-- Name: handler_content_signature; Type: TABLE; Schema: context; Owner: -
+--
+
+CREATE TABLE context.handler_content_signature (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    source_version_id uuid NOT NULL,
+    original_object_id uuid NOT NULL,
+    signature_kind text NOT NULL,
+    content_sha256 bytea NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT handler_content_signature_kind_check CHECK ((length(btrim(signature_kind)) > 0)),
+    CONSTRAINT handler_content_signature_sha256_check CHECK ((octet_length(content_sha256) = 32))
+);
+
+
+--
+-- Name: handler_detected_format; Type: TABLE; Schema: context; Owner: -
+--
+
+CREATE TABLE context.handler_detected_format (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    source_version_id uuid NOT NULL,
+    content_signature_id uuid NOT NULL,
+    format_id text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT handler_detected_format_format_id_check CHECK ((format_id = ANY (ARRAY['smsbackuprestore_xml'::text, 'chatgpt_official_json'::text, 'messages_transcript'::text])))
+);
+
+
+--
+-- Name: handler_compatibility; Type: TABLE; Schema: context; Owner: -
+--
+
+CREATE TABLE context.handler_compatibility (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    detected_format_id uuid NOT NULL,
+    handler_id text NOT NULL,
+    handler_version text NOT NULL,
+    execution_path text NOT NULL,
+    reason text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT handler_compatibility_handler_id_check CHECK ((length(btrim(handler_id)) > 0)),
+    CONSTRAINT handler_compatibility_handler_version_check CHECK ((length(btrim(handler_version)) > 0)),
+    CONSTRAINT handler_compatibility_execution_path_check CHECK ((execution_path = ANY (ARRAY['decoder'::text, 'duckdb'::text]))),
+    CONSTRAINT handler_compatibility_reason_check CHECK (((length(btrim(reason)) > 0) AND (octet_length(reason) <= 4000)))
+);
+
+
+--
+-- Name: handler_recommendation; Type: TABLE; Schema: context; Owner: -
+--
+
+CREATE TABLE context.handler_recommendation (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    source_version_id uuid NOT NULL,
+    original_object_id uuid NOT NULL,
+    content_signature_id uuid NOT NULL,
+    detected_format_id uuid NOT NULL,
+    activity_receipt_id uuid NOT NULL,
+    candidates jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT handler_recommendation_candidates_check CHECK (((jsonb_typeof(candidates) = 'array'::text) AND (jsonb_array_length(candidates) >= 1) AND (jsonb_array_length(candidates) <= 4) AND (octet_length((candidates)::text) <= 32768)))
+);
+
+
+--
+-- Name: handler_selection_decision; Type: TABLE; Schema: context; Owner: -
+--
+
+CREATE TABLE context.handler_selection_decision (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    source_version_id uuid NOT NULL,
+    recommendation_id uuid NOT NULL,
+    compatibility_id uuid NOT NULL,
+    actor_ref text NOT NULL,
+    decision_idempotency_key text NOT NULL,
+    decided_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT handler_selection_decision_actor_ref_check CHECK (((length(btrim(actor_ref)) > 0) AND (octet_length(actor_ref) <= 512))),
+    CONSTRAINT handler_selection_decision_key_check CHECK (((length(btrim(decision_idempotency_key)) > 0) AND (octet_length(decision_idempotency_key) <= 512)))
+);
+
+
+--
+-- Name: handler_selection_validation; Type: TABLE; Schema: context; Owner: -
+--
+
+CREATE TABLE context.handler_selection_validation (
+    id uuid DEFAULT uuidv7() NOT NULL,
+    source_version_id uuid NOT NULL,
+    recommendation_id uuid NOT NULL,
+    decision_id uuid NOT NULL,
+    compatibility_id uuid NOT NULL,
+    actor_ref text NOT NULL,
+    activity_receipt_id uuid NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT handler_selection_validation_actor_ref_check CHECK (((length(btrim(actor_ref)) > 0) AND (octet_length(actor_ref) <= 512)))
+);
 
 
 --
@@ -15021,6 +15135,66 @@ ALTER TABLE ONLY context.relative_time_anchor
 
 ALTER TABLE ONLY context.relative_time_anchor
     ADD CONSTRAINT relative_time_anchor_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: handler_content_signature handler_content_signature_pkey; Type: CONSTRAINT; Schema: context; Owner: -
+--
+
+ALTER TABLE ONLY context.handler_content_signature
+    ADD CONSTRAINT handler_content_signature_pkey PRIMARY KEY (id);
+
+
+ALTER TABLE ONLY context.handler_content_signature
+    ADD CONSTRAINT handler_content_signature_source_object_kind_key UNIQUE (source_version_id, original_object_id, signature_kind);
+
+
+ALTER TABLE ONLY context.handler_detected_format
+    ADD CONSTRAINT handler_detected_format_pkey PRIMARY KEY (id);
+
+
+ALTER TABLE ONLY context.handler_detected_format
+    ADD CONSTRAINT handler_detected_format_signature_key UNIQUE (content_signature_id);
+
+
+ALTER TABLE ONLY context.handler_compatibility
+    ADD CONSTRAINT handler_compatibility_pkey PRIMARY KEY (id);
+
+
+ALTER TABLE ONLY context.handler_compatibility
+    ADD CONSTRAINT handler_compatibility_identity_key UNIQUE (detected_format_id, handler_id, handler_version, execution_path);
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_pkey PRIMARY KEY (id);
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_activity_receipt_key UNIQUE (activity_receipt_id);
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_signature_key UNIQUE (content_signature_id);
+
+
+ALTER TABLE ONLY context.handler_selection_decision
+    ADD CONSTRAINT handler_selection_decision_pkey PRIMARY KEY (id);
+
+
+ALTER TABLE ONLY context.handler_selection_decision
+    ADD CONSTRAINT handler_selection_decision_idempotency_key UNIQUE (decision_idempotency_key);
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_pkey PRIMARY KEY (id);
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_decision_key UNIQUE (decision_id);
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_receipt_key UNIQUE (activity_receipt_id);
 
 
 --
@@ -22050,6 +22224,82 @@ ALTER TABLE ONLY context.relative_time_anchor
 
 
 --
+-- Name: handler_content_signature handler_content_signature_source_version_fkey; Type: FK CONSTRAINT; Schema: context; Owner: -
+--
+
+ALTER TABLE ONLY context.handler_content_signature
+    ADD CONSTRAINT handler_content_signature_source_version_fkey FOREIGN KEY (source_version_id) REFERENCES context.source_version(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_content_signature
+    ADD CONSTRAINT handler_content_signature_original_object_fkey FOREIGN KEY (original_object_id) REFERENCES context.retained_object(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_detected_format
+    ADD CONSTRAINT handler_detected_format_source_version_fkey FOREIGN KEY (source_version_id) REFERENCES context.source_version(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_detected_format
+    ADD CONSTRAINT handler_detected_format_signature_fkey FOREIGN KEY (content_signature_id) REFERENCES context.handler_content_signature(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_compatibility
+    ADD CONSTRAINT handler_compatibility_detected_format_fkey FOREIGN KEY (detected_format_id) REFERENCES context.handler_detected_format(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_source_version_fkey FOREIGN KEY (source_version_id) REFERENCES context.source_version(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_original_object_fkey FOREIGN KEY (original_object_id) REFERENCES context.retained_object(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_signature_fkey FOREIGN KEY (content_signature_id) REFERENCES context.handler_content_signature(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_detected_format_fkey FOREIGN KEY (detected_format_id) REFERENCES context.handler_detected_format(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_recommendation
+    ADD CONSTRAINT handler_recommendation_activity_receipt_fkey FOREIGN KEY (activity_receipt_id) REFERENCES context.activity_receipt(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_decision
+    ADD CONSTRAINT handler_selection_decision_source_version_fkey FOREIGN KEY (source_version_id) REFERENCES context.source_version(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_decision
+    ADD CONSTRAINT handler_selection_decision_recommendation_fkey FOREIGN KEY (recommendation_id) REFERENCES context.handler_recommendation(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_decision
+    ADD CONSTRAINT handler_selection_decision_compatibility_fkey FOREIGN KEY (compatibility_id) REFERENCES context.handler_compatibility(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_source_version_fkey FOREIGN KEY (source_version_id) REFERENCES context.source_version(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_recommendation_fkey FOREIGN KEY (recommendation_id) REFERENCES context.handler_recommendation(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_decision_fkey FOREIGN KEY (decision_id) REFERENCES context.handler_selection_decision(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_compatibility_fkey FOREIGN KEY (compatibility_id) REFERENCES context.handler_compatibility(id) ON DELETE RESTRICT;
+
+
+ALTER TABLE ONLY context.handler_selection_validation
+    ADD CONSTRAINT handler_selection_validation_activity_receipt_fkey FOREIGN KEY (activity_receipt_id) REFERENCES context.activity_receipt(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: repair_assessment repair_assessment_activity_receipt_id_fkey; Type: FK CONSTRAINT; Schema: context; Owner: -
 --
 
@@ -26657,6 +26907,14 @@ GRANT ALL ON FUNCTION canon.apply_proposal(p_proposal_id uuid, p_decision_id uui
 --
 
 GRANT ALL ON FUNCTION canon.route_tier(p_canonical_table_id uuid, p_confidence numeric) TO platform_app;
+
+
+--
+-- Name: FUNCTION forbid_mutation(); Type: ACL; Schema: context; Owner: -
+--
+
+GRANT ALL ON FUNCTION context.forbid_mutation() TO context_import_writer;
+GRANT ALL ON FUNCTION context.forbid_mutation() TO platform_app;
 
 
 --
@@ -37365,6 +37623,40 @@ GRANT ALL ON TABLE context.activity_receipt TO platform_app;
 
 
 --
+-- Name: TABLE handler_content_signature; Type: ACL; Schema: context; Owner: -
+--
+
+GRANT SELECT,INSERT ON TABLE context.handler_content_signature TO context_import_writer;
+GRANT SELECT ON TABLE context.handler_content_signature TO context_reader;
+GRANT ALL ON TABLE context.handler_content_signature TO platform_app;
+
+
+GRANT SELECT,INSERT ON TABLE context.handler_detected_format TO context_import_writer;
+GRANT SELECT ON TABLE context.handler_detected_format TO context_reader;
+GRANT ALL ON TABLE context.handler_detected_format TO platform_app;
+
+
+GRANT SELECT,INSERT ON TABLE context.handler_compatibility TO context_import_writer;
+GRANT SELECT ON TABLE context.handler_compatibility TO context_reader;
+GRANT ALL ON TABLE context.handler_compatibility TO platform_app;
+
+
+GRANT SELECT,INSERT ON TABLE context.handler_recommendation TO context_import_writer;
+GRANT SELECT ON TABLE context.handler_recommendation TO context_reader;
+GRANT ALL ON TABLE context.handler_recommendation TO platform_app;
+
+
+GRANT SELECT,INSERT ON TABLE context.handler_selection_decision TO context_import_writer;
+GRANT SELECT ON TABLE context.handler_selection_decision TO context_reader;
+GRANT ALL ON TABLE context.handler_selection_decision TO platform_app;
+
+
+GRANT SELECT,INSERT ON TABLE context.handler_selection_validation TO context_import_writer;
+GRANT SELECT ON TABLE context.handler_selection_validation TO context_reader;
+GRANT ALL ON TABLE context.handler_selection_validation TO platform_app;
+
+
+--
 -- Name: TABLE first_party_thread_message_relative_time_anchor; Type: ACL; Schema: context; Owner: -
 --
 
@@ -39633,4 +39925,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE ai IN SCHEMA working GRANT ALL ON TABLES TO pl
 --
 
 \unrestrict d4YxAM7rnJQLQYXwJQfS4d76HUPkBA1zZ38ISpVHsjBkvPdRF7u6CqJx5M6r8Jy
-

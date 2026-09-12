@@ -175,6 +175,7 @@ function courtReadiness() {
 function matterDetail() {
   return {
     id: MATTER_A,
+    matter_mode: "TEST",
     title: "Matter Alpha",
     description: "Fixture Matter",
     status: "active",
@@ -217,9 +218,11 @@ function createFixtureServer({ advancedEvidenceAvailable = true } = {}) {
       if (request.method === "GET" && url.pathname === "/api/matters") {
         assert.equal(url.searchParams.get("limit"), "50");
         assert.equal(url.searchParams.get("offset"), "0");
+        assert.equal(url.searchParams.get("mode"), "TEST");
         return json(response, 200, { data: [matterDetail()], total: 1, limit: 50, offset: 0 });
       }
       if (request.method === "GET" && url.pathname === `/api/matters/${MATTER_A}`) {
+        assert.equal(url.searchParams.get("mode"), "TEST");
         return json(response, 200, matterDetail());
       }
       if (request.method === "GET" && url.pathname === "/api/case-management/capabilities") {

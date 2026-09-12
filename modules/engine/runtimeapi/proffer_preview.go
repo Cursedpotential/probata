@@ -50,11 +50,16 @@ type PreviewWorkflow interface {
 	Start(context.Context, proffer.WorkflowInput) (workflowID, runID string, err error)
 	Decide(context.Context, string, proffer.PreviewDecision) error
 	DecideRepair(context.Context, string, proffer.RepairDecision) error
+	DecideHandler(context.Context, string, proffer.HandlerSelectionDecision) error
 	Preview(context.Context, string) (proffer.PreviewState, error)
 }
 
 type RepairDecisionWriter interface {
 	PersistRepairDecision(context.Context, proffer.RepairDecisionSpec) (proffer.Ref, error)
+}
+
+type HandlerSelectionDecisionWriter interface {
+	PersistHandlerSelectionDecision(context.Context, proffer.Ref, proffer.Ref, proffer.Ref, proffer.Ref, string) (proffer.Ref, error)
 }
 
 type PreviewBinding = previewmodel.Binding
@@ -99,6 +104,14 @@ func (s *MemoryPreviewStore) PersistRepairDecision(_ context.Context, spec proff
 		return "", errors.New("memory repair decision is incomplete")
 	}
 	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte(spec.IdempotencyKey))
+	return proffer.Ref(id.String()), nil
+}
+
+func (s *MemoryPreviewStore) PersistHandlerSelectionDecision(_ context.Context, sourceRef, recommendationRef, actorRef, compatibilityRef proffer.Ref, idempotencyKey string) (proffer.Ref, error) {
+	if sourceRef == "" || recommendationRef == "" || actorRef == "" || compatibilityRef == "" || strings.TrimSpace(idempotencyKey) == "" {
+		return "", errors.New("memory handler selection decision is incomplete")
+	}
+	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte(idempotencyKey))
 	return proffer.Ref(id.String()), nil
 }
 
@@ -363,14 +376,15 @@ type PreviewHTTPHandler struct {
 	workflow         PreviewWorkflow
 	store            PreviewStore
 	repairs          RepairDecisionWriter
+	handlerDecisions HandlerSelectionDecisionWriter
 	cursorKey        []byte
 	serviceTokenPath string
 	sourceContext    sourcecontext.Validator
 }
 
-func NewPreviewHTTPHandler(workflow PreviewWorkflow, store PreviewStore, repairs RepairDecisionWriter, cursorKey []byte, serviceTokenPath string, validators ...sourcecontext.Validator) (*PreviewHTTPHandler, error) {
-	if workflow == nil || store == nil || repairs == nil {
-		return nil, errors.New("proffer preview handler requires workflow, preview store, and repair decision writer")
+func NewPreviewHTTPHandler(workflow PreviewWorkflow, store PreviewStore, repairs RepairDecisionWriter, handlerDecisions HandlerSelectionDecisionWriter, cursorKey []byte, serviceTokenPath string, validators ...sourcecontext.Validator) (*PreviewHTTPHandler, error) {
+	if workflow == nil || store == nil || repairs == nil || handlerDecisions == nil {
+		return nil, errors.New("proffer preview handler requires workflow, preview store, repair decision writer, and handler decision writer")
 	}
 	if len(cursorKey) < 32 {
 		return nil, errors.New("proffer preview cursor key must be at least 32 bytes")
@@ -385,7 +399,7 @@ func NewPreviewHTTPHandler(workflow PreviewWorkflow, store PreviewStore, repairs
 	if len(validators) == 1 {
 		validator = validators[0]
 	}
-	return &PreviewHTTPHandler{workflow: workflow, store: store, repairs: repairs, cursorKey: append([]byte(nil), cursorKey...), serviceTokenPath: serviceTokenPath, sourceContext: validator}, nil
+	return &PreviewHTTPHandler{workflow: workflow, store: store, repairs: repairs, handlerDecisions: handlerDecisions, cursorKey: append([]byte(nil), cursorKey...), serviceTokenPath: serviceTokenPath, sourceContext: validator}, nil
 }
 
 func (h *PreviewHTTPHandler) Routes() http.Handler {
@@ -396,6 +410,7 @@ func (h *PreviewHTTPHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /reference-import/previews/{preview_handle}/events", h.auth(h.events))
 	mux.HandleFunc("POST /reference-import/previews/{preview_handle}/decision", h.auth(h.decide))
 	mux.HandleFunc("POST /reference-import/previews/{preview_handle}/repair-decision", h.auth(h.decideRepair))
+	mux.HandleFunc("POST /reference-import/previews/{preview_handle}/handler-selection", h.auth(h.decideHandler))
 	return mux
 }
 
@@ -541,10 +556,18 @@ func (h *PreviewHTTPHandler) snapshot(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			previewJSON(w, http.StatusOK, struct {
-				PreviewHandle    string                        `json:"preview_handle"`
-				Phase            proffer.PreviewPhase          `json:"phase"`
-				RepairAssessment *proffer.RepairAssessmentView `json:"repair_assessment,omitempty"`
-			}{handle, state.Phase, state.RepairAssessment})
+				PreviewHandle            string                        `json:"preview_handle"`
+				Phase                    proffer.PreviewPhase          `json:"phase"`
+				RepairAssessment         *proffer.RepairAssessmentView `json:"repair_assessment,omitempty"`
+				Checkpoints              []proffer.PreviewCheckpoint   `json:"checkpoints,omitempty"`
+				HandlerRecommendationRef proffer.Ref                   `json:"handler_recommendation_ref,omitempty"`
+				DetectedFormat           string                        `json:"detected_format,omitempty"`
+				DetectedFormatRef        proffer.Ref                   `json:"detected_format_ref,omitempty"`
+				SignatureRef             proffer.Ref                   `json:"signature_ref,omitempty"`
+				RecommendedHandler       *proffer.HandlerCandidate     `json:"recommended_handler,omitempty"`
+				AlternativeHandlers      []proffer.HandlerCandidate    `json:"alternative_handlers,omitempty"`
+			}{handle, state.Phase, state.RepairAssessment, state.Checkpoints, state.HandlerRecommendationRef,
+				state.DetectedFormat, state.DetectedFormatRef, state.SignatureRef, state.RecommendedHandler, state.AlternativeHandlers})
 			return
 		}
 		h.storeError(w, err)
@@ -704,6 +727,72 @@ func (h *PreviewHTTPHandler) decideRepair(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.workflow.DecideRepair(r.Context(), binding.WorkflowID, proffer.RepairDecision{DecisionRef: decisionRef}); err != nil {
+		previewError(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	previewJSON(w, http.StatusOK, map[string]string{"preview_handle": handle, "decision_ref": string(decisionRef), "status": "signaled"})
+}
+
+type handlerSelectionRequest struct {
+	CompatibilityRef proffer.Ref `json:"compatibility_ref"`
+}
+
+func (h *PreviewHTTPHandler) decideHandler(w http.ResponseWriter, r *http.Request) {
+	handle := r.PathValue("preview_handle")
+	var req handlerSelectionRequest
+	if err := decodePreviewJSON(w, r, &req); err != nil {
+		previewError(w, http.StatusBadRequest, err)
+		return
+	}
+	actor, _, err := authenticatedActor(r)
+	if err != nil {
+		previewError(w, http.StatusUnauthorized, err)
+		return
+	}
+	if _, err := uuid.Parse(string(req.CompatibilityRef)); err != nil {
+		previewError(w, http.StatusUnprocessableEntity, errors.New("compatibility_ref must be a UUID"))
+		return
+	}
+	idempotencyKey := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if idempotencyKey == "" || len(idempotencyKey) > 256 {
+		previewError(w, http.StatusBadRequest, errors.New("bounded Idempotency-Key is required"))
+		return
+	}
+	binding, err := h.store.Binding(r.Context(), handle)
+	if err != nil {
+		h.storeError(w, err)
+		return
+	}
+	state, err := h.workflow.Preview(r.Context(), binding.WorkflowID)
+	if err != nil {
+		previewError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	if state.Phase != proffer.PhaseAwaitingHandlerSelection || state.SourceVersionRef == "" || state.HandlerRecommendationRef == "" || state.RecommendedHandler == nil {
+		previewError(w, http.StatusConflict, errors.New("workflow is not awaiting an identified handler selection"))
+		return
+	}
+	candidates := append([]proffer.HandlerCandidate{*state.RecommendedHandler}, state.AlternativeHandlers...)
+	matched := false
+	for _, candidate := range candidates {
+		if candidate.CompatibilityRef == req.CompatibilityRef {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		previewError(w, http.StatusConflict, errors.New("compatibility_ref is not in the preview recommendation"))
+		return
+	}
+	decisionRef, err := h.handlerDecisions.PersistHandlerSelectionDecision(
+		r.Context(), state.SourceVersionRef, state.HandlerRecommendationRef, proffer.Ref(actor), req.CompatibilityRef,
+		"proffer:"+handle+":"+idempotencyKey,
+	)
+	if err != nil {
+		previewError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	if err := h.workflow.DecideHandler(r.Context(), binding.WorkflowID, proffer.HandlerSelectionDecision{DecisionRef: decisionRef}); err != nil {
 		previewError(w, http.StatusServiceUnavailable, err)
 		return
 	}

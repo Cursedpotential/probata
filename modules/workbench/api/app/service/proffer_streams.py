@@ -11,8 +11,16 @@ import json
 import httpx
 
 from app.config import settings
-from app.service.proffer import ProfferError, _service_authorization_headers, _validated
-from app.types.proffer import ProfferPreviewEvent
+from app.service.proffer import (
+    ProfferError,
+    _json_payload,
+    _mode_payload,
+    _require_mode_configuration,
+    _service_authorization_headers,
+    _validated,
+)
+from app.service.matter_mode import MatterModeError, require_preview_mode
+from app.types.proffer import MatterMode, ProfferPreviewEvent, ProfferUploadResponse
 
 
 async def _detail_async(response: httpx.Response) -> str:
@@ -27,9 +35,13 @@ async def _detail_async(response: httpx.Response) -> str:
 
 
 async def open_preview_event_stream(
-    preview_handle: str, *, last_event_id: int | None
+    preview_handle: str, *, mode: MatterMode, last_event_id: int | None
 ) -> tuple[httpx.AsyncClient, httpx.Response]:
     """Open the dedicated Proffer event stream; legacy run events are never consulted."""
+    try:
+        require_preview_mode(preview_handle, mode)
+    except MatterModeError as error:
+        raise ProfferError(error.detail, error.status_code) from None
     if not settings.proffer_starter_url.strip():
         raise ProfferError("Proffer starter is not configured", 503)
     headers = {"Accept": "text/event-stream", **_service_authorization_headers()}
@@ -59,7 +71,7 @@ async def open_preview_event_stream(
 
 
 async def validated_preview_events(
-    response: httpx.Response, *, preview_handle: str, last_event_id: int | None
+    response: httpx.Response, *, preview_handle: str, mode: MatterMode, last_event_id: int | None
 ) -> AsyncIterator[str]:
     """Validate and re-emit monotonic, replayable Proffer events."""
     previous = last_event_id if last_event_id is not None else -1
@@ -83,6 +95,12 @@ async def validated_preview_events(
                 payload = json.loads("\n".join(data_lines))
             except json.JSONDecodeError as error:
                 raise ProfferError("Proffer preview event stream returned malformed JSON", 502) from error
+            if not isinstance(payload, dict):
+                raise ProfferError("Proffer preview event stream returned an invalid event", 502)
+            upstream_mode = payload.get("matter_mode")
+            if upstream_mode is not None and upstream_mode != mode:
+                raise ProfferError("Proffer preview event belongs to a different matter mode", 502)
+            payload = {**payload, "matter_mode": mode}
             event = _validated(ProfferPreviewEvent, payload, "preview event")
             if event.preview_handle != preview_handle or upstream_id != event.event_id:
                 raise ProfferError("Proffer preview event correlation failed", 502)
@@ -120,3 +138,18 @@ async def open_upload_stream(
         await client.aclose()
         raise ProfferError(detail or "Proffer acquisition upload rejected the request", response.status_code)
     return client, response
+
+
+async def complete_upload_response(client, response, *, mode: MatterMode) -> ProfferUploadResponse:
+    """Validate the small upload receipt while preserving request-body streaming."""
+    _require_mode_configuration(mode)
+    try:
+        await response.aread()
+        return _validated(
+            ProfferUploadResponse,
+            _mode_payload(_json_payload(response, "upload response"), "upload response", mode),
+            "upload response",
+        )
+    finally:
+        await response.aclose()
+        await client.aclose()

@@ -1,96 +1,52 @@
-// Package activities: this file implements ExecuteStructuredELT, the
-// pg_duckdb-backed set-based structured-ELT Activity for BUILD LANE E1
-// (Tweak 4 / H-07 / D-080 / D-123). It is deliberately NOT yet registered as
-// a stagegraph.StageID member — ProfferWorkflow wiring is a
-// follow-up left to the workflow layer (see the BUILD LANE E1 handoff for
-// the exact diff profferworker/worker.go still needs).
-//
-// Byline: Claude Code · Sonnet 5 · 2026-09-02
+// Package activities implements the DuckDB-backed structured extraction
+// Activity. DuckDB replaces only execute_parser_activity for formats it owns:
+// it emits the same immutable parser bundle consumed by the existing raw,
+// normalize, lineage, and verification stages. It never writes raw rows.
 package activities
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
+
+	"github.com/Cursedpotential/probata/engine/parser"
+	"github.com/Cursedpotential/probata/engine/proffer"
+	"github.com/Cursedpotential/probata/engine/stagegraph"
 )
 
-// StructuredELTFormat is the DuckDB reader family this Activity selects.
-// Only the two formats named by the BUILD LANE E1 deliverable are supported;
-// any other value is a hard validation error, never a silent no-op.
+// StructuredELTFormat identifies one bounded DuckDB query template.
 type StructuredELTFormat string
 
 const (
-	StructuredELTFormatCSV    StructuredELTFormat = "csv"
-	StructuredELTFormatNDJSON StructuredELTFormat = "ndjson"
+	StructuredELTFormatCSV          StructuredELTFormat = "csv"
+	StructuredELTFormatNDJSON       StructuredELTFormat = "ndjson"
+	StructuredELTFormatSMSXML       StructuredELTFormat = "sms_xml"
+	StructuredELTFormatChatGPTJSON  StructuredELTFormat = "chatgpt_json_array"
+	StructuredELTFormatIMessageText StructuredELTFormat = "imessage_text"
 )
 
-// ExecuteStructuredELTActivityName is the Temporal registration name for
-// this Activity. It intentionally does not live in stagegraph.StageID yet
-// (see the package comment above).
-const ExecuteStructuredELTActivityName = "execute_structured_elt_activity"
+const (
+	// These distinct Temporal names let Proffer route an exact format to the
+	// DuckDB implementation without colliding with the decoder Activities.
+	SelectStructuredELTActivityName  = proffer.SelectStructuredELTActivityName
+	ExecuteStructuredELTActivityName = proffer.ExecuteStructuredELTActivityName
 
-// StructuredELTSpec is the compact, already-resolved input to
-// ExecuteStructuredELT, following the same compact-spec-struct shape as
-// ParserExecutionSpec / RawGenerationSpec elsewhere in this package.
-// SourceURL must be reachable from INSIDE the PostgreSQL server process
-// itself (pg_duckdb's httpfs/R2 secret) — the DuckDB read happens in the
-// database, never in this Go worker, so no source bytes ever cross into Go
-// memory or Temporal history.
-type StructuredELTSpec struct {
-	RequestID     string
-	Attempt       int32
-	SourceID      string // evidence.source.id (uuid, required)
-	DeviceID      string // registry.device.id (uuid, optional)
-	AcquisitionID string // evidence.acquisition.id (uuid, optional)
-	IngestRunID   string // idempotent-replay coordinate (uuid, required)
-	Medium        string // evidence.record_medium; empty uses the column default ('export')
-	SourceURL     string // path/URL passed to read_csv_auto/read_json_auto verbatim
-	Format        StructuredELTFormat
-}
+	// The selection receipt and raw-generation manifest must identify the
+	// implementation that actually produced the bundle.
+	StructuredELTParserID      = "duckdb_structured_elt"
+	StructuredELTParserVersion = "1.0.0"
+)
 
-func (s StructuredELTSpec) validate() error {
-	if strings.TrimSpace(s.RequestID) == "" {
-		return errors.New("structured elt requires a request id")
-	}
-	if strings.TrimSpace(s.SourceID) == "" {
-		return errors.New("structured elt requires source_id")
-	}
-	if strings.TrimSpace(s.IngestRunID) == "" {
-		return errors.New("structured elt requires ingest_run_id for idempotent retries")
-	}
-	if strings.TrimSpace(s.SourceURL) == "" {
-		return errors.New("structured elt requires a source url readable by read_csv_auto/read_json_auto")
-	}
-	switch s.Format {
-	case StructuredELTFormatCSV, StructuredELTFormatNDJSON:
-	default:
-		return fmt.Errorf("structured elt format %q is not csv or ndjson", s.Format)
-	}
-	return nil
-}
-
-// StructuredELTResult is the Tweak 4 coverage count-back. RowsInserted and
-// SourceRows are both independently derived by the repository (the second
-// duckdb.query() count, per the deliverable) so a mismatch is a real,
-// surfaced reconciliation finding rather than something silently trusted
-// from one side only. Skipped is true when a prior attempt already
-// persisted rows for the same IngestRunID (idempotent replay) — see the
-// package comment on the scope of that guard.
-type StructuredELTResult struct {
-	RowsInserted int64
-	SourceRows   int64
-	Skipped      bool
-}
-
-// StructuredELTRepository is the PostgreSQL/pg_duckdb boundary for
-// ExecuteStructuredELT. Implementations must resolve the DuckDB read and the
-// INSERT as one bounded PostgreSQL transaction — the httpfs/R2 read runs
-// server-side inside that one statement, so no Go-held transaction or
-// connection spans slow external I/O (D-089's short-transaction discipline;
-// see docs/DECISION_LOG.md).
-type StructuredELTRepository interface {
-	ExecuteStructuredELT(context.Context, StructuredELTSpec) (StructuredELTResult, error)
+var structuredELTDecisionRefs = [...]string{
+	"handler_recommendation",
+	"handler_decision",
+	"handler_validation",
+	"detected_format",
+	"content_signature",
+	"handler_compatibility",
 }
 
 // StructuredELTActivities implements the ExecuteStructuredELT Activity body.
@@ -98,13 +54,24 @@ type StructuredELTRepository interface {
 // binds it to activity.GetInfo(ctx).Attempt like every other Activities
 // struct in this package (see NewStructuredELTActivities in register.go).
 type StructuredELTActivities struct {
-	Repository StructuredELTRepository
-	Attempt    Attempt
+	Rows    StructuredELTRowRepository
+	Store   ParserActivityStore
+	Attempt Attempt
 }
 
-func (a StructuredELTActivities) validate() error {
-	if a.Repository == nil {
-		return errors.New("structured elt activities: repository is required")
+func (a StructuredELTActivities) validateStore() error {
+	if a.Store == nil {
+		return errors.New("structured elt activities: parser store is required")
+	}
+	return nil
+}
+
+func (a StructuredELTActivities) validateExecute() error {
+	if err := a.validateStore(); err != nil {
+		return err
+	}
+	if a.Rows == nil {
+		return errors.New("structured elt activities: row repository is required")
 	}
 	return nil
 }
@@ -120,31 +87,297 @@ func (a StructuredELTActivities) attempt(ctx context.Context) int32 {
 	return attempt
 }
 
-// ExecuteStructuredELT loads one structured (CSV or NDJSON) source through
-// pg_duckdb directly into raw.raw_csv as one set-based INSERT..SELECT — no
-// row-at-a-time Go loop ever touches a source record — then returns the
-// Tweak 4 reconciliation count-back. A rows-inserted/source-rows mismatch is
-// a hard error: this Activity never silently under-persists a source.
-func (a StructuredELTActivities) ExecuteStructuredELT(ctx context.Context, spec StructuredELTSpec) (StructuredELTResult, error) {
-	if err := a.validate(); err != nil {
-		return StructuredELTResult{}, err
+// StructuredELTRow is one source-native record emitted by a bounded DuckDB
+// query template. It becomes a standard parser.RawRecordEnvelope before it
+// leaves this Activity; DuckDB never writes raw tables directly.
+type StructuredELTRow struct {
+	StoredBytes    []byte
+	NativeFields   json.RawMessage
+	NativeMetadata json.RawMessage
+	RecordStatus   parser.RecordStatus
+	StatusReason   string
+}
+
+func (r StructuredELTRow) validate(expectedTemplate string) error {
+	if r.StoredBytes == nil {
+		return errors.New("structured elt row requires an exact stored byte value")
+	}
+	status := r.RecordStatus
+	if status == "" {
+		status = parser.StatusParsed
+	}
+	if err := status.Validate(); err != nil {
+		return err
+	}
+	if status != parser.StatusParsed && strings.TrimSpace(r.StatusReason) == "" {
+		return fmt.Errorf("structured elt row status %q requires a reason", status)
+	}
+	objects := make(map[string]map[string]any, 2)
+	for name, value := range map[string]json.RawMessage{
+		"native fields": r.NativeFields, "native metadata": r.NativeMetadata,
+	} {
+		var decoded any
+		if len(value) == 0 || !json.Valid(value) || json.Unmarshal(value, &decoded) != nil {
+			return fmt.Errorf("structured elt row %s must be a valid JSON object", name)
+		}
+		object, ok := decoded.(map[string]any)
+		if !ok {
+			return fmt.Errorf("structured elt row %s must be a JSON object", name)
+		}
+		objects[name] = object
+	}
+	if actual, ok := objects["native metadata"]["duckdb_template"].(string); !ok || actual != expectedTemplate {
+		return fmt.Errorf("structured elt row template %q does not match pinned template %q", actual, expectedTemplate)
+	}
+	return nil
+}
+
+// StructuredELTRowReader streams query output so the Activity never
+// materializes a complete source in Go or Temporal history.
+type StructuredELTRowReader interface {
+	Next(context.Context) (StructuredELTRow, error)
+	Close() error
+}
+
+// StructuredELTRowRepository owns only DuckDB extraction. Bundle persistence
+// and execute-parser receipts remain on ParserActivityStore.
+type StructuredELTRowRepository interface {
+	OpenStructuredELTRows(context.Context, proffer.StageRequest, StructuredELTFormat) (StructuredELTRowReader, error)
+}
+
+// StructuredELTFormatForDeclaredFormat maps source signatures to explicit
+// templates. Unknown formats fail closed rather than falling into a catch-all
+// query or running both DuckDB and a decoder.
+func StructuredELTFormatForDeclaredFormat(declared string) (StructuredELTFormat, error) {
+	switch strings.TrimSpace(declared) {
+	case "csv":
+		return StructuredELTFormatCSV, nil
+	case "ndjson", "jsonl":
+		return StructuredELTFormatNDJSON, nil
+	case "smsbackuprestore_xml":
+		return StructuredELTFormatSMSXML, nil
+	case "chatgpt_official_json":
+		return StructuredELTFormatChatGPTJSON, nil
+	case "messages_transcript":
+		return StructuredELTFormatIMessageText, nil
+	default:
+		return "", fmt.Errorf("declared format %q has no DuckDB structured-ELT template", declared)
+	}
+}
+
+// StructuredELTTemplateForFormat pins the SQL template revision covered by
+// StructuredELTParserVersion. Every emitted row must repeat this identifier
+// in native_metadata so an implementation/template mismatch fails before the
+// bundle or parser-execution receipt can be committed.
+func StructuredELTTemplateForFormat(format StructuredELTFormat) (string, error) {
+	switch format {
+	case StructuredELTFormatCSV:
+		return "csv_v1", nil
+	case StructuredELTFormatNDJSON:
+		return "ndjson_v1", nil
+	case StructuredELTFormatSMSXML:
+		return "sms_xml_v1", nil
+	case StructuredELTFormatChatGPTJSON:
+		return "chatgpt_json_array_v1", nil
+	case StructuredELTFormatIMessageText:
+		return "imessage_text_v1", nil
+	default:
+		return "", fmt.Errorf("structured elt format %q has no pinned template", format)
+	}
+}
+
+// requireStructuredELTDecisionRefs prevents the DuckDB pair from being used
+// as an extension-based shortcut. The workflow supplies these references only
+// after content inspection, an actor-bound choice, and durable compatibility
+// validation. The references themselves remain compact; their payloads stay
+// in PostgreSQL rather than Temporal history.
+func requireStructuredELTDecisionRefs(req proffer.StageRequest) error {
+	for _, name := range structuredELTDecisionRefs {
+		if strings.TrimSpace(string(req.Refs[name])) == "" {
+			return fmt.Errorf("structured elt requires durable %q reference", name)
+		}
+	}
+	return nil
+}
+
+// SelectStructuredELT records the exact DuckDB implementation and template
+// version for an eligible declared format. Proffer routes select and execute
+// together, so a source can never carry an SBV selection receipt while being
+// extracted by DuckDB.
+func (a StructuredELTActivities) SelectStructuredELT(ctx context.Context, req proffer.StageRequest) (proffer.StageResult, error) {
+	if err := a.validateStore(); err != nil {
+		return proffer.StageResult{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return StructuredELTResult{}, err
+		return proffer.StageResult{}, err
 	}
-	spec.Attempt = a.attempt(ctx)
-	if err := spec.validate(); err != nil {
-		return StructuredELTResult{}, err
+	if strings.TrimSpace(req.RequestID) == "" || req.SourceVersionRef == "" {
+		return proffer.StageResult{}, errors.New("select structured elt requires request and source version references")
 	}
-	result, err := a.Repository.ExecuteStructuredELT(ctx, spec)
+	if err := requireStructuredELTDecisionRefs(req); err != nil {
+		return proffer.StageResult{}, err
+	}
+	if _, err := StructuredELTFormatForDeclaredFormat(req.DeclaredFormat); err != nil {
+		return proffer.StageResult{}, err
+	}
+	selectionRef, receiptRef, err := a.Store.PersistParserSelection(ctx, ParserSelectionSpec{
+		RequestID: req.RequestID, SourceVersionRef: req.SourceVersionRef,
+		DeclaredFormat: parser.FormatID(req.DeclaredFormat),
+		ParserID:       StructuredELTParserID, ParserVersion: StructuredELTParserVersion,
+		Attempt: a.attempt(ctx),
+	})
 	if err != nil {
-		return StructuredELTResult{}, fmt.Errorf("execute structured elt: %w", err)
+		return proffer.StageResult{}, fmt.Errorf("persist structured-ELT selection: %w", err)
 	}
-	if result.RowsInserted != result.SourceRows {
-		return StructuredELTResult{}, fmt.Errorf(
-			"structured elt coverage mismatch: raw.raw_csv holds %d rows for this run, duckdb counted %d source rows",
-			result.RowsInserted, result.SourceRows,
-		)
+	if selectionRef == "" || receiptRef == "" {
+		return proffer.StageResult{}, errors.New("persisted structured-ELT selection lacks result or activity receipt reference")
 	}
-	return result, nil
+	return parserStageSuccess(stagegraph.SelectParser, selectionRef, receiptRef), nil
+}
+
+// ExecuteStructuredELT is the DuckDB implementation of the canonical
+// ExecuteParser stage. It emits the same immutable bundle and receipt as the
+// decoder implementation; PersistRawGeneration and every later gate remain
+// unchanged.
+func (a StructuredELTActivities) ExecuteStructuredELT(ctx context.Context, req proffer.StageRequest) (proffer.StageResult, error) {
+	if err := a.validateExecute(); err != nil {
+		return proffer.StageResult{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return proffer.StageResult{}, err
+	}
+	if strings.TrimSpace(req.RequestID) == "" || req.SourceVersionRef == "" {
+		return proffer.StageResult{}, errors.New("execute structured elt requires request and source version references")
+	}
+	if err := requireStructuredELTDecisionRefs(req); err != nil {
+		return proffer.StageResult{}, err
+	}
+	selectionRef, err := requiredParserRef(req, "parser_selection")
+	if err != nil {
+		return proffer.StageResult{}, err
+	}
+	if _, err := requiredParserRef(req, "original"); err != nil {
+		return proffer.StageResult{}, err
+	}
+	format, err := StructuredELTFormatForDeclaredFormat(req.DeclaredFormat)
+	if err != nil {
+		return proffer.StageResult{}, err
+	}
+	templateID, err := StructuredELTTemplateForFormat(format)
+	if err != nil {
+		return proffer.StageResult{}, err
+	}
+	selection, err := a.Store.LoadParserSelection(ctx, selectionRef)
+	if err != nil {
+		return proffer.StageResult{}, fmt.Errorf("load persisted structured-ELT selection %q: %w", selectionRef, err)
+	}
+	if err := validatePersistedSelection(req, selection); err != nil {
+		return proffer.StageResult{}, err
+	}
+	if selection.ParserID != StructuredELTParserID || selection.ParserVersion != StructuredELTParserVersion {
+		return proffer.StageResult{}, errors.New("persisted parser selection is not the pinned DuckDB structured-ELT implementation")
+	}
+	input, err := a.Store.ResolveParserInput(ctx, req, selection)
+	if err != nil {
+		return proffer.StageResult{}, fmt.Errorf("resolve structured-ELT input: %w", err)
+	}
+	if err := validateResolvedInput(req, selection, input); err != nil {
+		return proffer.StageResult{}, err
+	}
+	writer, err := a.Store.OpenParserBundleWriter(ctx, req, selection, input)
+	if err != nil {
+		return proffer.StageResult{}, fmt.Errorf("open structured-ELT bundle writer: %w", err)
+	}
+	finalized := false
+	defer func() {
+		if !finalized {
+			_ = writer.Abort(context.WithoutCancel(ctx))
+		}
+	}()
+	if err := writer.Begin(ctx, parser.BundleHeader{
+		ContractVersion: parser.ContractVersion, ParserID: selection.ParserID,
+		ParserVersion: selection.ParserVersion, SourceVersionRef: string(req.SourceVersionRef),
+		FormatID: parser.FormatID(req.DeclaredFormat),
+	}); err != nil {
+		return proffer.StageResult{}, fmt.Errorf("begin structured-ELT bundle: %w", err)
+	}
+	rows, err := a.Rows.OpenStructuredELTRows(ctx, req, format)
+	if err != nil {
+		return proffer.StageResult{}, fmt.Errorf("open DuckDB structured rows: %w", err)
+	}
+	defer rows.Close()
+
+	var ordinal uint64
+	var accounting parser.BundleAccounting
+	for {
+		row, nextErr := rows.Next(ctx)
+		if errors.Is(nextErr, io.EOF) {
+			break
+		}
+		if nextErr != nil {
+			return proffer.StageResult{}, fmt.Errorf("read DuckDB structured row %d: %w", ordinal, nextErr)
+		}
+		if err := row.validate(templateID); err != nil {
+			return proffer.StageResult{}, fmt.Errorf("DuckDB structured row %d: %w", ordinal, err)
+		}
+		status := row.RecordStatus
+		if status == "" {
+			status = parser.StatusParsed
+		}
+		envelope := parser.RawRecordEnvelope{
+			RecordOrdinal: ordinal, RecordStatus: status, StatusReason: strings.TrimSpace(row.StatusReason),
+			StoredBytes:    &parser.StoredBytes{Bytes: append([]byte(nil), row.StoredBytes...)},
+			FormatID:       parser.FormatID(req.DeclaredFormat),
+			NativeFields:   append(json.RawMessage(nil), row.NativeFields...),
+			NativeMetadata: append(json.RawMessage(nil), row.NativeMetadata...),
+		}
+		if err := envelope.Validate(parser.FormatID(req.DeclaredFormat)); err != nil {
+			return proffer.StageResult{}, fmt.Errorf("validate DuckDB structured row %d: %w", ordinal, err)
+		}
+		if err := writer.Emit(ctx, envelope); err != nil {
+			return proffer.StageResult{}, fmt.Errorf("emit DuckDB structured row %d: %w", ordinal, err)
+		}
+		tallyStructuredELT(&accounting, envelope)
+		ordinal++
+	}
+	if ordinal == 0 {
+		return proffer.StageResult{}, errors.New("DuckDB structured extraction produced no records")
+	}
+	bundleResult, err := writer.Finalize(ctx, accounting)
+	if err != nil {
+		return proffer.StageResult{}, fmt.Errorf("finalize structured-ELT bundle: %w", err)
+	}
+	finalized = true
+	if strings.TrimSpace(bundleResult.BundleRef) == "" {
+		return proffer.StageResult{}, errors.New("structured-ELT bundle writer returned an empty reference")
+	}
+	resultRef, receiptRef, err := a.Store.PersistParserExecution(ctx, ParserExecutionSpec{
+		RequestID: req.RequestID, SourceVersionRef: req.SourceVersionRef,
+		ParserSelectionRef: selectionRef, ParserID: selection.ParserID,
+		ParserVersion: selection.ParserVersion, BundleRef: proffer.Ref(bundleResult.BundleRef),
+		Attempt: a.attempt(ctx),
+	})
+	if err != nil {
+		return proffer.StageResult{}, fmt.Errorf("persist structured-ELT execution: %w", err)
+	}
+	if resultRef == "" || receiptRef == "" {
+		return proffer.StageResult{}, errors.New("persisted structured-ELT execution lacks result or activity receipt reference")
+	}
+	return parserStageSuccess(stagegraph.ExecuteParser, resultRef, receiptRef), nil
+}
+
+func tallyStructuredELT(accounting *parser.BundleAccounting, record parser.RawRecordEnvelope) {
+	accounting.Attachments += uint64(len(record.Attachments))
+	switch record.RecordStatus {
+	case parser.StatusParsed:
+		accounting.Emitted++
+	case parser.StatusRejected:
+		accounting.Rejected++
+	case parser.StatusMalformed:
+		accounting.Malformed++
+	case parser.StatusUnknown:
+		accounting.Unknown++
+	case parser.StatusUnparsed:
+		accounting.Unparsed++
+	}
 }

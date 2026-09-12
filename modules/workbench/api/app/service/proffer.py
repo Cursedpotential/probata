@@ -16,31 +16,30 @@ import httpx
 from pydantic import ValidationError
 
 from app.config import settings
-from app.repo.object_store_client import (
-    CASEBIBLE_SORTED_PREFIX,
-    list_casebible_sorted_objects,
+from app.service.matter_mode import (
+    MatterModeError,
+    bind_preview_mode,
+    configured_matter_id,
+    require_preview_mode,
+    require_scope,
 )
+from app.service.proffer_errors import ProfferError
+from app.service.proffer_sources import browse_sources  # noqa: F401
+from app.types.matter_mode import MatterMode
 from app.types.proffer import (
     ProfferDecisionRequest,
     ProfferDecisionActor,
     ProfferDecisionResponse,
+    ProfferHandlerSelectionDecisionRequest,
+    ProfferHandlerSelectionDecisionResponse,
     ProfferRepairDecisionRequest,
     ProfferRepairDecisionResponse,
     ProfferPreviewMessagesResponse,
     ProfferPreviewResponse,
     ProfferStartRequest,
     ProfferStartResponse,
-    ProfferSourceBrowserResponse,
-    ProfferSourceObject,
-    ProfferSourcePrefix,
+    ProfferUploadResponse,
 )
-
-
-class ProfferError(Exception):
-    def __init__(self, detail: str, status_code: int = 502):
-        self.detail = detail
-        self.status_code = status_code
-        super().__init__(detail)
 
 
 _SERVICE_TOKEN = re.compile(r"[A-Za-z0-9\-._~+/]+={0,}")
@@ -104,63 +103,45 @@ async def _request(method: str, path: str, **kwargs: Any) -> httpx.Response:
     return response
 
 
-async def start(request: ProfferStartRequest) -> ProfferStartResponse:
-    response = await _request("POST", "/reference-import/start", json=request.model_dump(mode="json"))
-    return _validated(
+def _mode_call(call, *args):
+    try:
+        return call(*args)
+    except MatterModeError as error:
+        raise ProfferError(error.detail, error.status_code) from None
+
+
+def _mode_payload(payload: Any, label: str, mode: MatterMode) -> dict[str, Any]:
+    """Add the BFF-only mode echo while rejecting contradictory upstream data."""
+    if not isinstance(payload, dict):
+        raise ProfferError(f"Proffer starter returned an invalid {label}", 502)
+    upstream_mode = payload.get("matter_mode")
+    if upstream_mode is not None and upstream_mode != mode:
+        raise ProfferError(f"Proffer starter returned {label} for a different matter mode", 502)
+    result = dict(payload)
+    result["matter_mode"] = mode
+    return result
+
+
+def _require_mode_configuration(mode: MatterMode) -> None:
+    _mode_call(configured_matter_id, mode)
+
+
+async def start(request: ProfferStartRequest, *, mode: MatterMode) -> ProfferStartResponse:
+    if request.matter_mode != mode:
+        raise ProfferError("matter_mode in the start body must match the mode query", 409)
+    _mode_call(require_scope, mode, request.matter_id, request.court_case_id)
+    response = await _request(
+        "POST",
+        "/reference-import/start",
+        json=request.model_dump(mode="json", exclude={"matter_mode"}),
+    )
+    result = _validated(
         ProfferStartResponse,
-        _json_payload(response, "start response"),
+        _mode_payload(_json_payload(response, "start response"), "start response", mode),
         "start response",
     )
-
-
-def browse_sources(
-    *, prefix: str = "", continuation_token: str | None = None, filter_text: str = "", page_size: int = 100
-) -> ProfferSourceBrowserResponse:
-    """Browse the fixed Case Bible Sorted bucket without exposing provider choices."""
-    normalized_prefix = prefix.strip()
-    if normalized_prefix.startswith("/") or "\\" in normalized_prefix or ".." in normalized_prefix.split("/"):
-        raise ProfferError("source prefix is outside the Case Bible Sorted root", 422)
-    normalized_filter = filter_text.strip().casefold()
-    try:
-        page = list_casebible_sorted_objects(
-            prefix=CASEBIBLE_SORTED_PREFIX + normalized_prefix,
-            continuation_token=continuation_token,
-            max_keys=page_size,
-        )
-    except RuntimeError as error:
-        raise ProfferError(str(error), 503) from error
-
-    prefixes = []
-    for row in page.get("CommonPrefixes", []):
-        child_prefix = str(row.get("Prefix", ""))
-        name = child_prefix.rstrip("/").rsplit("/", 1)[-1]
-        if child_prefix and (not normalized_filter or normalized_filter in name.casefold()):
-            prefixes.append(ProfferSourcePrefix(prefix=child_prefix, name=name))
-    objects = []
-    for row in page.get("Contents", []):
-        key = str(row.get("Key", ""))
-        name = key.rsplit("/", 1)[-1]
-        if not key or key.endswith("/") or (normalized_filter and normalized_filter not in key.casefold()):
-            continue
-        objects.append(
-            ProfferSourceObject(
-                key=key,
-                name=name,
-                byte_length=int(row.get("Size", 0)),
-                last_modified=row.get("LastModified"),
-                etag=str(row["ETag"]).strip('"') if row.get("ETag") else None,
-            )
-        )
-    return ProfferSourceBrowserResponse(
-        prefix=normalized_prefix,
-        filter=filter_text.strip(),
-        filter_applied=bool(normalized_filter),
-        page_size=page_size,
-        is_truncated=bool(page.get("IsTruncated", False)),
-        continuation_token=page.get("NextContinuationToken"),
-        prefixes=prefixes,
-        objects=objects,
-    )
+    _mode_call(bind_preview_mode, result.preview_handle, mode)
+    return result
 
 
 def _validated(model, payload: Any, label: str):
@@ -182,7 +163,10 @@ async def decide(
     preview_handle: str,
     request: ProfferDecisionRequest,
     actor: ProfferDecisionActor,
+    *,
+    mode: MatterMode,
 ) -> ProfferDecisionResponse:
+    _mode_call(require_preview_mode, preview_handle, mode)
     response = await _request(
         "POST",
         f"/reference-import/previews/{preview_handle}/decision",
@@ -194,12 +178,24 @@ async def decide(
     )
     result = _validated(
         ProfferDecisionResponse,
-        _json_payload(response, "decision response"),
+        _mode_payload(_json_payload(response, "decision response"), "decision response", mode),
         "decision response",
     )
     if result.preview_handle != preview_handle:
         raise ProfferError("Proffer decision response correlation failed", 502)
     return result
+
+
+async def decide_handler_selection(
+    preview_handle: str,
+    request: ProfferHandlerSelectionDecisionRequest,
+    actor: ProfferDecisionActor,
+    *,
+    mode: MatterMode,
+) -> ProfferHandlerSelectionDecisionResponse:
+    from app.service.proffer_handler_selection import decide_handler_selection as implementation
+
+    return await implementation(preview_handle, request, actor, mode=mode)
 
 
 def _repair_idempotency_key(
@@ -222,7 +218,10 @@ async def decide_repair(
     preview_handle: str,
     request: ProfferRepairDecisionRequest,
     actor: ProfferDecisionActor,
+    *,
+    mode: MatterMode,
 ) -> ProfferRepairDecisionResponse:
+    _mode_call(require_preview_mode, preview_handle, mode)
     response = await _request(
         "POST",
         f"/reference-import/previews/{preview_handle}/repair-decision",
@@ -235,7 +234,7 @@ async def decide_repair(
     )
     result = _validated(
         ProfferRepairDecisionResponse,
-        _json_payload(response, "repair decision response"),
+        _mode_payload(_json_payload(response, "repair decision response"), "repair decision response", mode),
         "repair decision response",
     )
     if result.preview_handle != preview_handle:
@@ -243,11 +242,12 @@ async def decide_repair(
     return result
 
 
-async def preview(preview_handle: str) -> ProfferPreviewResponse:
+async def preview(preview_handle: str, *, mode: MatterMode) -> ProfferPreviewResponse:
+    _mode_call(require_preview_mode, preview_handle, mode)
     response = await _request("GET", f"/reference-import/previews/{preview_handle}")
     result = _validated(
         ProfferPreviewResponse,
-        _json_payload(response, "preview snapshot"),
+        _mode_payload(_json_payload(response, "preview snapshot"), "preview snapshot", mode),
         "preview snapshot",
     )
     if result.preview_handle != preview_handle:
@@ -255,14 +255,17 @@ async def preview(preview_handle: str) -> ProfferPreviewResponse:
     return result
 
 
-async def preview_messages(preview_handle: str, *, cursor: str | None, limit: int) -> ProfferPreviewMessagesResponse:
+async def preview_messages(
+    preview_handle: str, *, mode: MatterMode, cursor: str | None, limit: int
+) -> ProfferPreviewMessagesResponse:
+    _mode_call(require_preview_mode, preview_handle, mode)
     params: dict[str, str | int] = {"limit": limit}
     if cursor:
         params["cursor"] = cursor
     response = await _request("GET", f"/reference-import/previews/{preview_handle}/messages", params=params)
     result = _validated(
         ProfferPreviewMessagesResponse,
-        _json_payload(response, "preview message page"),
+        _mode_payload(_json_payload(response, "preview message page"), "preview message page", mode),
         "preview message page",
     )
     if result.preview_handle != preview_handle:
@@ -270,20 +273,27 @@ async def preview_messages(preview_handle: str, *, cursor: str | None, limit: in
     return result
 
 
-async def open_preview_event_stream(preview_handle: str, *, last_event_id: int | None):
+async def open_preview_event_stream(preview_handle: str, *, mode: MatterMode, last_event_id: int | None):
     from app.service.proffer_streams import open_preview_event_stream as implementation
 
-    return await implementation(preview_handle, last_event_id=last_event_id)
+    return await implementation(preview_handle, mode=mode, last_event_id=last_event_id)
 
 
-async def validated_preview_events(response, *, preview_handle: str, last_event_id: int | None):
+async def validated_preview_events(response, *, preview_handle: str, mode: MatterMode, last_event_id: int | None):
     from app.service.proffer_streams import validated_preview_events as implementation
 
-    async for event in implementation(response, preview_handle=preview_handle, last_event_id=last_event_id):
+    async for event in implementation(response, preview_handle=preview_handle, mode=mode, last_event_id=last_event_id):
         yield event
 
 
-async def open_upload_stream(body, *, content_type: str | None, content_length: str | None):
+async def open_upload_stream(body, *, mode: MatterMode, content_type: str | None, content_length: str | None):
     from app.service.proffer_streams import open_upload_stream as implementation
 
+    _require_mode_configuration(mode)
     return await implementation(body, content_type=content_type, content_length=content_length)
+
+
+async def complete_upload_response(client, response, *, mode: MatterMode) -> ProfferUploadResponse:
+    from app.service.proffer_streams import complete_upload_response as implementation
+
+    return await implementation(client, response, mode=mode)

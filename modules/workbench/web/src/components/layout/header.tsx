@@ -14,6 +14,7 @@ import { useFixedCase } from "@/lib/fixed-case-context";
 import { navigationTitle } from "@/platform-ui/navigation";
 import { useCurrentPath } from "@/lib/router-compat";
 import { useTheme } from "@/components/layout/theme-provider";
+import { MatterModeSelector } from "@/components/intake/matter-mode-selector";
 
 export function Header() {
   const pathname = useCurrentPath();
@@ -47,6 +48,7 @@ export function Header() {
         )}
       </div>
       <div className="flex items-center gap-4 px-5">
+        <MatterModeSelector compact />
         <div className="hidden min-w-0 text-right lg:block">
           <strong className="block truncate text-xs">{pageTitle}</strong>
           <span className="flex items-center justify-end gap-1 text-[10px] text-[#9fe0b9]"><ShieldCheck className="h-3 w-3" /> Fixed scope</span>

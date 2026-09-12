@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     casebible_r2_config_path: str = "/run/secrets/casebible-r2.json"
     # Direct-tailnet Proffer starter boundary; blank values fail closed in the adapter.
     proffer_starter_url: str = ""
+    # Explicit TEST/REAL matter identities for the Proffer intake surface.
+    # Neither identity is discovered by title. Blank or malformed values fail
+    # the corresponding mode closed at the BFF boundary.
+    proffer_test_matter_id: str = "deadbeef-dead-beef-dead-beefdeadbeef"
+    proffer_real_matter_id: str = ""
+    proffer_test_court_case_id: str = "cafebabe-cafe-babe-cafe-babecafebabe"
+    proffer_real_court_case_id: str = ""
     # Non-secret location only. Read once per outbound request for rotation.
     proffer_service_token_file: str = "/run/secrets/proffer-service-token"
     # Separate runtime-read operator capability. Only the Workbench receives

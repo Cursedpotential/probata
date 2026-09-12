@@ -8,6 +8,7 @@ import { AlertTriangle, BriefcaseBusiness, Loader2, Scale } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KnowledgeBrowser } from "@/components/knowledge/knowledge-browser";
+import { useFixedCase } from "@/lib/fixed-case-context";
 import {
   ApiError,
   getCaseManagementCapabilities,
@@ -27,6 +28,11 @@ function errorText(error: unknown) {
 }
 
 export function MatterWorkspace() {
+  const { mode } = useFixedCase();
+  return <ModeScopedMatterWorkspace key={mode} mode={mode} />;
+}
+
+function ModeScopedMatterWorkspace({ mode }: { mode: "TEST" | "REAL" }) {
   const router = useAppNavigate();
   const searchParams = useBrowserSearchParams();
   const matterId = searchParams.get("matter_id")?.trim() || null;
@@ -41,7 +47,7 @@ export function MatterWorkspace() {
   useEffect(() => {
     let cancelled = false;
     const request = matterId
-      ? Promise.all([getMatter(matterId), getCaseManagementCapabilities()]).then(async ([detail, capability]) => ({
+      ? Promise.all([getMatter(matterId, mode), getCaseManagementCapabilities()]).then(async ([detail, capability]) => ({
           detail,
           capability,
           items: capability.advanced_evidence_available
@@ -49,7 +55,7 @@ export function MatterWorkspace() {
             : [],
           matters: [] as Matter[],
         }))
-      : listMatters().then((response) => ({
+      : listMatters(50, 0, mode).then((response) => ({
           detail: null,
           capability: null,
           items: [] as EvidenceItem[],
@@ -80,7 +86,7 @@ export function MatterWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [matterId]);
+  }, [matterId, mode]);
 
   if (loading) {
     return (

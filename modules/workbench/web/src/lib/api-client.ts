@@ -92,6 +92,9 @@ import type {
   ProfferSourceObject,
   ProfferHumanSourceAssertions,
   ProfferSourceContextReceipt,
+  ProfferHandlerSelectionDecisionRequest,
+  ProfferHandlerSelectionDecisionResponse,
+  MatterMode,
 } from "./shared/types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -553,8 +556,9 @@ export async function getKnowledgeContent(artifactId: string, caseId: string) {
 // Matter workspace (framework-neutral spine API, via Workbench proxy)
 // ---------------------------------------------------------------------------
 
-export async function listMatters(limit = 50, offset = 0) {
+export async function listMatters(limit = 50, offset = 0, mode?: MatterMode) {
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (mode) qs.set("mode", mode);
   return apiFetch<MatterListResponse>(`/api/matters?${qs.toString()}`);
 }
 
@@ -571,8 +575,11 @@ export async function createMatter(payload: {
   });
 }
 
-export async function getMatter(matterId: string) {
-  return apiFetch<MatterDetail>(`/api/matters/${encodeURIComponent(matterId)}`);
+export async function getMatter(matterId: string, mode?: MatterMode) {
+  const query = new URLSearchParams();
+  if (mode) query.set("mode", mode);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return apiFetch<MatterDetail>(`/api/matters/${encodeURIComponent(matterId)}${suffix}`);
 }
 
 export interface CaseManagementCapabilities {
@@ -589,8 +596,9 @@ export async function getCaseManagementCapabilities() {
 // proffer workflow (formerly Universal Import Workflow) — production acquisition and decision boundary
 // ---------------------------------------------------------------------------
 
-export async function uploadProfferSource(file: File) {
-  const response = await fetch(`${API_BASE}/api/proffer/upload`, {
+export async function uploadProfferSource(file: File, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
+  const response = await fetch(`${API_BASE}/api/proffer/upload?${query.toString()}`, {
     method: "POST",
     headers: {
       "Content-Type": file.type || "application/octet-stream",
@@ -609,33 +617,56 @@ export async function uploadProfferSource(file: File) {
     }
     throw new ApiError(detail, response.status);
   }
-  return (await response.json()) as ProfferUploadResponse;
+  const result = (await response.json()) as ProfferUploadResponse;
+  if (result.matter_mode !== mode) throw new ApiError("The upload response did not confirm the active TEST/REAL mode", 502);
+  return result;
 }
 
 export function listProfferSources(params: {
+  mode: MatterMode;
+  rootId?: string;
+  fileTypes?: string[];
   prefix?: string;
   continuationToken?: string;
   filter?: string;
   pageSize?: number;
-} = {}) {
+}) {
   const query = new URLSearchParams();
+  query.set("mode", params.mode);
+  query.set("filter_scope", "root");
+  if (params.rootId) query.set("root_id", params.rootId);
+  for (const fileType of params.fileTypes ?? []) query.append("file_type", fileType);
   if (params.prefix) query.set("prefix", params.prefix);
   if (params.continuationToken) query.set("continuation_token", params.continuationToken);
   if (params.filter) query.set("filter", params.filter);
   if (params.pageSize) query.set("page_size", String(params.pageSize));
   const suffix = query.size ? `?${query.toString()}` : "";
-  return apiFetch<ProfferSourceBrowserResponse>(`/api/proffer/sources${suffix}`);
+  return apiFetch<ProfferSourceBrowserResponse>(`/api/proffer/sources${suffix}`).then((response) => {
+    if (response.matter_mode !== params.mode) throw new ApiError("The source browser did not confirm the active TEST/REAL mode", 502);
+    if (params.rootId && response.active_root_id !== params.rootId) throw new ApiError("The source browser returned a different source location", 502);
+    if ((params.filter?.trim() ?? "") && (response.filter !== params.filter?.trim() || !response.filter_applied || response.filter_scope !== "root")) {
+      throw new ApiError("The source browser did not confirm a complete backing-source search", 502);
+    }
+    return response;
+  });
 }
 
-export function inspectProfferSource(source: ProfferSourceObject) {
-  return apiFetch<ProfferSourceInspection>("/api/proffer/source-inspection", {
+export function inspectProfferSource(source: ProfferSourceObject, mode: MatterMode, rootId: string) {
+  const query = new URLSearchParams({ mode, root_id: rootId });
+  return apiFetch<ProfferSourceInspection>(`/api/proffer/source-inspection?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       key: source.key,
+      source_ref: source.source_ref,
+      root_id: rootId,
       expected_byte_length: source.byte_length,
       expected_etag: source.etag ?? null,
     }),
+  }).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The source inspection did not confirm the active TEST/REAL mode", 502);
+    if (response.active_root_id !== rootId || response.source_ref !== source.source_ref) throw new ApiError("The source inspection did not confirm the selected R2 source location", 502);
+    return response;
   });
 }
 
@@ -655,65 +686,113 @@ export function createProfferSourceContext(payload: {
   supersedes_ref?: string | null;
   assertions: ProfferHumanSourceAssertions;
   change_reason: string;
+  matter_mode: MatterMode;
 }) {
-  return apiFetch<ProfferSourceContextReceipt>("/api/proffer/source-contexts", {
+  const query = new URLSearchParams({ mode: payload.matter_mode });
+  return apiFetch<ProfferSourceContextReceipt>(`/api/proffer/source-contexts?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  }).then((response) => {
+    if (response.matter_mode !== payload.matter_mode) throw new ApiError("The source-context receipt did not confirm the active TEST/REAL mode", 502);
+    return response;
   });
 }
 
 export function startProffer(payload: ProfferStartRequest) {
-  return apiFetch<ProfferStartResponse>("/api/proffer/start", {
+  const query = new URLSearchParams({ mode: payload.matter_mode });
+  return apiFetch<ProfferStartResponse>(`/api/proffer/start?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  }).then((response) => {
+    if (response.matter_mode !== payload.matter_mode) throw new ApiError("The started preview did not confirm the active TEST/REAL mode", 502);
+    return response;
   });
 }
 
-export function getProfferPreview(previewHandle: string, signal?: AbortSignal) {
-  return apiFetch<ProfferPreviewResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}`, { signal });
-}
-
-export function decideProfferRepair(previewHandle: string, payload: ProfferRepairDecisionRequest) {
-  return apiFetch<ProfferRepairDecisionResponse>(
-    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/repair-decision`,
+export function decideProfferHandler(
+  previewHandle: string,
+  mode: MatterMode,
+  payload: ProfferHandlerSelectionDecisionRequest,
+) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferHandlerSelectionDecisionResponse>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/handler-selection?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
-  );
+  ).then((response) => {
+    if (response.matter_mode !== mode || response.preview_handle !== previewHandle) {
+      throw new ApiError("The handler-selection decision did not confirm this mode and preview", 502);
+    }
+    return response;
+  });
+}
+
+export function getProfferPreview(previewHandle: string, mode: MatterMode, signal?: AbortSignal) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferPreviewResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}?${query.toString()}`, { signal }).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The preview did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
+}
+
+export function decideProfferRepair(previewHandle: string, mode: MatterMode, payload: ProfferRepairDecisionRequest) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferRepairDecisionResponse>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/repair-decision?${query.toString()}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  ).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The repair decision did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
 }
 
 export function decideProffer(
   previewHandle: string,
+  mode: MatterMode,
   payload: { approved: boolean; reason: string },
 ) {
-  return apiFetch<ProfferDecisionResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}/decision`, {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferDecisionResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}/decision?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  }).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The decision response did not confirm the active TEST/REAL mode", 502);
+    return response;
   });
 }
 
 export function getProfferPreviewMessages(
   previewHandle: string,
+  mode: MatterMode,
   cursor?: string,
   limit = 100,
   signal?: AbortSignal,
 ) {
-  const query = new URLSearchParams({ limit: String(limit) });
+  const query = new URLSearchParams({ limit: String(limit), mode });
   if (cursor) query.set("cursor", cursor);
   return apiFetch<ProfferPreviewMessagesResponse>(
     `/api/proffer/previews/${encodeURIComponent(previewHandle)}/messages?${query.toString()}`,
     { signal },
-  );
+  ).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The preview messages did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
 }
 
-export function createProfferPreviewEventSource(previewHandle: string) {
+export function createProfferPreviewEventSource(previewHandle: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return new EventSource(
-    `${API_BASE}/api/proffer/previews/${encodeURIComponent(previewHandle)}/events`,
+    `${API_BASE}/api/proffer/previews/${encodeURIComponent(previewHandle)}/events?${query.toString()}`,
     { withCredentials: true },
   );
 }

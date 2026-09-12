@@ -25,6 +25,14 @@ ALL_PROFFER_WORKFLOWS = tuple(sorted((ROOT / "deploy/docker/n8n/workflows/proffe
 
 REQUEST_FIELDS = {"request_id", "source_version_ref", "declared_format", "refs"}
 RESULT_FIELDS = {"stage", "status", "ref", "receipt_ref"}
+HANDLER_SELECTION_REFS = {
+    "handler_recommendation",
+    "handler_decision",
+    "handler_validation",
+    "detected_format",
+    "content_signature",
+    "handler_compatibility",
+}
 FORBIDDEN_PAYLOAD_TERMS = {
     "file_bytes",
     "raw_records",
@@ -183,6 +191,20 @@ def test_request_body_is_compact_references_only(path: Path, stage: str):
         re.search(rf"(?:\$json|input|body|payload)[^\n;]{{0,100}}{re.escape(term)}", input_code, re.I)
         for term in FORBIDDEN_PAYLOAD_TERMS
     )
+
+
+@pytest.mark.parametrize("path,stage", WORKFLOW_SPECS.items())
+def test_handler_selection_refs_are_exactly_validated_and_forwarded(path: Path, stage: str):
+    workflow = _load_workflow(path)
+    sequence, _, _ = _linear_nodes(workflow)
+    input_code = _code(sequence[1]["parameters"])
+
+    for reference in HANDLER_SELECTION_REFS:
+        assert reference in input_code, f"{stage} drops validated handler ref {reference}"
+    assert "allowedRefSets" in input_code
+    assert "refKeys.length===set.length" in input_code
+    assert "Object.fromEntries(requiredRefs.map" in input_code
+    assert "exact legacy set or the exact content-validated handler set" in input_code
 
 
 @pytest.mark.parametrize("path,stage", WORKFLOW_SPECS.items())

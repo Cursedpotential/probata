@@ -29,6 +29,7 @@ type WorkflowStarter interface {
 	// arriving.
 	Decide(ctx context.Context, workflowID string, decision proffer.PreviewDecision) error
 	DecideRepair(ctx context.Context, workflowID string, decision proffer.RepairDecision) error
+	DecideHandler(ctx context.Context, workflowID string, decision proffer.HandlerSelectionDecision) error
 	// Preview queries proffer.PreviewQueryName on a run. Like Decide, this goes
 	// through the Temporal server against durable workflow state, not any
 	// process-local cache.
@@ -100,6 +101,19 @@ func (s *temporalStarter) DecideRepair(ctx context.Context, workflowID string, d
 	}
 	if err := s.client.SignalWorkflow(ctx, workflowID, "", proffer.RepairDecisionSignalName, decision); err != nil {
 		return fmt.Errorf("temporal: signal repair decision: %w", err)
+	}
+	return nil
+}
+
+// DecideHandler transports only the durable actor-bound decision reference.
+// Handler identity, format, compatibility, and actor are deliberately reloaded
+// by the validation Activity rather than copied into Temporal history.
+func (s *temporalStarter) DecideHandler(ctx context.Context, workflowID string, decision proffer.HandlerSelectionDecision) error {
+	if strings.TrimSpace(workflowID) == "" || decision.DecisionRef == "" {
+		return errors.New("temporal: workflow_id and handler decision reference are required")
+	}
+	if err := s.client.SignalWorkflow(ctx, workflowID, "", proffer.HandlerSelectionDecisionSignalName, decision); err != nil {
+		return fmt.Errorf("temporal: signal handler selection decision: %w", err)
 	}
 	return nil
 }

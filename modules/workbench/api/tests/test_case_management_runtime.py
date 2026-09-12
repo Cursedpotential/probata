@@ -7,6 +7,7 @@ Byline amendment: Codex · GPT-5 · 2026-08-18 (third-party detail compatibility
 from __future__ import annotations
 
 import pytest
+from uuid import UUID
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -199,12 +200,14 @@ def test_workbench_rejects_spoofed_actor_fields():
 
 
 def test_spine_cross_matter_denial_is_preserved(monkeypatch):
+    monkeypatch.setattr(runtime, "configured_matter_id", lambda mode: UUID(MATTER_ID))
+    monkeypatch.setattr(runtime, "require_matter", lambda mode, matter_id: matter_id)
     monkeypatch.setattr(
         runtime.service,
         "get_matter",
         lambda matter_id: (_ for _ in ()).throw(SpineError("matter not found", 404)),
     )
-    response = _client().get(f"/api/matters/{MATTER_ID}")
+    response = _client().get(f"/api/matters/{MATTER_ID}?mode=TEST")
     assert response.status_code == 404
     assert response.json()["detail"] == "matter not found"
 

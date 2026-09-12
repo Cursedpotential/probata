@@ -25,6 +25,7 @@ type previewWorkflowStub struct {
 	started  proffer.WorkflowInput
 	decision proffer.PreviewDecision
 	repair   proffer.RepairDecision
+	handler  proffer.HandlerSelectionDecision
 	state    proffer.PreviewState
 	order    *[]string
 }
@@ -39,6 +40,13 @@ func (s *previewWorkflowStub) Decide(_ context.Context, _ string, decision proff
 }
 func (s *previewWorkflowStub) DecideRepair(_ context.Context, _ string, decision proffer.RepairDecision) error {
 	s.repair = decision
+	if s.order != nil {
+		*s.order = append(*s.order, "signal")
+	}
+	return nil
+}
+func (s *previewWorkflowStub) DecideHandler(_ context.Context, _ string, decision proffer.HandlerSelectionDecision) error {
+	s.handler = decision
 	if s.order != nil {
 		*s.order = append(*s.order, "signal")
 	}
@@ -68,6 +76,20 @@ type repairWriterStub struct {
 	order *[]string
 }
 
+type handlerDecisionWriterStub struct {
+	source, recommendation, actor, compatibility proffer.Ref
+	idempotency                                  string
+	order                                        *[]string
+}
+
+func (s *handlerDecisionWriterStub) PersistHandlerSelectionDecision(_ context.Context, source, recommendation, actor, compatibility proffer.Ref, idempotency string) (proffer.Ref, error) {
+	s.source, s.recommendation, s.actor, s.compatibility, s.idempotency = source, recommendation, actor, compatibility, idempotency
+	if s.order != nil {
+		*s.order = append(*s.order, "persist")
+	}
+	return "77777777-7777-7777-7777-777777777777", nil
+}
+
 type sourceContextValidatorStub struct{ err error }
 
 func (s sourceContextValidatorStub) ValidateSourceContext(context.Context, string, string, string, string, string) error {
@@ -95,8 +117,12 @@ func previewTestHandler(t *testing.T) (*PreviewHTTPHandler, *MemoryPreviewStore,
 	store := NewMemoryPreviewStore(&countingEntropy{next: 1})
 	workflow := &previewWorkflowStub{state: proffer.PreviewState{
 		Phase: proffer.PhaseAwaitingDecision, SelectRef: "selection-1", ParserOptionsRef: "options-1",
+		Checkpoints: []proffer.PreviewCheckpoint{
+			{Checkpoint: "raw_source_verification", Status: proffer.CheckpointRunning},
+			{Checkpoint: "parser_selection", Status: proffer.CheckpointCompleted, ReceiptRef: "receipt-selection"},
+		},
 	}}
-	handler, err := NewPreviewHTTPHandler(workflow, store, store, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t), sourceContextValidatorStub{})
+	handler, err := NewPreviewHTTPHandler(workflow, store, store, store, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t), sourceContextValidatorStub{})
 	require.NoError(t, err)
 	return handler, store, workflow
 }
@@ -222,6 +248,8 @@ func TestPreviewSurfaceCorrelatesPagesDecisionsAndReplay(t *testing.T) {
 
 	notReady := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle, nil)
 	require.Equal(t, http.StatusOK, notReady.Code)
+	require.Contains(t, notReady.Body.String(), `"checkpoint":"raw_source_verification","status":"running"`)
+	require.Contains(t, notReady.Body.String(), `"checkpoint":"parser_selection","status":"completed","receipt_ref":"receipt-selection"`)
 	putValidProjection(t, store, handle)
 
 	snapshot := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle, nil)
@@ -291,7 +319,7 @@ func TestRepairDecisionIsPersistedByProfferBeforeTemporalSignal(t *testing.T) {
 		RepairAssessmentRef: "44444444-4444-4444-4444-444444444444",
 	}}
 	writer := &repairWriterStub{order: &order}
-	handler, err := NewPreviewHTTPHandler(workflow, store, writer, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t))
+	handler, err := NewPreviewHTTPHandler(workflow, store, writer, store, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t))
 	require.NoError(t, err)
 	handle := startPreview(t, handler)
 	req := httptest.NewRequest(http.MethodPost, "/reference-import/previews/"+handle+"/repair-decision", strings.NewReader(`{"approved":true,"apply_repair":false,"tool_payload":{}}`))
@@ -308,11 +336,59 @@ func TestRepairDecisionIsPersistedByProfferBeforeTemporalSignal(t *testing.T) {
 	require.Equal(t, proffer.Ref("66666666-6666-6666-6666-666666666666"), workflow.repair.DecisionRef)
 }
 
+func TestHandlerSelectionIsCorrelatedPersistedBeforeReferenceOnlySignal(t *testing.T) {
+	store := NewMemoryPreviewStore(&countingEntropy{next: 1})
+	order := []string{}
+	compatibilityRef := proffer.Ref("55555555-5555-5555-5555-555555555555")
+	workflow := &previewWorkflowStub{order: &order, state: proffer.PreviewState{
+		Phase:                    proffer.PhaseAwaitingHandlerSelection,
+		SourceVersionRef:         "33333333-3333-3333-3333-333333333333",
+		HandlerRecommendationRef: "44444444-4444-4444-4444-444444444444",
+		RecommendedHandler: &proffer.HandlerCandidate{
+			HandlerID: "duckdb_structured_elt", HandlerVersion: "1.0.0", ExecutionPath: proffer.HandlerPathDuckDB,
+			CompatibilityRef: compatibilityRef, Reason: "content signature match",
+		},
+	}}
+	writer := &handlerDecisionWriterStub{order: &order}
+	handler, err := NewPreviewHTTPHandler(workflow, store, store, writer, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t))
+	require.NoError(t, err)
+	handle := startPreview(t, handler)
+	visible := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle, nil)
+	require.Equal(t, http.StatusOK, visible.Code, visible.Body.String())
+	require.Contains(t, visible.Body.String(), `"handler_recommendation_ref":"44444444-4444-4444-4444-444444444444"`)
+	require.Contains(t, visible.Body.String(), `"compatibility_ref":"55555555-5555-5555-5555-555555555555"`)
+	req := httptest.NewRequest(http.MethodPost, "/reference-import/previews/"+handle+"/handler-selection", strings.NewReader(`{"compatibility_ref":"55555555-5555-5555-5555-555555555555"}`))
+	req.RemoteAddr = "100.64.1.9:3456"
+	req.Header.Set("X-authentik-uid", "authentik-subject-1")
+	req.Header.Set("X-authentik-username", "operator")
+	req.Header.Set("Idempotency-Key", "handler-choice-1")
+	req.Header.Set("Authorization", "Bearer "+strings.Repeat("s", 32))
+	recorder := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(recorder, req)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Equal(t, []string{"persist", "signal"}, order)
+	require.Equal(t, proffer.Ref("authentik-subject-1"), writer.actor)
+	require.Equal(t, compatibilityRef, writer.compatibility)
+	require.Equal(t, "proffer:"+handle+":handler-choice-1", writer.idempotency)
+	require.Equal(t, proffer.Ref("77777777-7777-7777-7777-777777777777"), workflow.handler.DecisionRef)
+
+	badRequest := httptest.NewRequest(http.MethodPost, "/reference-import/previews/"+handle+"/handler-selection", strings.NewReader(`{"compatibility_ref":"66666666-6666-6666-6666-666666666666"}`))
+	badRequest.RemoteAddr = "100.64.1.9:3456"
+	badRequest.Header.Set("X-authentik-uid", "authentik-subject-1")
+	badRequest.Header.Set("X-authentik-username", "operator")
+	badRequest.Header.Set("Idempotency-Key", "handler-choice-2")
+	badRequest.Header.Set("Authorization", "Bearer "+strings.Repeat("s", 32))
+	bad := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(bad, badRequest)
+	require.Equal(t, http.StatusConflict, bad.Code, bad.Body.String())
+	require.Equal(t, []string{"persist", "signal"}, order, "mismatched candidate must not persist or signal")
+}
+
 func TestStartRetryReconcilesSameWorkflowAfterBindingFailure(t *testing.T) {
 	base := NewMemoryPreviewStore(&countingEntropy{next: 1})
 	store := &failOncePreviewStore{MemoryPreviewStore: base}
 	workflow := &previewWorkflowStub{}
-	handler, err := NewPreviewHTTPHandler(workflow, store, store, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t))
+	handler, err := NewPreviewHTTPHandler(workflow, store, store, store, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t))
 	require.NoError(t, err)
 	body := []byte(`{"request_id":"request-1","matter_id":"11111111-1111-1111-1111-111111111111","court_case_id":"22222222-2222-2222-2222-222222222222","source_ref":"upload://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","declared_format":"sms_xml","parser_options_ref":"options-1"}`)
 	require.Equal(t, http.StatusServiceUnavailable, servePreview(handler.Routes(), http.MethodPost, "/reference-import/start", body).Code)
@@ -337,7 +413,7 @@ func TestStartPassesOnlyTheDurableSourceContextReferenceIntoTemporal(t *testing.
 func TestStartRejectsSourceContextThatDoesNotOwnTheExactIntakeScope(t *testing.T) {
 	store := NewMemoryPreviewStore(&countingEntropy{next: 1})
 	workflow := &previewWorkflowStub{}
-	handler, err := NewPreviewHTTPHandler(workflow, store, store, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t), sourceContextValidatorStub{err: errors.New("scope mismatch")})
+	handler, err := NewPreviewHTTPHandler(workflow, store, store, store, bytes.Repeat([]byte("k"), 32), serviceTokenPath(t), sourceContextValidatorStub{err: errors.New("scope mismatch")})
 	require.NoError(t, err)
 	body := []byte(`{"request_id":"request-with-context","matter_id":"11111111-1111-1111-1111-111111111111","court_case_id":"22222222-2222-2222-2222-222222222222","source_ref":"upload://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","declared_format":"sms_xml","parser_options_ref":"options-1","source_context_ref":"33333333-3333-3333-3333-333333333333"}`)
 	recorder := servePreview(handler.Routes(), http.MethodPost, "/reference-import/start", body)
@@ -358,7 +434,7 @@ func TestIntegratedRejectedPreviewCanApproveWithoutLegacyRepairRefs(t *testing.T
 func TestServiceTokenRotationIsReloadedPerRequest(t *testing.T) {
 	store := NewMemoryPreviewStore(&countingEntropy{next: 1})
 	path := serviceTokenPath(t)
-	handler, err := NewPreviewHTTPHandler(&previewWorkflowStub{}, store, store, bytes.Repeat([]byte("k"), 32), path)
+	handler, err := NewPreviewHTTPHandler(&previewWorkflowStub{}, store, store, store, bytes.Repeat([]byte("k"), 32), path)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, []byte(strings.Repeat("r", 32)), 0600))
 	oldToken := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/unknown", nil)

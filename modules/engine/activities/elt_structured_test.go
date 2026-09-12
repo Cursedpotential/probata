@@ -3,133 +3,14 @@ package activities
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
+	"io"
 	"testing"
+
+	"github.com/Cursedpotential/probata/engine/parser"
+	"github.com/Cursedpotential/probata/engine/proffer"
+	"github.com/Cursedpotential/probata/engine/stagegraph"
 )
-
-type fakeStructuredELTRepository struct {
-	spec   StructuredELTSpec
-	result StructuredELTResult
-	err    error
-	calls  int
-}
-
-func (f *fakeStructuredELTRepository) ExecuteStructuredELT(_ context.Context, spec StructuredELTSpec) (StructuredELTResult, error) {
-	f.calls++
-	f.spec = spec
-	if f.err != nil {
-		return StructuredELTResult{}, f.err
-	}
-	return f.result, nil
-}
-
-func validELTSpec() StructuredELTSpec {
-	return StructuredELTSpec{
-		RequestID:   "req-1",
-		SourceID:    "8c8c2c9e-1c1a-4a1a-9b1a-1c1a4a1a9b1a",
-		IngestRunID: "3d3d2c9e-1c1a-4a1a-9b1a-1c1a4a1a9b1a",
-		SourceURL:   "https://example.invalid/data.csv",
-		Format:      StructuredELTFormatCSV,
-	}
-}
-
-func TestStructuredELTActivitiesRequiresRepository(t *testing.T) {
-	a := StructuredELTActivities{}
-	if _, err := a.ExecuteStructuredELT(context.Background(), validELTSpec()); err == nil {
-		t.Fatal("expected error when repository is nil")
-	}
-}
-
-func TestStructuredELTActivitiesValidatesSpec(t *testing.T) {
-	tests := []struct {
-		name string
-		spec StructuredELTSpec
-	}{
-		{"missing request id", StructuredELTSpec{SourceID: "s", IngestRunID: "i", SourceURL: "u", Format: StructuredELTFormatCSV}},
-		{"missing source id", StructuredELTSpec{RequestID: "r", IngestRunID: "i", SourceURL: "u", Format: StructuredELTFormatCSV}},
-		{"missing ingest run id", StructuredELTSpec{RequestID: "r", SourceID: "s", SourceURL: "u", Format: StructuredELTFormatCSV}},
-		{"missing source url", StructuredELTSpec{RequestID: "r", SourceID: "s", IngestRunID: "i", Format: StructuredELTFormatCSV}},
-		{"bad format", StructuredELTSpec{RequestID: "r", SourceID: "s", IngestRunID: "i", SourceURL: "u", Format: "xml"}},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			repo := &fakeStructuredELTRepository{}
-			a := StructuredELTActivities{Repository: repo}
-			if _, err := a.ExecuteStructuredELT(context.Background(), test.spec); err == nil {
-				t.Fatal("expected validation error")
-			}
-			if repo.calls != 0 {
-				t.Fatalf("repository should not be called on validation failure, got %d calls", repo.calls)
-			}
-		})
-	}
-}
-
-func TestStructuredELTActivitiesSuccessReturnsResult(t *testing.T) {
-	repo := &fakeStructuredELTRepository{result: StructuredELTResult{RowsInserted: 32, SourceRows: 32}}
-	a := StructuredELTActivities{Repository: repo, Attempt: func(context.Context) int32 { return 2 }}
-	result, err := a.ExecuteStructuredELT(context.Background(), validELTSpec())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.RowsInserted != 32 || result.SourceRows != 32 {
-		t.Fatalf("unexpected result: %+v", result)
-	}
-	if repo.spec.Attempt != 2 {
-		t.Fatalf("attempt not threaded to repository spec: got %d", repo.spec.Attempt)
-	}
-}
-
-func TestStructuredELTActivitiesDefaultsAttemptToOne(t *testing.T) {
-	repo := &fakeStructuredELTRepository{result: StructuredELTResult{RowsInserted: 1, SourceRows: 1}}
-	a := StructuredELTActivities{Repository: repo}
-	if _, err := a.ExecuteStructuredELT(context.Background(), validELTSpec()); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if repo.spec.Attempt != 1 {
-		t.Fatalf("expected default attempt 1, got %d", repo.spec.Attempt)
-	}
-}
-
-func TestStructuredELTActivitiesPropagatesRepositoryError(t *testing.T) {
-	repo := &fakeStructuredELTRepository{err: errors.New("boom")}
-	a := StructuredELTActivities{Repository: repo}
-	if _, err := a.ExecuteStructuredELT(context.Background(), validELTSpec()); err == nil {
-		t.Fatal("expected repository error to propagate")
-	}
-}
-
-func TestStructuredELTActivitiesFailsClosedOnCoverageMismatch(t *testing.T) {
-	repo := &fakeStructuredELTRepository{result: StructuredELTResult{RowsInserted: 31, SourceRows: 32}}
-	a := StructuredELTActivities{Repository: repo}
-	result, err := a.ExecuteStructuredELT(context.Background(), validELTSpec())
-	if err == nil {
-		t.Fatal("expected coverage mismatch error")
-	}
-	if result != (StructuredELTResult{}) {
-		t.Fatalf("expected zero-value result on mismatch, got %+v", result)
-	}
-}
-
-func TestStructuredELTActivitiesSkippedReplayStillReconciles(t *testing.T) {
-	repo := &fakeStructuredELTRepository{result: StructuredELTResult{RowsInserted: 32, SourceRows: 32, Skipped: true}}
-	a := StructuredELTActivities{Repository: repo}
-	result, err := a.ExecuteStructuredELT(context.Background(), validELTSpec())
-	if err != nil {
-		t.Fatalf("unexpected error on matching skipped replay: %v", err)
-	}
-	if !result.Skipped {
-		t.Fatal("expected Skipped to be threaded through")
-	}
-}
-
-func TestStructuredELTActivitiesSkippedReplayStillFailsOnMismatch(t *testing.T) {
-	repo := &fakeStructuredELTRepository{result: StructuredELTResult{RowsInserted: 30, SourceRows: 32, Skipped: true}}
-	a := StructuredELTActivities{Repository: repo}
-	if _, err := a.ExecuteStructuredELT(context.Background(), validELTSpec()); err == nil {
-		t.Fatal("expected coverage mismatch to be reported even on an idempotent replay")
-	}
-}
 
 func TestStructuredELTFormatConstants(t *testing.T) {
 	if StructuredELTFormatCSV != "csv" {
@@ -137,5 +18,205 @@ func TestStructuredELTFormatConstants(t *testing.T) {
 	}
 	if StructuredELTFormatNDJSON != "ndjson" {
 		t.Fatalf("ndjson format constant changed value: %q", StructuredELTFormatNDJSON)
+	}
+}
+
+type fakeStructuredELTRowReader struct {
+	rows  []StructuredELTRow
+	index int
+}
+
+func (r *fakeStructuredELTRowReader) Next(context.Context) (StructuredELTRow, error) {
+	if r.index >= len(r.rows) {
+		return StructuredELTRow{}, io.EOF
+	}
+	row := r.rows[r.index]
+	r.index++
+	return row, nil
+}
+
+func (*fakeStructuredELTRowReader) Close() error { return nil }
+
+type fakeStructuredELTRowRepository struct {
+	req    proffer.StageRequest
+	format StructuredELTFormat
+	reader StructuredELTRowReader
+	err    error
+}
+
+func (r *fakeStructuredELTRowRepository) OpenStructuredELTRows(_ context.Context, req proffer.StageRequest, format StructuredELTFormat) (StructuredELTRowReader, error) {
+	r.req, r.format = req, format
+	if r.err != nil {
+		return nil, r.err
+	}
+	return r.reader, nil
+}
+
+func structuredELTStageFixture() (proffer.StageRequest, *runtimeStore, *runtimeBundleWriter) {
+	req := proffer.StageRequest{
+		RequestID: "workflow:elt", SourceVersionRef: "source:elt", DeclaredFormat: "smsbackuprestore_xml",
+		Refs: map[string]proffer.Ref{
+			"parser_selection":       "selection:elt",
+			"original":               "original:elt",
+			"handler_recommendation": "recommendation:elt",
+			"handler_decision":       "decision:elt",
+			"handler_validation":     "validation:elt",
+			"detected_format":        "format:elt",
+			"content_signature":      "signature:elt",
+			"handler_compatibility":  "compatibility:elt",
+		},
+	}
+	writer := &runtimeBundleWriter{}
+	store := &runtimeStore{
+		selection: PersistedParserSelection{
+			SourceVersionRef: req.SourceVersionRef, DeclaredFormat: parser.FormatID(req.DeclaredFormat),
+			ParserID: "duckdb_structured_elt", ParserVersion: "1.0.0",
+		},
+		input: parser.ParserInput{
+			ContractVersion: parser.ContractVersion, SourceVersionRef: string(req.SourceVersionRef),
+			DeclaredFormat: parser.FormatID(req.DeclaredFormat),
+			FileOrMember: parser.Locator{Type: parser.LocatorWholeObject, ObjectRef: parser.ObjectRef{
+				StorageClass: "immutable_object_store", URI: "s3://nexus/test/sms.xml",
+			}},
+		},
+		writer: writer,
+	}
+	return req, store, writer
+}
+
+func TestSelectStructuredELTRequiresDurableContentDecision(t *testing.T) {
+	req, store, _ := structuredELTStageFixture()
+	delete(req.Refs, "content_signature")
+	if _, err := (StructuredELTActivities{Store: store}).SelectStructuredELT(context.Background(), req); err == nil {
+		t.Fatal("expected selection without content signature to fail closed")
+	}
+	if store.selectionSpec.ParserID != "" {
+		t.Fatalf("selection was persisted without content validation: %+v", store.selectionSpec)
+	}
+}
+
+func TestExecuteStructuredELTRequiresDurableHandlerValidation(t *testing.T) {
+	req, store, writer := structuredELTStageFixture()
+	delete(req.Refs, "handler_validation")
+	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{}}
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+		t.Fatal("expected execution without handler validation to fail closed")
+	}
+	if writer.records != 0 || store.persistExecCalls != 0 {
+		t.Fatalf("unvalidated handler wrote output: records=%d receipt_calls=%d", writer.records, store.persistExecCalls)
+	}
+}
+
+func TestSelectStructuredELTPinsDuckDBIdentity(t *testing.T) {
+	req, store, _ := structuredELTStageFixture()
+	result, err := (StructuredELTActivities{Store: store, Attempt: func(context.Context) int32 { return 4 }}).SelectStructuredELT(context.Background(), req)
+	if err != nil {
+		t.Fatalf("SelectStructuredELT() error = %v", err)
+	}
+	if result.Stage != stagegraph.SelectParser || result.Status != proffer.StatusSuccess || result.Ref != "selection:1" || result.ReceiptRef != "receipt:selection" {
+		t.Fatalf("unexpected stage result: %+v", result)
+	}
+	if store.selectionSpec.ParserID != StructuredELTParserID || store.selectionSpec.ParserVersion != StructuredELTParserVersion || store.selectionSpec.Attempt != 4 {
+		t.Fatalf("selection was not pinned to DuckDB: %+v", store.selectionSpec)
+	}
+}
+
+func TestExecuteStructuredELTEmitsStandardBundleAndParserReceipt(t *testing.T) {
+	req, store, writer := structuredELTStageFixture()
+	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{rows: []StructuredELTRow{
+		{StoredBytes: []byte(`{"address":"+1555","body":"one"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"one"}`), NativeMetadata: json.RawMessage(`{"duckdb_template":"sms_xml_v1"}`)},
+		{StoredBytes: []byte(`{"address":"+1555","body":"two"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"two"}`), NativeMetadata: json.RawMessage(`{"duckdb_template":"sms_xml_v1"}`)},
+	}}}
+	result, err := (StructuredELTActivities{Rows: repo, Store: store, Attempt: func(context.Context) int32 { return 3 }}).ExecuteStructuredELT(context.Background(), req)
+	if err != nil {
+		t.Fatalf("ExecuteStructuredELT() error = %v", err)
+	}
+	if result.Stage != stagegraph.ExecuteParser || result.Status != proffer.StatusSuccess || result.Ref != "execution:1" || result.ReceiptRef != "receipt:execution" {
+		t.Fatalf("unexpected stage result: %+v", result)
+	}
+	if repo.format != StructuredELTFormatSMSXML || repo.req.RequestID != req.RequestID {
+		t.Fatalf("repository received format=%q request=%+v", repo.format, repo.req)
+	}
+	if writer.records != 2 || writer.finalizes != 1 || writer.aborts != 0 {
+		t.Fatalf("bundle writer records=%d finalizes=%d aborts=%d", writer.records, writer.finalizes, writer.aborts)
+	}
+	if writer.header.FormatID != parser.FormatID(req.DeclaredFormat) || writer.header.ParserID != "duckdb_structured_elt" {
+		t.Fatalf("unexpected bundle header: %+v", writer.header)
+	}
+	if store.executionSpec.BundleRef != "bundle:staged" || store.executionSpec.Attempt != 3 || store.persistExecCalls != 1 {
+		t.Fatalf("unexpected parser execution receipt spec: %+v calls=%d", store.executionSpec, store.persistExecCalls)
+	}
+}
+
+func TestExecuteStructuredELTEmptyQueryFailsBeforeReceiptAndAbortsBundle(t *testing.T) {
+	req, store, writer := structuredELTStageFixture()
+	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{}}
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+		t.Fatal("expected empty DuckDB extraction to fail")
+	}
+	if writer.aborts != 1 || writer.finalizes != 0 || store.persistExecCalls != 0 {
+		t.Fatalf("writer aborts=%d finalizes=%d receipt calls=%d", writer.aborts, writer.finalizes, store.persistExecCalls)
+	}
+}
+
+func TestExecuteStructuredELTRejectsTemplateMismatch(t *testing.T) {
+	req, store, writer := structuredELTStageFixture()
+	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{rows: []StructuredELTRow{
+		{StoredBytes: []byte(`{"body":"one"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"one"}`), NativeMetadata: json.RawMessage(`{"duckdb_template":"calls_xml_v1"}`)},
+	}}}
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+		t.Fatal("expected mismatched DuckDB template to fail closed")
+	}
+	if writer.records != 0 || writer.finalizes != 0 || writer.aborts != 1 || store.persistExecCalls != 0 {
+		t.Fatalf("template mismatch wrote output: records=%d finalizes=%d aborts=%d receipt_calls=%d", writer.records, writer.finalizes, writer.aborts, store.persistExecCalls)
+	}
+}
+
+func TestExecuteStructuredELTRejectsDecoderSelection(t *testing.T) {
+	req, store, writer := structuredELTStageFixture()
+	store.selection.ParserID = "sbv_sms_xml_backup"
+	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{rows: []StructuredELTRow{
+		{StoredBytes: []byte(`{"body":"one"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"one"}`), NativeMetadata: json.RawMessage(`{}`)},
+	}}}
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+		t.Fatal("expected decoder selection to fail closed")
+	}
+	if writer.records != 0 || store.persistExecCalls != 0 {
+		t.Fatalf("decoder selection wrote ELT output: records=%d receipt_calls=%d", writer.records, store.persistExecCalls)
+	}
+}
+
+func TestStructuredELTFormatForDeclaredFormat(t *testing.T) {
+	tests := map[string]StructuredELTFormat{
+		"smsbackuprestore_xml":  StructuredELTFormatSMSXML,
+		"chatgpt_official_json": StructuredELTFormatChatGPTJSON,
+		"messages_transcript":   StructuredELTFormatIMessageText,
+	}
+	for declared, want := range tests {
+		got, err := StructuredELTFormatForDeclaredFormat(declared)
+		if err != nil || got != want {
+			t.Fatalf("StructuredELTFormatForDeclaredFormat(%q) = %q, %v; want %q", declared, got, err, want)
+		}
+	}
+	for _, unsupported := range []string{"pdf", "sms_export_xml", "callsbackuprestore_xml", "imessage_txt"} {
+		if _, err := StructuredELTFormatForDeclaredFormat(unsupported); err == nil {
+			t.Fatalf("expected uncovered format %q to fail closed", unsupported)
+		}
+	}
+}
+
+func TestStructuredELTTemplateForFormat(t *testing.T) {
+	tests := map[StructuredELTFormat]string{
+		StructuredELTFormatCSV:          "csv_v1",
+		StructuredELTFormatNDJSON:       "ndjson_v1",
+		StructuredELTFormatSMSXML:       "sms_xml_v1",
+		StructuredELTFormatChatGPTJSON:  "chatgpt_json_array_v1",
+		StructuredELTFormatIMessageText: "imessage_text_v1",
+	}
+	for format, want := range tests {
+		got, err := StructuredELTTemplateForFormat(format)
+		if err != nil || got != want {
+			t.Fatalf("StructuredELTTemplateForFormat(%q) = %q, %v; want %q", format, got, err, want)
+		}
 	}
 }

@@ -16,6 +16,8 @@ test("SBV preview is native to the Workbench shell and platform contracts", () =
   assert.match(preview, /getProfferPreviewMessages/);
   assert.match(preview, /createProfferPreviewEventSource/);
   assert.match(viewer, /PostgreSQL remains canonical/);
+  assert.match(preview, /data-testid="back-to-proffer-intake" href="\/intake"/);
+  assert.doesNotMatch(preview, /kimi|moonshot|href="https?:\/\//i);
 });
 
 test("SBV preview does not revive legacy storage, auth, or ingest APIs", () => {

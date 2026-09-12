@@ -263,6 +263,21 @@ func TestCallStageRejectsMissingRequiredRefs(t *testing.T) {
 	}
 }
 
+func TestOutboundRequestAllowsOnlyBoundedHandlerDecisionRefs(t *testing.T) {
+	route := stageRoutes(Config{})[stagegraph.SelectParser]
+	req := selectRequest()
+	for _, name := range handlerDecisionRefNames() {
+		req.Refs[name] = proffer.Ref(name + "-ref")
+	}
+	if err := validateOutboundRequest(route, req); err != nil {
+		t.Fatalf("validateOutboundRequest() rejected durable handler refs: %v", err)
+	}
+	req.Refs["browser_handler_hint"] = "untrusted"
+	if err := validateOutboundRequest(route, req); err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("validateOutboundRequest() error = %v, want unsupported extra ref", err)
+	}
+}
+
 func TestCallStageFailsClosedOnNon2xx(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
