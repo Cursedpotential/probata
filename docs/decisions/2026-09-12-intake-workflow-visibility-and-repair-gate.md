@@ -35,7 +35,7 @@ The product-level unit is an **Ingest Operation**, not an isolated source row, b
 
 `source version -> ingest plan -> workflow/run -> service executions -> human decisions -> derived outputs -> receipts`
 
-PostgreSQL is authoritative for this graph. n8n composes the visible ingest plan and its eligible branches. Temporal owns durable execution and waits. Workbench projects the operation and sends authenticated owner decisions. Tool/runtime services execute only the selected bounded steps and return provenance-bearing results.
+PostgreSQL is authoritative for the transactional operation ledger and custody receipts: stable identities and foreign-key relationships must commit atomically with decisions. It is not a replacement graph engine. SurrealDB receives the governed temporal/source-lineage projection, and Neo4j may receive the traversal-heavy operational/dependency projection within its assigned domain. Those projections are rebuilt through an outbox/projection boundary; owner decisions are never dual-written independently into multiple databases. n8n composes the visible ingest plan and its eligible branches. Temporal owns durable execution and waits. Workbench projects the operation and sends authenticated owner decisions. Tool/runtime services execute only the selected bounded steps and return provenance-bearing results.
 
 For an image, the plan must distinguish integrity assessment from extraction. A clean image continues past repair assessment, then exposes only capabilities that are registered and ready, such as preserve plus metadata, OCR, vision analysis, or OCR plus vision. The recommended route is explicit, alternatives are visible, and owner selection or override is durably receipted.
 
