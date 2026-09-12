@@ -117,7 +117,7 @@ rebuild)
     docker exec $C psql -U ai -d platform -At -F '|' \
       -c \"select 'tables_total', count(*) from pg_tables where schemaname not in ('pg_catalog','information_schema')\" \
       -c \"select 'proffer_tables', count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='context' and c.relname like 'proffer%' and c.relkind='r'\" \
-      -c \"select 'uiw_named_objects', (select count(*) from pg_class where relname like '%uiw%')+(select count(*) from pg_constraint where conname like '%uiw%')\" \
+      -c \"select 'retired_proffer_named_objects', (select count(*) from pg_class where relname like '%uiw%')+(select count(*) from pg_constraint where conname like '%uiw%') /* (formerly UIW) */\" \
       -c \"select 'fks_leaving_reference', count(*) from pg_constraint where contype='f' and conrelid::regclass::text like 'reference.%' and confrelid::regclass::text not like 'reference.%'\" \
       -c \"select 'analysis_human_label_tables', count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='analysis' and c.relname like 'human_label%'\" \
       -c \"select 'raw_content_canon_defaults', string_agg(distinct column_default, ' / ') from information_schema.columns where table_schema='raw' and column_name='content_canon'\""

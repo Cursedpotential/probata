@@ -23,7 +23,7 @@ def _snapshot() -> str:
 def test_snapshot_has_the_ruled_shape() -> None:
     sql = _snapshot()
     assert "CREATE TABLE context.proffer_preview_binding" in sql
-    assert "uiw_" not in sql, "uiw names must not reappear (D-140)"
+    assert "uiw_" not in sql, "legacy prefix must not reappear (formerly UIW; D-140)"
     # word-bounded: ai.agno_approvals is a table that legitimately survives; the agno_app ROLE is what must be gone
     assert not re.search(r"\bagno_app\b", sql), "agno_app role is dead (owner 2026-09-06)"
     assert "CREATE TABLE reference.human_label (" in sql and "analysis.human_label" not in sql
