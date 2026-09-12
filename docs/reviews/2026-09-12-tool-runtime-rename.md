@@ -64,5 +64,15 @@ The rename carries forward the orphaned runtime-hardening changes rather than ov
 
 The first branch pipeline's Go job passed. Its Python job stopped at a pre-existing Ruff format
 gate in three `origin/main` files before lint/tests/naming could run. Mechanical-only formatting
-is isolated in follow-up commit `d8b0cd1`; the branch must be green before it is fast-forwarded
-to `main` and the Coolify record is returned from the proof branch to `main`.
+is isolated in follow-up commit `d8b0cd1`, and two deliberate retired-name absence checks were
+annotated in `61c5478` so the naming gate reports zero hits.
+
+The clean rerun (`34702262280`) passed formatting, Ruff lint, mypy (180 source files), and the
+full Go build/vet/test job. It then stopped in the repository's pre-existing documentation-path
+and ADR/D-reference resolution gate, before the general Python suite or naming step. The same
+Validate workflow was already red on `origin/main` (`34483170186`) before this rename. The open
+baseline includes many unrelated retired paths and unresolved decision references and is not
+silenced or broadly rewritten in this runtime lane. The focused 63-test runtime suite and the
+live runtime proofs above remain the named acceptance evidence. A local attempt at the entire
+Python suite was also non-authoritative because this worktree lacks optional test dependencies
+and historical SQL files; its collection errors are not reported as runtime test failures.
