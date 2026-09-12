@@ -28,3 +28,15 @@ The governing rule is:
 The Intake route again mounts the filterable source inventory and Runs table. The selected-source tabs remain mounted during repair review, the original-source choice is labeled as an owner override, and common image extensions are classified as `image` rather than `unknown_binary`.
 
 A complete Proffer queue remains required so every preview handle and durable wait can be reopened after navigation or refresh. Browser component state is not an acceptable registry.
+
+## Unified ingest operation
+
+The product-level unit is an **Ingest Operation**, not an isolated source row, browser wizard, Temporal handle, n8n execution, or service call. One stable operation identity must join:
+
+`source version -> ingest plan -> workflow/run -> service executions -> human decisions -> derived outputs -> receipts`
+
+PostgreSQL is authoritative for this graph. n8n composes the visible ingest plan and its eligible branches. Temporal owns durable execution and waits. Workbench projects the operation and sends authenticated owner decisions. Tool/runtime services execute only the selected bounded steps and return provenance-bearing results.
+
+For an image, the plan must distinguish integrity assessment from extraction. A clean image continues past repair assessment, then exposes only capabilities that are registered and ready, such as preserve plus metadata, OCR, vision analysis, or OCR plus vision. The recommended route is explicit, alternatives are visible, and owner selection or override is durably receipted.
+
+Every operation must remain reopenable and show source identity, current stage, responsible service, eligible and selected routes, waits, errors, decisions, outputs, and receipts. Submission returns control to the operator; backgrounding is normal. Hold/cancel/retry are authenticated durable commands, not browser-only state changes.
