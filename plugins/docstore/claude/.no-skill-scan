@@ -1,0 +1,15 @@
+Do not import anything under this tree as a standalone skill.
+
+These SKILL.md files belong to the `docstore` PLUGIN. Claude Code loads them
+through the plugin (namespaced `docstore:<skill>`). Copying or symlinking them
+into .claude/skills/, ~/.claude/skills/ or ~/.agents/skills/ produces a DOUBLE
+LISTING: the same skill offered twice, once namespaced and once bare, with
+competing trigger descriptions.
+
+Layout:  plugins/docstore/claude/   <- Claude Code plugin (this one)
+         plugins/docstore/codex/    <- Codex variant (planned)
+
+The plugin is consumed via the symlink ~/.claude/local-plugins/plugins/docstore
+-> plugins/docstore/claude, registered in the casebible-local marketplace.
+
+Byline: Claude Code · Opus 5 (1M) · 2026-09-11
