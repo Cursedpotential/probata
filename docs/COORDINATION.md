@@ -582,7 +582,7 @@ Resume documents: `docs/MASTER-TODO-2026-08-18.md` (entire application) and
 
 | Lane | Ownership | State |
 |---|---|---|
-| `tool-runtime` in-place rename | `deploy/tool-runtime.yaml`, `deploy/docker/tool-runtime/**`, runtime client/config compatibility, current naming docs, targeted tests, and the existing Coolify application UUID `e1mshujml6bv8ldtoe8n7je0` | In progress — code and local verification first; deployment and live proof pending |
+| `tool-runtime` in-place rename | `deploy/tool-runtime.yaml`, `deploy/docker/tool-runtime/**`, runtime client/config compatibility, current naming docs, targeted tests, and the existing Coolify application UUID `e1mshujml6bv8ldtoe8n7je0` | Live on proof branch — same app is `running:healthy`; 43 tools, repair manifest, pinned Poppler profile, and SBV passed; branch CI rerun and `main` fast-forward remain |
 
 Boundary: preserve the orphaned Poppler/profile/read-root changes; do not create a second app;
 do not rename the separate `parser-runtime`; retain the old Docker DNS and ContextForge

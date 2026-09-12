@@ -66,7 +66,7 @@ jobs:
   go:
     # sbv build/test steps removed 2026-09-01: sbv lives at modules/forks/sbv,
     # now a proper git SUBMODULE of Cursedpotential/sbv-forensic (private),
-    # whose own CI builds the image the platform-tools Dockerfile consumes by
+    # whose own CI builds the image the tool-runtime Dockerfile consumes by
     # digest. Its Go CI lives there. The submodule checkout below exists only
     # because engine/go.mod replaces github.com/lowcarbdev/sbv with
     # ../forks/sbv — the engine cannot build without the sources present.

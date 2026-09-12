@@ -45,13 +45,24 @@ The rename carries forward the orphaned runtime-hardening changes rather than ov
 ## Source and verification
 
 - Source repository: `Cursedpotential/probata`
-- Delivery branch: `codex/tool-runtime-rename` (temporary deployment proof), then `main`
+- Delivery branch: `codex/tool-runtime-rename` (temporary deployment proof); `main` cutover
+  waits for the branch CI gate
 - Coolify server: `ovh-app` (`fmuao9enq3nxk8qw5hqjzzce`)
 - Application UUID: `e1mshujml6bv8ldtoe8n7je0`
-- Deployment status: **pending**
-- Live facade proof: **pending**
-- Live SBV proof: **pending**
-- Exact commit: **pending**
+- Runtime commit: `708c354067b265b24ed61820d3cc736b5338339d`
+- Coolify deployments: `v6bwub7tv2p40ougk2ju4ww8` finished at 2026-09-12 15:17:07 EDT;
+  duplicate crash-recovery deployment `o3ocbxl9f5uooadsv8vf50b9` finished at 15:20:42 EDT
+- Coolify application after both deployments: `probata-tool-runtime`, `running:healthy`, same UUID
+- `GET http://100.72.169.40:8090/health`: HTTP 200, registry `ok`, 43 tools
+- `POST /tools/repair.capabilities/run`: all required formats ready — XML, HTML, JSON, NDJSON,
+  CSV, PDF, and image
+- `POST /tools/engine.poppler-inspect/run`: ready profile `poppler-linux-amd64`, package
+  `22.12.0-2+deb12u3`, all checks passed
+- `GET /sbv/health`: proxy reports reachable; direct `http://100.72.169.40:8085/` returned HTTP 200
+- Local verification: 63 focused Python tests, full `modules/engine` Go suite, Ruff on changed
+  Python files, YAML parsing, and `git diff --check` all passed
 
-This receipt must be updated with the deployment UUID, final branch/commit, Coolify health, and
-live endpoint results before the rename is claimed complete.
+The first branch pipeline's Go job passed. Its Python job stopped at a pre-existing Ruff format
+gate in three `origin/main` files before lint/tests/naming could run. Mechanical-only formatting
+is isolated in follow-up commit `d8b0cd1`; the branch must be green before it is fast-forwarded
+to `main` and the Coolify record is returned from the proof branch to `main`.
