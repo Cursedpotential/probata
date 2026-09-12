@@ -45,8 +45,8 @@ The rename carries forward the orphaned runtime-hardening changes rather than ov
 ## Source and verification
 
 - Source repository: `Cursedpotential/probata`
-- Delivery branch: `codex/tool-runtime-rename` (temporary deployment proof); `main` cutover
-  waits for the branch CI gate
+- Delivery branch: `codex/tool-runtime-rename` for deployment proof; non-force fast-forwarded
+  to `main` after verification
 - Coolify server: `ovh-app` (`fmuao9enq3nxk8qw5hqjzzce`)
 - Application UUID: `e1mshujml6bv8ldtoe8n7je0`
 - Runtime commit: `708c354067b265b24ed61820d3cc736b5338339d`
@@ -76,3 +76,25 @@ silenced or broadly rewritten in this runtime lane. The focused 63-test runtime 
 live runtime proofs above remain the named acceptance evidence. A local attempt at the entire
 Python suite was also non-authoritative because this worktree lacks optional test dependencies
 and historical SQL files; its collection errors are not reported as runtime test failures.
+
+## Main and caller cutover
+
+- `origin/main` was verified unchanged at `0369db8`, then non-force fast-forwarded through the
+  rename/verification series. No unrelated commits from the owner's separate local `main` were
+  pushed.
+- The same Coolify runtime record now follows `Cursedpotential/probata`, branch `main`, manifest
+  `/deploy/tool-runtime.yaml`, and remains `running:healthy`.
+- Existing `tool-gateway` application `ws67wgw1qxdgxo956p2k1jvi` was repointed to the canonical
+  repository and `main`. Production and preview now have `TOOL_RUNTIME_BASE_URL`; the legacy
+  key remains for rollback compatibility.
+- Automatic gateway deployment `box2p4x6y4oftnr68k251r3g` finished on commit `3133146`; manual
+  duplicate `c3h83mxn00ob803us3p3ags0` was canceled before it started.
+- `GET https://tool-gateway.tilapia-skilift.ts.net/healthz` returned HTTP 200. An unauthenticated
+  `GET /tools` returned the expected HTTP 401, proving the surface remains fail-closed.
+
+The `main` push also triggered apps with broad or empty watch paths. `proffer-starter` finished
+successfully. `llm-probe` and `llm-probe-ui` attempted builds from their pre-rename repository
+alias and failed because their compose definitions reference missing `llm_probe/...` and
+`llm_probe_ui/...` Dockerfile paths. Their prior containers remained `running:healthy`; this
+lane did not change or redeploy them again. Their repository/watch-path repair is separate work,
+not concealed as part of the runtime rename.
