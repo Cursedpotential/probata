@@ -16,7 +16,10 @@
 # =============================================================================
 # AUTHENTIK IDENTITY PROVIDER -- standalone Coolify Docker Compose application
 #
-# Source state only: this manifest has not been deployed or verified live.
+# Deployed in Coolify on 2026-09-12. Containers are healthy, but the public
+# browser route is not end-to-end verified: first-owner setup and the
+# Workbench provider/application/outpost assignment are still required, and
+# public TCP 443 currently does not reach the host from an external client.
 # Coolify watch path: deploy/authentik.yaml
 #
 # Host preparation (once, before first deployment):
@@ -65,6 +68,12 @@ x-authentik-healthcheck: &authentik-healthcheck
   retries: 3
   start_period: 120s
 
+x-authentik-image: &authentik-image
+  build:
+    context: .
+    dockerfile: deploy/docker/authentik/Dockerfile
+  image: probata-authentik:2026.8.0
+
 services:
   authentik-postgres:
     image: docker.io/library/postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
@@ -89,7 +98,7 @@ services:
       - probata
 
   authentik-server:
-    image: ghcr.io/goauthentik/server:2026.8.0@sha256:7421753cfea67e89a6d295a1f0173ccea3866b33768c88dad90453b151cdcfd5
+    <<: *authentik-image
     container_name: authentik-server
     command: server
     restart: unless-stopped
@@ -121,7 +130,7 @@ services:
       - probata
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2026.8.0@sha256:7421753cfea67e89a6d295a1f0173ccea3866b33768c88dad90453b151cdcfd5
+    <<: *authentik-image
     container_name: authentik-worker
     command: worker
     restart: unless-stopped
