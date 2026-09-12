@@ -6,10 +6,14 @@ into .claude/skills/, ~/.claude/skills/ or ~/.agents/skills/ produces a DOUBLE
 LISTING: the same skill offered twice, once namespaced and once bare, with
 competing trigger descriptions.
 
-Layout:  plugins/docstore/claude/   <- Claude Code plugin (this one)
-         plugins/docstore/codex/    <- Codex variant (planned)
+Layout:  plugins/docstore/claude/   <- shared namespaced skills, commands and agents
+         plugins/docstore/control/  <- shared governed MCP control server
+         plugins/docstore/          <- explicit Claude/Codex plugin root
 
-The plugin is consumed via the symlink ~/.claude/local-plugins/plugins/docstore
--> plugins/docstore/claude, registered in the casebible-local marketplace.
+Claude consumes the slim package through its registered local marketplace.
+Codex consumes the root package explicitly as `probata-docstore@probata` via
+`plugins/.agents/plugins/marketplace.json`. The marker blocks only accidental
+bare-skill scanning; it does not disable explicit plugin loading.
 
 Byline: Claude Code · Opus 5 (1M) · 2026-09-11
+Byline amendment: Codex · GPT-5 · 2026-09-12 (document explicit Codex plugin loading)
