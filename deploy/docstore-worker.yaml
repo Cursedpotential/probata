@@ -12,7 +12,8 @@
 # Coolify scheduled task: python scripts/docstore/worker_sync.py (periodic resync, graph, health).
 # Coolify env: BIND_IP=100.91.190.107, SURREAL_DOCS_USER, SURREAL_DOCS_PASS, NVIDIA_API_KEY,
 #   VOYAGE_API_KEY, optional DOCSTORE_API_TOKEN. Never in this file.
-# API: http://100.91.190.107:8473 and https://docstore-api.tilapia-skilift.ts.net (svc:docstore-api).
+# API: http://100.91.190.107:8474 and https://docstore-api.tilapia-skilift.ts.net (svc:docstore-api).
+# Port 8473 belongs to the independent surreal-intake service and must not be reused.
 # HOST-PREP (once): install -d -m 0750 /data/probata/volumes/docstore-worker
 #                   install -d -m 0775 /data/probata/exchange/docstore-worker
 # =============================================================================
@@ -41,7 +42,7 @@ services:
       DOCSTORE_SYNC_LOCK: /data/state/sync.lock
       DOCSTORE_MAX_RSS_MB: "3000"
     ports:
-      - "${BIND_IP:-127.0.0.1}:8473:8000"   # http://100.91.190.107:8473 - tailnet-only
+      - "${BIND_IP:-127.0.0.1}:8474:8000"   # http://100.91.190.107:8474 - tailnet-only
     volumes:
       - /data/probata/volumes/docstore-worker:/data/state
       - /data/probata/exchange/docstore-worker:/exchange
