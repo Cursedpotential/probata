@@ -179,7 +179,9 @@ def _assert_timeline_schema_present(conn) -> None:
     Migrations were retired 2026-09-07; this replaces the old apply-0035-then-rollback rehearsal."""
     from sqlalchemy import text
 
-    n = conn.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'timeline'")).scalar_one()
+    n = conn.execute(
+        text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'timeline'")
+    ).scalar_one()
     assert n > 0, "timeline schema missing from the live database; rebuild from sql/bootstrap/schema_snapshot"
 
 

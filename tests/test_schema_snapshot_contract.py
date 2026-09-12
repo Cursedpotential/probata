@@ -15,7 +15,9 @@ def _snapshot() -> str:
     files = sorted(BOOTSTRAP.glob("schema_snapshot_*.sql"))
     assert files, "no schema snapshot under sql/bootstrap"
     # DDL only: the header comments narrate the old names on purpose (history), so drop `--` lines.
-    return "\n".join(line for line in files[-1].read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("--"))
+    return "\n".join(
+        line for line in files[-1].read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("--")
+    )
 
 
 def test_snapshot_has_the_ruled_shape() -> None:
@@ -25,13 +27,17 @@ def test_snapshot_has_the_ruled_shape() -> None:
     # word-bounded: ai.agno_approvals is a table that legitimately survives; the agno_app ROLE is what must be gone
     assert not re.search(r"\bagno_app\b", sql), "agno_app role is dead (owner 2026-09-06)"
     assert "CREATE TABLE reference.human_label (" in sql and "analysis.human_label" not in sql
-    assert "CREATE TABLE working.content_chunk (" in sql  # chunk spine (ADR-0053); normalized_record_chunk writer retired 2026-09-05
+    assert (
+        "CREATE TABLE working.content_chunk (" in sql
+    )  # chunk spine (ADR-0053); normalized_record_chunk writer retired 2026-09-05
     assert "CREATE TABLE raw.raw_sms" in sql
 
 
 def test_intake_tables_default_to_context_fingerprints_not_custody_tags() -> None:
     sql = _snapshot()
-    assert "DEFAULT 'h2-rawelement-v1'" not in sql, "intake tables must not default to a custody H-tag (D-124, D-149, D-152)"
+    assert "DEFAULT 'h2-rawelement-v1'" not in sql, (
+        "intake tables must not default to a custody H-tag (D-124, D-149, D-152)"
+    )
     assert sql.count("DEFAULT 'context-rawrecord-fingerprint-v1'") >= 6
 
 

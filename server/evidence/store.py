@@ -454,7 +454,6 @@ def store_record_batch(
         for index, r in enumerate(records)
     ]
 
-
     def _do_insert() -> None:
         with _get_engine().begin() as conn:
             conn.execute(
