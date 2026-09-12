@@ -75,7 +75,9 @@ services:
       POSTGRES_DB: authentik
       POSTGRES_PASSWORD_FILE: /run/secrets/authentik/postgres-password
     volumes:
-      - /data/probata/volumes/authentik/postgres:/var/lib/postgresql/data
+      # PostgreSQL 18+ requires the parent mount so its major-version-specific
+      # data directory remains below the mount boundary.
+      - /data/probata/volumes/authentik/postgres:/var/lib/postgresql
       - /data/probata/secrets/authentik/postgres-password:/run/secrets/authentik/postgres-password:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
