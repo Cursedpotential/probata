@@ -3,12 +3,12 @@
 # 10 read mirroring the hosted read-only MCP names + 4 write:
 # create_application, upsert_application_envs, delete_application,
 # check_port_collision). Python, official MCP SDK (FastMCP), streamable-HTTP
-# at /mcp (stateless). Code lives in ./docker/coolify-mcp (patched repo copy
+# at /mcp (stateless). Code lives in ./deploy/docker/coolify-mcp (patched repo copy
 # of the local stdio skill ~/.claude/skills/coolify-write/server.py).
 #
 # DEPLOY AS ITS OWN Coolify "Docker Compose" app `coolify-mcp` on ovh-app
 # (server fmuao9enq3nxk8qw5hqjzzce), repo Cursedpotential/probata (formerly mcp-platform-agno-mvp)
-# @ main, compose file /compose.coolify-mcp.yaml. Lane C owns this file —
+# @ main, compose file /deploy/coolify-mcp.yaml. Lane C owns this file —
 # do NOT fold into compose.exec.yaml.
 #
 # Env (set in the Coolify app — real values NEVER in git):
@@ -24,7 +24,7 @@
 
 services:
   coolify-mcp:
-    build: ./docker/coolify-mcp
+    build: ./deploy/docker/coolify-mcp
     container_name: coolify-mcp
     restart: unless-stopped
     environment:
