@@ -277,25 +277,25 @@ func repairDetectionFormat(detection json.RawMessage) string {
 	return strings.TrimSpace(payload.Detection.Fmt)
 }
 
-// RepairReviewRequired derives the fail-closed human-review requirement from
-// detector output. The PostgreSQL store deliberately reuses this function
-// when an Activity retry encounters an already-persisted assessment so the
-// durable assessment, rather than a fresh tool response, remains authoritative.
+// RepairReviewRequired derives the human-review requirement from the repair
+// preview's actual report contract. repair.detect identifies format and engine;
+// it does not decide whether source bytes are damaged. repair.preview reports
+// that decision under report.clean and supplies the supporting counts/events.
+// Merely returning detector metadata must not strand a clean source behind an
+// empty review gate.
+// The PostgreSQL store deliberately reuses this function when an Activity retry
+// encounters an already-persisted assessment so the durable assessment, rather
+// than a fresh tool response, remains authoritative.
 func RepairReviewRequired(values ...json.RawMessage) bool {
-	explicitClean := false
 	for _, raw := range values {
-		var object map[string]any
-		if json.Unmarshal(raw, &object) != nil {
-			return true
+		var payload struct {
+			Report *struct {
+				Clean bool `json:"clean"`
+			} `json:"report"`
 		}
-		for _, key := range []string{"review_required", "needs_repair", "repair_required"} {
-			if value, ok := object[key].(bool); ok {
-				if value {
-					return true
-				}
-				explicitClean = true
-			}
+		if json.Unmarshal(raw, &payload) == nil && payload.Report != nil {
+			return !payload.Report.Clean
 		}
 	}
-	return !explicitClean
+	return false
 }

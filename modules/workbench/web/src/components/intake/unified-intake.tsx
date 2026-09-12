@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   Check,
   ChevronRight,
+  ArrowLeft,
   FileText,
   FolderOpen,
   Loader2,
@@ -50,7 +51,7 @@ type IntakePhase = "choose" | "ready" | "starting" | "repair_review" | "review" 
 type PreviewTab = "source" | "metadata" | "parser";
 type OperatorTab = "intake" | "atomic_tools";
 
-const LOCAL_FILE_ACCEPT = ".md,.json,.docx,.html,.htm,.pdf";
+const LOCAL_FILE_ACCEPT = ".md,.json,.docx,.html,.htm,.pdf,.png,.jpg,.jpeg,.gif,.tif,.tiff,.bmp";
 
 const EMPTY_ASSERTIONS: ProfferHumanSourceAssertions = {
   source_class: "unknown",
@@ -81,6 +82,13 @@ function declaredFormat(source: { name: string }) {
     txt: "delimited_text",
     csv: "delimited_text",
     pdf: "pdf",
+    png: "image",
+    jpg: "image",
+    jpeg: "image",
+    gif: "image",
+    tif: "image",
+    tiff: "image",
+    bmp: "image",
     docx: "docx",
     html: "html",
     htm: "html",
@@ -436,31 +444,32 @@ export function UnifiedIntake() {
       )}
 
       <div className="grid min-h-[620px] lg:grid-cols-[minmax(0,1fr)_330px]">
-        <main className="min-w-0 p-6">
-          {phase === "repair_review" && preview?.repair_assessment ? (
-            <section className="platform-panel mx-auto max-w-3xl overflow-hidden" aria-label="Repair review gate">
+        <main className="min-w-0 space-y-5 p-6">
+          {phase === "repair_review" && preview?.repair_assessment && (
+            <section className="platform-panel overflow-hidden" aria-label="Repair review gate">
               <header className="flex flex-wrap items-start justify-between gap-4 border-b px-5 py-4">
                 <div>
                   <p className="platform-kicker mb-1">Repair review required</p>
                   <h2 className="text-xl font-semibold">Choose how this source continues</h2>
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">The durable workflow paused before parsing. Nothing is repaired or replaced until you confirm an allowed choice.</p>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">The durable workflow paused before parsing. The source preview remains available below. Nothing is repaired or replaced until you confirm an allowed choice.</p>
                 </div>
                 <span className="border border-[#c58214] bg-[#fff4dd] px-2 py-1 text-[10px] font-semibold uppercase text-[#684b18] dark:bg-[#43351f] dark:text-[#ffe0a6]">Review required</span>
               </header>
 
-              <dl className="grid gap-px border-b bg-border text-xs sm:grid-cols-2">
+              <dl className="grid gap-px border-b bg-border text-xs sm:grid-cols-3">
+                <div className="bg-card p-4"><dt className="text-muted-foreground">Why it stopped</dt><dd className="mt-1 text-sm font-semibold">{preview.reason || "The detector requested human review before parsing."}</dd></div>
                 <div className="bg-card p-4"><dt className="text-muted-foreground">Assessment</dt><dd className="mt-1 break-all font-mono text-[10px]">{preview.repair_assessment.assessment_ref}</dd></div>
                 <div className="bg-card p-4"><dt className="text-muted-foreground">Source version</dt><dd className="mt-1 break-all font-mono text-[10px]">{preview.repair_assessment.source_version_ref}</dd></div>
               </dl>
 
               <div className="space-y-4 p-5">
                 <div>
-                  <p className="platform-rule-title mb-2">Allowed choice</p>
+                  <p className="platform-rule-title mb-2">Owner decision</p>
                   <button type="button" onClick={() => setRepairChoice("original")} aria-pressed={repairChoice === "original"} className={cn("w-full border p-4 text-left hover:bg-accent", repairChoice === "original" && "border-primary bg-accent ring-1 ring-primary")}>
-                    <strong className="block text-sm">Use original source</strong>
-                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">Continue with the sealed original bytes. No derived repair is applied.</span>
+                    <strong className="block text-sm">Override repair and use the original source</strong>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">Continue with the sealed original bytes. No derived repair is applied, and the override is recorded against this assessment.</span>
                   </button>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">The workflow supplied no allowed derived-repair choice, so this gate does not display one.</p>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">No compatible derived-repair action was supplied by the workflow. The application will not invent or silently run one.</p>
                 </div>
 
                 {repairChoice === "original" && (
@@ -471,7 +480,9 @@ export function UnifiedIntake() {
                 )}
               </div>
             </section>
-          ) : !file && !remote ? (
+          )}
+
+          {!file && !remote ? (
             <div className="platform-panel mx-auto max-w-3xl overflow-hidden">
               <div className="border-b px-5 py-4">
                 <p className="platform-kicker mb-1">Default ingestion point</p>
@@ -507,7 +518,7 @@ export function UnifiedIntake() {
                   <strong className="block truncate text-sm">{file?.name ?? remote?.name}</strong>
                   <span className="text-xs text-muted-foreground">{declaredFormat(file ?? remote!)} · {bytes(file?.size ?? remote?.byte_length ?? 0)}</span>
                 </div>
-                <Button variant="outline" onClick={reset}><RotateCcw className="h-4 w-4" /> Change source</Button>
+                <Button variant="outline" onClick={reset}><ArrowLeft className="h-4 w-4" /> Back to sources</Button>
               </div>
 
               <div className="flex min-h-11 gap-5 border-b px-5" role="tablist" aria-label="Source inspection">

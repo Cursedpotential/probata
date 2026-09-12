@@ -36,12 +36,12 @@ func TestValidatePriorRepairAssessmentReturnsDurableReviewRequirement(t *testing
 	assessmentID := uuid.MustParse("00000000-0000-0000-0000-000000000051")
 	sourceID := uuid.MustParse("00000000-0000-0000-0000-000000000052")
 	originalID := uuid.MustParse("00000000-0000-0000-0000-000000000053")
-	detection := []byte(`{"needs_repair":true,"details":{"count":2}}`)
-	preview := []byte(`{"sample":[]}`)
+	detection := []byte(`{"detection":{"fmt":"pdf","confidence":1}}`)
+	preview := []byte(`{"report":{"clean":false,"chunks_failed":1,"repairs":0,"lossy":0,"truncated":false},"samples":[]}`)
 	spec := activities.RepairAssessmentSpec{
 		SourceVersionRef: proffer.Ref(sourceID.String()), OriginalRef: proffer.Ref(originalID.String()),
-		DeclaredFormat: "pdf", Detection: json.RawMessage(`{"details":{"count":2},"needs_repair":true}`),
-		Preview: json.RawMessage(`{"sample":[]}`), ReviewRequired: false,
+		DeclaredFormat: "pdf", Detection: json.RawMessage(`{"detection":{"fmt":"pdf","confidence":1}}`),
+		Preview: json.RawMessage(`{"report":{"clean":true},"samples":[]}`), ReviewRequired: false,
 	}
 	resultRef, _ := json.Marshal(map[string]string{"ref_kind": "repair_assessment", "ref_id": assessmentID.String()})
 	result, err := validatePriorRepairAssessment(spec, assessmentID, sourceID, originalID, "pdf", resultRef, detection, preview)
@@ -60,10 +60,10 @@ func TestValidatePriorRepairAssessmentDiscardsChangedRetryContent(t *testing.T) 
 	resultRef, _ := json.Marshal(map[string]string{"ref_kind": "repair_assessment", "ref_id": assessmentID.String()})
 	spec := activities.RepairAssessmentSpec{
 		SourceVersionRef: proffer.Ref(sourceID.String()), OriginalRef: proffer.Ref(originalID.String()),
-		DeclaredFormat: "pdf", Detection: json.RawMessage(`{"needs_repair":false}`), Preview: json.RawMessage(`{"sample":[]}`),
+		DeclaredFormat: "pdf", Detection: json.RawMessage(`{"detection":{"fmt":"pdf"}}`), Preview: json.RawMessage(`{"report":{"clean":true},"samples":[]}`),
 	}
 	result, err := validatePriorRepairAssessment(spec, assessmentID, sourceID, originalID, "pdf", resultRef,
-		[]byte(`{"needs_repair":true}`), []byte(`{"sample":[]}`))
+		[]byte(`{"detection":{"fmt":"pdf"}}`), []byte(`{"report":{"clean":false,"chunks_failed":1},"samples":[]}`))
 	if err != nil {
 		t.Fatal(err)
 	}

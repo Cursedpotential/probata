@@ -190,3 +190,16 @@ func TestAssessSourceRepairForwardsStructuralFormatFromDetection(t *testing.T) {
 		t.Fatalf("preview must carry the detector's structural format: %v", client.payloads[1])
 	}
 }
+
+func TestRepairReviewUsesActualPreviewReport(t *testing.T) {
+	detection := json.RawMessage(`{"detection":{"fmt":"image","encoding":"binary","confidence":1},"cloud_only":false}`)
+	if RepairReviewRequired(detection, json.RawMessage(`{"report":{"clean":true,"chunks_failed":0,"repairs":0,"lossy":0,"truncated":false},"events":[]}`)) {
+		t.Fatal("clean preview report created a repair gate")
+	}
+	if !RepairReviewRequired(detection, json.RawMessage(`{"report":{"clean":false,"chunks_failed":1,"repairs":0,"lossy":0,"truncated":false},"events":[]}`)) {
+		t.Fatal("validated damaged preview report did not require review")
+	}
+	if RepairReviewRequired(detection, json.RawMessage(`{"samples":[]}`)) {
+		t.Fatal("preview without a damage report was falsely labeled as needing repair")
+	}
+}
