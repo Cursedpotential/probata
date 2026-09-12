@@ -1,7 +1,9 @@
 # Docstore API deployment repair
 
-**Date:** 2026-09-12  
-**Status:** Source collision fixed; Coolify application and Tailscale Service still absent  
+**Date:** 2026-09-12
+
+**Status:** Source collision fixed; Coolify application and Tailscale Service still absent
+
 **Scope:** The optional HTTP/front-end API served by `docstore-worker`; not the native SurrealDB MCP endpoint
 
 ## What was verified live
