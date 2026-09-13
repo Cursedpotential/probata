@@ -41,6 +41,8 @@ from app.types.proffer import (
     ProfferUploadResponse,
 )
 from app.service.proffer_operations import list_operations, operation
+from app.service.proffer_operator import operator_snapshot
+from app.types.proffer_operator import ProfferOperatorSnapshot
 from app.types.proffer_operations import (
     ProfferOperationDetail,
     ProfferOperationLifecycle,
@@ -203,6 +205,14 @@ async def operations_endpoint(
 async def operation_endpoint(preview_handle: PreviewHandle):
     try:
         return await operation(preview_handle)
+    except ProfferError as error:
+        raise _translate(error) from None
+
+
+@router.get("/previews/{preview_handle}/operator", response_model=ProfferOperatorSnapshot)
+async def operator_snapshot_endpoint(preview_handle: PreviewHandle, mode: Annotated[MatterMode, Query()]):
+    try:
+        return await operator_snapshot(preview_handle, mode=mode)
     except ProfferError as error:
         raise _translate(error) from None
 

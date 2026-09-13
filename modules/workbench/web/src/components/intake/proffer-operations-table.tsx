@@ -25,6 +25,7 @@ import {
   useAppNavigate,
   useBrowserSearchParams,
 } from "@/lib/router-compat";
+import { useFixedCase } from "@/lib/fixed-case-context";
 import type {
   ProfferOperationDetail,
   ProfferOperationLifecycle,
@@ -86,6 +87,7 @@ function createdAt(value: string) {
 }
 
 export function ProfferOperationsTable() {
+  const { mode } = useFixedCase();
   const searchParams = useBrowserSearchParams();
   const navigate = useAppNavigate();
   const statusFilter = operationStatus(searchParams.get("operation_status"));
@@ -336,7 +338,7 @@ export function ProfferOperationsTable() {
                 )}
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <p className="max-w-xl text-[11px] leading-5 text-muted-foreground">Cancel and retry controls are not exposed here because the engine has no append-only control-receipt contract for those actions yet.</p>
-                  <Button asChild size="sm"><AppLink href={`/evidence/preview?preview_handle=${encodeURIComponent(selectedDetail.preview_handle)}`}>Open pipeline preview <ExternalLink className="h-4 w-4" /></AppLink></Button>
+                  <Button asChild size="sm"><AppLink href={`/evidence/preview?mode=${mode}&preview_handle=${encodeURIComponent(selectedDetail.preview_handle)}`}>Open {mode} pipeline preview <ExternalLink className="h-4 w-4" /></AppLink></Button>
                 </div>
               </div>
             </div>

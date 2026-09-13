@@ -11,6 +11,7 @@ const checkpoints = source("../src/lib/proffer-context-checkpoints.ts");
 const rail = source("../src/components/intake/context-flow-rail.tsx");
 const intake = source("../src/components/intake/unified-intake.tsx");
 const preview = source("../src/components/sbv/proffer-preview-client.tsx");
+const operatorPreview = source("../src/components/sbv/proffer-operator-preview.tsx");
 const types = source("../src/lib/shared/types.ts");
 
 test("the import source surface has one ordered six-checkpoint context rail", () => {
@@ -45,10 +46,10 @@ test("checkpoint copy is literal and the full preview remains gated", () => {
 test("the UI receipt contract uses raw source verification and never labels it custody", () => {
   assert.match(types, /receipt_type: "raw_source_verification"/);
   assert.match(preview, /PROFFER_CONTEXT_CHECKPOINTS\.map/);
-  assert.match(preview, /checkpointLabel\(receipt\.receipt_type\)/);
+  assert.match(operatorPreview, /checkpointLabel\(receipt\.receipt_type\)/);
   assert.doesNotMatch(checkpoints, /custody/i);
   assert.doesNotMatch(rail, /custody/i);
-  assert.doesNotMatch(preview, /custody/i);
+  assert.match(operatorPreview, /Context intake does not establish custody|Custody state/);
 });
 
 test("live checkpoint status consumes partial snapshots and the event stream refreshes them", () => {

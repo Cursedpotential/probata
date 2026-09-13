@@ -1149,6 +1149,88 @@ export interface ProfferOperationListResponse {
   next_cursor?: string | null;
 }
 
+export interface ProfferOperatorAvailability {
+  status: "available" | "pending" | "unavailable";
+  reason: string;
+  ref?: string | null;
+  count?: number | null;
+}
+
+export interface ProfferOperatorSnapshot {
+  preview_handle: string;
+  matter_mode: MatterMode;
+  matter_id: string;
+  court_case_id: string;
+  request_id: string;
+  source_ref: string;
+  source_version_ref?: string | null;
+  lifecycle: ProfferOperationLifecycle;
+  phase: string;
+  current_stage?: string | null;
+  active_stages: string[];
+  retry_count: number;
+  reason: string;
+  terminal: boolean;
+  parser_handler?: string | null;
+  parser_execution_path?: "decoder" | "duckdb" | null;
+  contracts: Array<{ contract: string; version: string; authority: string }>;
+  package: {
+    original: ProfferOperatorAvailability;
+    original_fingerprint: ProfferOperatorAvailability;
+    package_identity: ProfferOperatorAvailability;
+    package_hash: ProfferOperatorAvailability;
+    metadata: ProfferOperatorAvailability;
+    attachments: ProfferOperatorAvailability;
+    parsed_or_extracted_products: ProfferOperatorAvailability;
+    normalized_products: ProfferOperatorAvailability;
+  };
+  authority_state: {
+    intake_classification: ProfferOperatorAvailability;
+    context_status: ProfferOperatorAvailability;
+    evidence_eligibility: ProfferOperatorAvailability;
+    promotion_prerequisites: ProfferOperatorAvailability;
+    promotion_rehash: ProfferOperatorAvailability;
+    custody_state: ProfferOperatorAvailability;
+  };
+  repair_state: {
+    assessment_report: ProfferOperatorAvailability;
+    affected_units: ProfferOperatorAvailability;
+    engine_profile: ProfferOperatorAvailability;
+    proposed_action: ProfferOperatorAvailability;
+    decision_receipt: ProfferOperatorAvailability;
+    reentry_rule: string;
+  };
+  storage_state: {
+    source_type: ProfferOperatorAvailability;
+    context_target: ProfferOperatorAvailability;
+    postgres_control_state: ProfferOperatorAvailability;
+    searchable_projection: ProfferOperatorAvailability;
+    rule: string;
+  };
+  layers: Array<{
+    layer: "temporal" | "n8n";
+    status: "active" | "waiting" | "completed" | "failed" | "unavailable" | "not_observed";
+    workflow_id: ProfferOperatorAvailability;
+    run_or_execution_id: ProfferOperatorAvailability;
+    version: ProfferOperatorAvailability;
+    current_node_or_stage?: string | null;
+    detail: string;
+  }>;
+  surfaces: Record<"source" | "records" | "chunks" | "entities" | "graph" | "workflow" | "duckdb", ProfferOperatorAvailability>;
+  stages: ProfferOperationStage[];
+  valid_actions: Array<{
+    action: "select_handler" | "retain_original" | "approve_preview" | "reject_preview" | "refresh" | "restart_new_operation";
+    label: string;
+    detail: string;
+    requires_reason: boolean;
+  }>;
+  unavailable_controls: Array<{
+    control: "apply_repair" | "retry_stage" | "skip_stage" | "cancel" | "resume_checkpoint";
+    reason: string;
+  }>;
+  write_boundary: string;
+}
+
 export interface ProfferPreviewReceipt {
   receipt_type: "raw_source_verification" | "parser_selection" | "parser_execution" | "normalization" | "storage" | "completeness";
   receipt_ref: string;

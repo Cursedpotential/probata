@@ -82,6 +82,7 @@ import type {
   ProfferOperationDetail,
   ProfferOperationLifecycle,
   ProfferOperationListResponse,
+  ProfferOperatorSnapshot,
   ProfferDecisionResponse,
   ProfferPreviewResponse,
   ProfferRepairDecisionRequest,
@@ -749,6 +750,19 @@ export function getProfferPreview(previewHandle: string, mode: MatterMode, signa
   const query = new URLSearchParams({ mode });
   return apiFetch<ProfferPreviewResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}?${query.toString()}`, { signal }).then((response) => {
     if (response.matter_mode !== mode) throw new ApiError("The preview did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
+}
+
+export function getProfferOperatorSnapshot(previewHandle: string, mode: MatterMode, signal?: AbortSignal) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferOperatorSnapshot>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/operator?${query.toString()}`,
+    { signal },
+  ).then((response) => {
+    if (response.preview_handle !== previewHandle || response.matter_mode !== mode) {
+      throw new ApiError("The operator snapshot crossed its preview or TEST/REAL boundary", 502);
+    }
     return response;
   });
 }

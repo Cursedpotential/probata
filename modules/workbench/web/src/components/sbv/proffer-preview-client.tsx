@@ -1,11 +1,11 @@
 // Byline: Codex · GPT-5.6 · 2026-09-12 (hydrate deep-linked preview mode and handle atomically)
 "use client";
 
-import { Activity, Check, ChevronLeft, Link2, Loader2, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { Activity, ChevronLeft, Link2, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { PlatformMessageViewer } from "@/components/sbv/platform-message-viewer";
+import { ProfferOperatorPreview } from "@/components/sbv/proffer-operator-preview";
 import { ContextFlowRail } from "@/components/intake/context-flow-rail";
 import { MatterModeSelector } from "@/components/intake/matter-mode-selector";
 import { Badge } from "@/components/ui/badge";
@@ -16,10 +16,13 @@ import { Label } from "@/components/ui/label";
 import {
   createProfferPreviewEventSource,
   decideProffer,
+  decideProfferHandler,
+  decideProfferRepair,
+  getProfferOperatorSnapshot,
   getProfferPreview,
   getProfferPreviewMessages,
 } from "@/lib/api-client";
-import { checkpointLabel, PROFFER_CONTEXT_CHECKPOINTS, profferContextFlowComplete } from "@/lib/proffer-context-checkpoints";
+import { PROFFER_CONTEXT_CHECKPOINTS, profferContextFlowComplete } from "@/lib/proffer-context-checkpoints";
 import { useFixedCase } from "@/lib/fixed-case-context";
 import { AppLink } from "@/lib/router-compat";
 import type {
@@ -27,6 +30,8 @@ import type {
   ProfferPreviewMessage,
   ProfferPreviewParticipant,
   ProfferPreviewResponse,
+  ProfferOperatorSnapshot,
+  ProfferParserCandidate,
 } from "@/lib/shared/types";
 
 function initialHandle(mode: "TEST" | "REAL") {
@@ -45,6 +50,7 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
   const [draftHandle, setDraftHandle] = useState(initialUrlHandle);
   const [previewHandle, setPreviewHandle] = useState(initialUrlHandle);
   const [preview, setPreview] = useState<ProfferPreviewResponse | null>(null);
+  const [operatorSnapshot, setOperatorSnapshot] = useState<ProfferOperatorSnapshot | null>(null);
   const [messages, setMessages] = useState<ProfferPreviewMessage[]>([]);
   const [participants, setParticipants] = useState<ProfferPreviewParticipant[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -70,6 +76,7 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     messageControllersRef.current.clear();
     requestedCursorsRef.current.clear();
     setPreview(null);
+    setOperatorSnapshot(null);
     setMessages([]);
     setParticipants([]);
     setNextCursor(null);
@@ -104,10 +111,14 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     const controller = new AbortController();
     snapshotControllerRef.current = controller;
     try {
-      const result = await getProfferPreview(handle, mode, controller.signal);
+      const [result, operator] = await Promise.all([
+        getProfferPreview(handle, mode, controller.signal),
+        getProfferOperatorSnapshot(handle, mode, controller.signal),
+      ]);
       if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
       if (result.preview_handle !== handle) throw new Error("Preview snapshot correlation failed");
       setPreview(result);
+      setOperatorSnapshot(operator);
       setSnapshotError(null);
     } catch (error) {
       if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
@@ -221,20 +232,20 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     window.history.replaceState({}, "", url);
   }
 
-  async function decide(approved: boolean) {
+  async function decide(approved: boolean, explicitReason = rejectionReason.trim()) {
     const handle = previewHandle;
     const generation = generationRef.current;
     if (!handle || !decisionEligible) {
       toast.error("Load the correlated messages, provenance, and completed receipts before deciding");
       return;
     }
-    if (!approved && !rejectionReason.trim()) {
+    if (!approved && !explicitReason) {
       toast.error("A rejection requires a reason");
       return;
     }
     setDecisionPending(true);
     try {
-      const result = await decideProffer(handle, mode, { approved, reason: approved ? "" : rejectionReason.trim() });
+      const result = await decideProffer(handle, mode, { approved, reason: approved ? "" : explicitReason });
       if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
       if (result.preview_handle !== handle) throw new Error("Decision response correlation failed");
       toast.success(approved ? "Preview approved" : "Preview rejected");
@@ -245,6 +256,40 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
       if (generation === generationRef.current && activeHandleRef.current === handle) {
         setDecisionPending(false);
       }
+    }
+  }
+
+  async function retainOriginal() {
+    if (!previewHandle || preview?.phase !== "awaiting_repair_decision") return;
+    setDecisionPending(true);
+    try {
+      await decideProfferRepair(previewHandle, mode, { approved: true, apply_repair: false });
+      toast.success("Original-source override recorded");
+      await loadSnapshot();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The repair decision failed");
+    } finally {
+      setDecisionPending(false);
+    }
+  }
+
+  async function selectHandler(candidate: ProfferParserCandidate) {
+    if (!previewHandle || preview?.phase !== "awaiting_handler_selection" || !preview.handler_recommendation_ref) return;
+    setDecisionPending(true);
+    try {
+      await decideProfferHandler(previewHandle, mode, {
+        recommendation_ref: preview.handler_recommendation_ref,
+        handler_id: candidate.handler_id,
+        handler_version: candidate.handler_version,
+        execution_path: candidate.execution_path,
+        compatibility_ref: candidate.compatibility_ref,
+      });
+      toast.success("Handler selection recorded");
+      await loadSnapshot();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The handler selection failed");
+    } finally {
+      setDecisionPending(false);
     }
   }
 
@@ -317,80 +362,34 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
           <ShieldCheck className="mx-auto size-9 text-muted-foreground" />
           <p className="mt-3 text-sm font-medium">Attach the preview handle returned by intake.</p>
         </div>
+      ) : snapshotError ? (
+        <div className="platform-panel border-destructive/50 p-5 text-sm text-destructive" role="alert">{snapshotError}</div>
+      ) : !preview || !operatorSnapshot ? (
+        <section className="platform-panel flex min-h-[34rem] items-center justify-center p-6 text-sm text-muted-foreground" aria-label="Preview loading">Loading the {mode} operator snapshot…</section>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(22rem,0.8fr)]">
-          {!preview ? (
-            <section className="platform-panel flex min-h-[34rem] items-center justify-center p-6 text-sm text-muted-foreground" aria-label="Preview loading"><Loader2 className="mr-2 size-4 animate-spin" /> Loading the {mode} context checkpoints</section>
-          ) : !contextFlowComplete ? (
-            <section className="platform-panel flex min-h-[34rem] items-center justify-center p-6 text-center" aria-label="Preview locked">
-              <div className="max-w-md"><ShieldCheck className="mx-auto size-9 text-muted-foreground" /><h2 className="mt-3 text-base font-semibold">Full preview locked</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">The Import Source view remains available while context processing runs. Messages unlock only after all six checkpoints complete.</p></div>
-            </section>
-          ) : (
-            <PlatformMessageViewer
-              key={`${mode}:${previewHandle}`}
-              messages={messages}
-              participants={participants}
-              loading={messagesLoading}
-              error={messageError}
-              previewHandle={previewHandle}
-              hasMore={Boolean(nextCursor)}
-              onLoadMore={() => void loadMessages(nextCursor ?? undefined)}
-            />
-          )}
-
-          <div className="space-y-4">
-            <Card className="platform-panel">
-              <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm">Workflow gate</CardTitle>
-                <Button variant="ghost" size="icon-sm" onClick={() => void loadSnapshot()} aria-label="Refresh preview">
-                  <RefreshCw className="size-4" />
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {snapshotError && <p className="text-sm text-destructive" role="alert">{snapshotError}</p>}
-                {!preview && !snapshotError && <p className="text-sm text-muted-foreground" role="status">Waiting for the first workflow snapshot.</p>}
-                {preview && (
-                  <>
-                    <Badge variant={awaitingDecision ? "secondary" : "outline"}>{preview.phase}</Badge>
-                    <dl className="grid gap-2 text-xs">
-                      <div><dt className="text-muted-foreground">Request</dt><dd className="break-all font-mono">{preview.correlation?.request_id ?? "Pending"}</dd></div>
-                      <div><dt className="text-muted-foreground">Source version</dt><dd className="break-all font-mono">{preview.correlation?.source_version_id ?? "Pending"}</dd></div>
-                      <div><dt className="text-muted-foreground">Raw generation</dt><dd className="break-all font-mono">{preview.correlation?.raw_generation_id ?? "Pending"}</dd></div>
-                      <div><dt className="text-muted-foreground">Normalized generation</dt><dd className="break-all font-mono">{preview.correlation?.normalized_generation_id ?? "Pending"}</dd></div>
-                      <div><dt className="text-muted-foreground">Preview digest</dt><dd className="break-all font-mono">{preview.preview_digest ?? "Pending"}</dd></div>
-                      <div><dt className="text-muted-foreground">Parser</dt><dd>{preview.parser ? `${preview.parser.parser_id} · ${preview.parser.parser_version}` : "Not selected"}</dd></div>
-                    </dl>
-                    <ul className="space-y-1 border-t pt-3 text-xs">
-                      {preview.receipts?.map((receipt) => <li key={receipt.receipt_ref} className="space-y-0.5 border-l-2 pl-2"><div>{checkpointLabel(receipt.receipt_type)} · {receipt.status}</div><div className="break-all font-mono text-[10px] text-muted-foreground">{receipt.receipt_ref}{receipt.digest ? ` · ${receipt.digest}` : ""}</div><time className="text-[10px] text-muted-foreground" dateTime={receipt.recorded_at}>{new Date(receipt.recorded_at).toLocaleString()}</time></li>)}
-                    </ul>
-                    {awaitingDecision && (
-                      <div className="space-y-2 border-t pt-3">
-                        <Label htmlFor="proffer-rejection-reason">Rejection reason</Label>
-                        <Input id="proffer-rejection-reason" value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} />
-                        <div className="flex gap-2">
-                          <Button disabled={decisionPending || !decisionEligible} onClick={() => void decide(true)}><Check className="size-4" /> Approve</Button>
-                          <Button disabled={decisionPending || !decisionEligible} variant="destructive" onClick={() => void decide(false)}><X className="size-4" /> Reject</Button>
-                        </div>
-                        {!decisionEligible && <p className="text-xs text-muted-foreground" role="status">Decision locked until this exact preview has normalized messages, participant and attachment provenance, and all required completed receipts.</p>}
-                      </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="platform-panel">
-              <CardHeader><CardTitle className="text-sm">Proffer events</CardTitle></CardHeader>
-              <CardContent>
-                {eventError && <p className="text-sm text-destructive" role="alert">{eventError}</p>}
-                {!eventError && events.length === 0 && <p className="text-sm text-muted-foreground">Waiting for replayable workflow events…</p>}
-                <ol className="space-y-2 text-xs">
-                  {events.map((event) => <li key={event.event_id} className="border-l-2 pl-2"><span className="font-mono">#{event.event_id}</span> · {event.event_type} · {event.phase}</li>)}
-                </ol>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        <>
+          {eventError && <p className="border border-[#ead5a9] bg-[#fff4dd] p-3 text-sm text-[#684b18]" role="status">{eventError}</p>}
+          {!decisionEligible && awaitingDecision && <p className="border border-[#ead5a9] bg-[#fff4dd] p-3 text-xs text-[#684b18]" role="status">Approval remains locked until this exact preview has normalized records, participant and attachment provenance, and every required completed receipt.</p>}
+          <ProfferOperatorPreview
+            key={`${mode}:${previewHandle}`}
+            snapshot={operatorSnapshot}
+            preview={preview}
+            messages={messages}
+            participants={participants}
+            events={events}
+            messagesLoading={messagesLoading}
+            messageError={messageError}
+            hasMore={Boolean(nextCursor)}
+            onLoadMore={() => void loadMessages(nextCursor ?? undefined)}
+            onRefresh={() => void loadSnapshot()}
+            onApprove={() => decisionEligible && void decide(true)}
+            onReject={(reason) => decisionEligible && void decide(false, reason)}
+            onRetainOriginal={() => void retainOriginal()}
+            onSelectHandler={(candidate) => void selectHandler(candidate)}
+            actionPending={decisionPending}
+            decisionReady={decisionEligible}
+          />
+        </>
       )}
     </div>
   );
