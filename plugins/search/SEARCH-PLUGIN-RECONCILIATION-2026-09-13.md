@@ -55,9 +55,11 @@ The runtime-location correction and quarantine evidence are recorded in
 only under the ignored Propria `.runtime/search/smart-explore` root; the engine
 remains solely in `plugins/search`.
 
-The clean CCC rebuild and a live semantic query must be recorded after the
-running index job finishes. Until then, code-index freshness is **in progress**,
-not complete.
+The CCC refresh and semantic-query attempts were stopped after each exhausted
+physical memory. The resulting 2,847,653,888-byte SQLite database passed
+integrity_check and the zero-documentation fence, but CCC still reports the run
+in progress. Code-index freshness and semantic usability are **failed pending a
+bounded-memory CCC repair**, not complete.
 
 ## Product-surface acceptance boundary
 
