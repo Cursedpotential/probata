@@ -8,13 +8,23 @@ The codebase-level CCC is separate. Never point its state or daemon at Docstore,
 
 Create a plan with `docstore_index_plan(paths=[...])`. Paths are relative to the explicitly configured source root. Its SHA-256 is over original local bytes, not the worker's normalized-content hash, and must not be compared as if they were the same hash algorithm/input.
 
-Use `docstore_index_execute()` for one authenticated full-source reconciliation.
+Use `docstore_index_full()` for one authenticated full-source reconciliation.
 Passing one to twenty paths requests exact verification of those paths, but the
 worker still declares the complete source set to CocoIndex. This prevents selected
-runs from retiring omitted documents. Read `docstore_run_status` using the returned
-run ID; a terminal run is CDC-verified only when the source snapshot remained stable
+runs from retiring omitted documents. Use `docstore_index_selected(paths=[...])` for
+that admitted selected-source request. Read `docstore_run_current`,
+`docstore_run_get`, or `docstore_run_list`; a terminal run is CDC-verified only when
+the source snapshot remained stable
 and every managed source path and normalized content hash matched SurrealDB exactly.
-Use `docstore_cancel_run` only for the exact active run returned by this API process.
+Use `docstore_run_cancel` only for the exact active run returned by this API process.
+`docstore_attribution_verify` performs the same complete path/hash comparison fresh
+without starting indexing. `docstore_index_execute`, `docstore_run_status`, and
+`docstore_cancel_run` remain compatibility aliases.
+
+Index and run controls are registered MCP tools, not REST-only implementation
+details: `docstore_pipeline_identity`, `docstore_index_full`,
+`docstore_index_selected`, `docstore_run_current`, `docstore_run_get`,
+`docstore_run_list`, `docstore_run_cancel`, and `docstore_attribution_verify`.
 
 ## Execution boundary
 

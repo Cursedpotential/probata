@@ -873,7 +873,8 @@ app = coco.App(
 async def _run_checked() -> None:
     # app.update starts this app's explicit environment. coco.runtime() would
     # start the DEFAULT environment and consume unrelated ambient state.
-    handle = app.update()
+    options = {"full_reprocess": True} if os.environ.get("DOCSTORE_FULL_REPROCESS", "").strip() == "1" else {}
+    handle = app.update(**options)
     await handle.result()
     stats = handle.stats()
     if stats is None or stats.total.num_errors or stats.total.num_in_progress:
