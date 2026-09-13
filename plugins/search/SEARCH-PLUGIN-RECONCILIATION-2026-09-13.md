@@ -50,7 +50,14 @@ Consequence guards are part of the implementation: the orchestrator cannot hide 
 
 Direct SQLite inspection of the rebuilt CCC auxiliary table found zero chunks and zero distinct files in `docs`, `doc`, `documentation`, `knowledge`, `memory`, `.remember`, `.memories`, `to_be_deleted`, `_worktrees`, or `probata-worktrees`, and zero `.md`, `.mdx`, `.rst`, `.txt`, `.html`, or `.htm` file classes. CCC doctor passed both 2048-dimension indexing and query model checks after loading the registry-backed credential into the process without printing its value.
 
-The clean CCC rebuild and a live semantic query must be recorded below after the running index job finishes. Until then, code-index freshness is **in progress**, not complete.
+The runtime-location correction and quarantine evidence are recorded in
+`RUNTIME-RECONCILIATION-2026-09-13.md`. Smart Explore generated state now lives
+only under the ignored Propria `.runtime/search/smart-explore` root; the engine
+remains solely in `plugins/search`.
+
+The clean CCC rebuild and a live semantic query must be recorded after the
+running index job finishes. Until then, code-index freshness is **in progress**,
+not complete.
 
 ## Product-surface acceptance boundary
 

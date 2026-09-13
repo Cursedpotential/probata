@@ -14,6 +14,12 @@ Tree-sitter and DuckDB runtime. Existing Smart Explore commands remain available
 `index`, `indexes`, `search`, `outline`, `unfold`, `refs`, `lsp`, `imports`,
 `changed`, and safe `prune` quarantine.
 
+Runtime indexes live only at
+`E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore\indexes`.
+The Propria root ignores `.runtime`, and database/WAL files must never be staged.
+The plugin contains the engine; the runtime directory contains generated index
+state only. A one-off `--db` is available for isolated diagnostics and tests.
+
 Direct CCC commands are `semantic`, `ccc-index`, `ccc-status`, `ccc-doctor`, and
 `ccc-grep`. Reconciliation commands are `stores`, `recall`, `conflicts`,
 `decisions`, `reconcile run`, `reconcile repair`, `reconcile status`, and `export`.

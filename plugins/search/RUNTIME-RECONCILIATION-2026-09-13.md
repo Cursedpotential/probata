@@ -1,0 +1,64 @@
+# Search Runtime Reconciliation — 2026-09-13
+
+## Governing location
+
+The only Smart Explore engine implementation is plugins/search. Generated
+Tree-sitter/DuckDB state lives under
+E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore\indexes.
+The Propria root ignores /.runtime/; database and WAL files are never source
+artifacts. Shared runtime-root overrides and legacy repository-local indexes are
+rejected. --db remains available only for isolated diagnostics.
+
+## Why E:\data\codex-smart-explore existed
+
+The directory was selected on 2026-09-12 by a transient historical
+SMART_EXPLORE_HOME=E:\data\codex-smart-explore override. The source default
+at that time was the user profile. Process, User, and Machine environment scopes
+contained no such value during this reconciliation, and targeted searches found
+no committed or active config reference to the E:\data path. Its Probata
+filename hash is identical to the canonical path hash, confirming that it was
+alternate runtime state for the same resolved project root.
+
+The flagged directory contained only:
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| probata-5dd437c903f9.duckdb | 12,288 | E507EE3E10AE6F57180779E68B3A94DB0575566B063BB6D997FA83815507A5E6 |
+| probata-5dd437c903f9.duckdb.wal | 4,574,173 | 802A30A82F7329D22DFB616ECE4A58113FE54F3DA14FA18591B0F1A2D159B989 |
+
+No Smart Explore process held either file. The unrelated DuckDB processes seen
+during inspection were building the Consignatio best-copy database at a
+different path.
+
+## Preserved migration
+
+The newer user-profile Probata index was checkpointed before copying. It records
+root E:\AI_Workspace\Projects\Propria\Probata\probata, 8,534 files, and
+112,480 symbols. The source and canonical copy matched:
+
+| Location | Bytes | SHA-256 |
+| --- | ---: | --- |
+| C:\Users\matts\.agents\smart-explore\indexes\probata-5dd437c903f9.duckdb | 22,294,528 | 89FF949713E0F916DEEAB6785C5CD012EB9D8AADE97263B8D1109D603ED5C243 |
+| E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore\indexes\probata-5dd437c903f9.duckdb | 22,294,528 | 89FF949713E0F916DEEAB6785C5CD012EB9D8AADE97263B8D1109D603ED5C243 |
+
+After hash and read-only metadata/count verification, the obsolete roots were
+moved without deletion to:
+
+- E:\AI_Workspace\Projects\Propria\to_be_deleted\smart-explore-runtime-reconciliation-20260913\legacy-user-runtime
+- E:\AI_Workspace\Projects\Propria\to_be_deleted\smart-explore-runtime-reconciliation-20260913\legacy-e-data-runtime
+
+Only the owner may delete those quarantined copies.
+
+## CCC code-index boundary
+
+CCC remains a separate generated code index at
+E:\AI_Workspace\.cocoindex_code\target_sqlite.db; it is not a Smart Explore
+runtime database. The 2,246,606,848-byte database contains 228,756 chunks across
+9,855 files. Direct SQLite inspection found zero documentation-root files/chunks
+and zero .md, .mdx, .rst, .txt, .html, or .htm files/chunks.
+
+At receipt creation, CCC still reported its previous run as in progress.
+The code-only content fence is proven; freshness remains unproven until a clean
+refresh exits successfully. Search product usability remains pending owner
+review regardless of index plumbing results.
+

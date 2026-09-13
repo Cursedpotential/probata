@@ -60,7 +60,7 @@ class ReconciliationTests(unittest.TestCase):
   self.assertIn('rerun memsearch stats',data['next_action'])
 
  def test_active_wal_is_reported_and_never_stale(self):
-  with tempfile.TemporaryDirectory() as td, patch.dict(os.environ, {'SMART_EXPLORE_HOME': td}):
+  with tempfile.TemporaryDirectory() as td, patch.object(smart_explore,'PROPRIA_SMART_EXPLORE_RUNTIME',Path(td)):
    indexes=Path(td)/'indexes'; indexes.mkdir()
    db=indexes/'active.duckdb'; db.write_bytes(b'not opened')
    db.with_suffix('.duckdb.wal').write_bytes(b'active')
@@ -68,6 +68,15 @@ class ReconciliationTests(unittest.TestCase):
   self.assertEqual(len(rows),1)
   self.assertFalse(rows[0]['stale'])
   self.assertTrue(rows[0]['error'].startswith('active_or_unclean_wal'))
+
+ def test_runtime_store_is_under_propria(self):
+  expected=Path(r'E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore\indexes')
+  with patch.dict(os.environ):
+   os.environ.pop('PROPRIA_SEARCH_RUNTIME',None)
+   self.assertEqual(smart_explore.central_store(),expected)
+   self.assertNotIn(str(Path.home()),str(smart_explore.central_store()))
+  with patch.dict(os.environ,{'PROPRIA_SEARCH_RUNTIME':r'E:\data\codex-smart-explore'}):
+   with self.assertRaises(RuntimeError): smart_explore.central_store()
 
  def test_lock_retry_contract_has_bounded_default(self):
   self.assertEqual(os.environ.get('SMART_EXPLORE_LOCK_TIMEOUT','60'),'60')
