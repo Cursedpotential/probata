@@ -135,7 +135,16 @@ def recall(query:str, project_root:str|None=None, mode:str="auto", stores:list[s
     decisions=[r for r in results if re.search(r"\b(decision|adr|ruling|approved|owner)\b",(r["title"]+" "+r["excerpt"]),re.I)]
     contracts=[r for r in results if re.search(r"\b(contract|final|canonical|must|shall)\b",(r["title"]+" "+r["excerpt"]),re.I)]
     conflicts=discover_conflicts(results)
-    return {"schema":SCHEMA,"operation":"recall","query":query,"mode":mode,"project_root":root,"store_runs":runs,"results":results,"decisions":decisions,"contracts":contracts,"conflicts":conflicts,"attribution_clean":not conflicts and not any(x["requested"] and (x["error"] or not x["available"]) for x in runs),"errors":[x for x in runs if x["error"]]}
+    next_actions=[]
+    for run in runs:
+      if run["requested"] and not run["available"]:
+        next_actions.append("configure PROPRIA_DOCSTORE_ADAPTER and retry" if run["store"]=="docstore" else f"make the {run['store']} adapter available and retry")
+      elif run["requested"] and run["error"]:
+        next_actions.append(f"inspect the {run['store']} error and retry that selected store")
+    if conflicts: next_actions.append("run reconcile repair to create a provenance-rich agent action packet")
+    if not results: next_actions.append("verify selected index freshness or choose another explicit store")
+    if results and not conflicts: next_actions.append("inspect result provenance before accepting a governing decision or contract")
+    return {"schema":SCHEMA,"operation":"recall","query":query,"mode":mode,"project_root":root,"store_runs":runs,"results":results,"decisions":decisions,"contracts":contracts,"conflicts":conflicts,"attribution_clean":not conflicts and not any(x["requested"] and (x["error"] or not x["available"]) for x in runs),"errors":[x for x in runs if x["error"]],"next_actions":list(dict.fromkeys(next_actions))}
 
 def persist_packet(packet:dict, output_dir:str|None=None)->dict:
     root=Path(output_dir or (Path(packet["project_root"])/".search-reconcile"/"packets")); root.mkdir(parents=True,exist_ok=True)

@@ -5,6 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 import reconciliation as rec
 import mcp_server
+import smart_explore
 
 class ReconciliationTests(unittest.TestCase):
  def test_store_selection(self):
@@ -28,6 +29,7 @@ class ReconciliationTests(unittest.TestCase):
    self.assertTrue(next(x for x in out['store_runs'] if x['store']=='codex_memory')['queried'])
    self.assertTrue(out['decisions']); self.assertTrue(out['contracts'])
    self.assertEqual(out['results'][0]['store'],'codex_memory')
+   self.assertTrue(out['next_actions'])
 
  def test_conflict_detection(self):
   rows=[{'title':'Final Contract','store':'ccc','content_hash':'a'}, {'title':'final-contract','store':'docstore','content_hash':'b'}]
@@ -37,5 +39,22 @@ class ReconciliationTests(unittest.TestCase):
   names={x['name'] for x in mcp_server.TOOLS}
   expected={'structural_search','semantic_code_search','code_index_refresh','code_index_status','code_index_doctor','structural_grep','selected_store_recall','conflict_discovery','decisions_final_contracts','reconcile_run','reconcile_repair','reconcile_status','reconcile_export','store_inventory'}
   self.assertEqual(names,expected)
+
+ def test_unavailable_selected_store_has_recovery_action(self):
+  fake={s:{'available':False,'adapter':None,'identity':{}} for s in rec.STORE_NAMES}
+  with patch.object(rec,'inventory',return_value=fake):
+   out=rec.recall('contract',str(ROOT),'selected',['docstore'],1)
+  self.assertFalse(out['attribution_clean'])
+  self.assertIn('configure PROPRIA_DOCSTORE_ADAPTER and retry',out['next_actions'])
+
+ def test_active_wal_is_reported_and_never_stale(self):
+  with tempfile.TemporaryDirectory() as td, patch.dict(os.environ, {'SMART_EXPLORE_HOME': td}):
+   indexes=Path(td)/'indexes'; indexes.mkdir()
+   db=indexes/'active.duckdb'; db.write_bytes(b'not opened')
+   db.with_suffix('.duckdb.wal').write_bytes(b'active')
+   rows=list(smart_explore.store_entries())
+  self.assertEqual(len(rows),1)
+  self.assertFalse(rows[0]['stale'])
+  self.assertTrue(rows[0]['error'].startswith('active_or_unclean_wal'))
 
 if __name__=='__main__': unittest.main()

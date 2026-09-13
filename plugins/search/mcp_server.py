@@ -35,16 +35,25 @@ def run_cli(args,cwd=None):
  try:return json.loads(cp.stdout)
  except json.JSONDecodeError:return {"text":cp.stdout}
 
+def with_actions(value,actions):
+ if isinstance(value,dict): value=dict(value)
+ else:value={"result":value}
+ value["next_actions"]=actions
+ return value
+
 def call(name,a):
  path=a.get("path",os.getcwd()); limit=str(a.get("limit",20)); mode=a.get("mode","auto"); stores=a.get("stores",[])
- if name=="structural_search": return run_cli(["search",a["query"],"--path",path,"--max",str(a.get("max",20)),"--json"],path)
+ if name=="structural_search": return with_actions(run_cli(["search",a["query"],"--path",path,"--max",str(a.get("max",20)),"--json"],path),["open the returned file and line or broaden the query when no symbol matches"])
  if name=="semantic_code_search":
   args=["semantic",a["query"],"--path",path,"--offset",str(a.get("offset",0)),"--limit",str(a.get("limit",10))]
   for lang in a.get("lang",[]):args += ["--lang",lang]
   if a.get("file_path"):args += ["--file-path",a["file_path"]]
-  return run_cli(args,path)
- if name in {"code_index_refresh","code_index_status","code_index_doctor"}: return run_cli([{"code_index_refresh":"ccc-index","code_index_status":"ccc-status","code_index_doctor":"ccc-doctor"}[name],"--path",path],path)
- if name=="structural_grep": return run_cli(["ccc-grep","--path",path,"--query",a["query"]],path)
+  return with_actions(run_cli(args,path),["inspect the returned file paths and scores or adjust language/path filters"])
+ if name in {"code_index_refresh","code_index_status","code_index_doctor"}:
+  value=run_cli([{"code_index_refresh":"ccc-index","code_index_status":"ccc-status","code_index_doctor":"ccc-doctor"}[name],"--path",path],path)
+  actions={"code_index_refresh":["call code_index_status, then prove a semantic_code_search result"],"code_index_status":["refresh when stale; run code_index_doctor when status is unclear"],"code_index_doctor":["repair reported health failures, refresh, then prove semantic search"]}[name]
+  return with_actions(value,actions)
+ if name=="structural_grep": return with_actions(run_cli(["ccc-grep","--path",path,"--query",a["query"]],path),["open matching files or adjust the structural example when no match is returned"])
  if name=="store_inventory": return run_cli(["stores","--path",path,"--json"],path)
  command={"selected_store_recall":"recall","conflict_discovery":"conflicts","decisions_final_contracts":"decisions"}.get(name)
  if command:

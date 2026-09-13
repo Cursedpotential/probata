@@ -20,7 +20,7 @@ Subcommands:
   lsp                                show LSP server availability per language
   imports [--file F | --module M]    list a file's imports, or who imports a module
   changed [--since 24h|7d]           symbols added/removed/modified since a cutoff
-  prune   [--yes]                    remove indexes whose project path no longer exists
+  prune   [--yes]                    quarantine indexes whose project path no longer exists
 
 Every subcommand accepts --json for machine-readable output and --db to
 target an explicit index file.
@@ -936,17 +936,17 @@ def cmd_changed(args):
 
 
 def cmd_prune(args):
-    """Remove central-store indexes whose project path no longer exists."""
+    """Quarantine central-store indexes whose project path no longer exists."""
     stale = [e for e in store_entries()
              if e["stale"] or (e["error"] and not e["error"].startswith("active_or_unclean_wal"))]
     if args.json and not args.yes:
-        print(json.dumps({"would_remove": stale, "note": "re-run with --yes to delete"}, indent=1))
+        print(json.dumps({"would_quarantine": stale, "note": "re-run with --yes to move into to_be_deleted"}, indent=1))
         return
     if not stale:
         print("Nothing to prune — every index maps to an existing project path.")
         return
     if not args.yes:
-        print("-- Would remove (dry run; re-run with --yes to delete) --")
+        print("-- Would quarantine (dry run; re-run with --yes to move into to_be_deleted) --")
         for e in stale:
             why = e["error"] and f"unreadable: {e['error']}" or f"project path missing: {e['root']}"
             print(f"  {e['name']}  ({e['size_kb']}K)  [{why}]")
@@ -1121,8 +1121,8 @@ def main():
     p.set_defaults(func=cmd_changed)
 
     p = sub.add_parser("prune", parents=[common],
-                       help="remove indexes whose project path no longer exists")
-    p.add_argument("--yes", action="store_true", help="actually delete (default: dry run)")
+                       help="quarantine indexes whose project path no longer exists")
+    p.add_argument("--yes", action="store_true", help="move into to_be_deleted (default: dry run)")
     p.set_defaults(func=cmd_prune)
 
     p = sub.add_parser("stores", parents=[common], help="inventory selectable code, docs, and memory stores")
