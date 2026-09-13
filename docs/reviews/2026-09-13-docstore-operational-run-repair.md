@@ -153,6 +153,24 @@ stores. The selected Docstore adapter was unavailable because
 reported requested=true, available=false, queried=false, skipped=unavailable, and
 the exact configuration/retry next action. No ad-hoc search or silent fallback ran.
 
+Deployment `vhp260pdcx7udkw60gi2e1wq` installed commit
+`b97562ea6833b4ceeeb207504530096b8e600d8b`. Its ordinary startup reconciliation,
+run `2e1193bc5013444bbbc3f4990e4302b4`, finished in 27 seconds with a stable source
+digest, 488 expected documents, 488 observed documents, and zero missing,
+unexpected, or hash-mismatched paths. The durable receipt and a separate fresh
+`/attribution` call both returned `cdc_verified=true`.
+
+The exact user-configured Codex stdio command then discovered 40 tools and invoked
+pipeline identity, current run, fresh attribution, graph schema, graph preview, and
+CSV node/edge export through MCP. Identity verified live; the same terminal run and
+zero-drift attribution were returned. The catalog exposed full/selected run start,
+current/get/list, cancellation, attribution, graph, DuckDB compact presentation, and
+all four reconciliation adapter tools. A `codebase` index-kind invocation was rejected
+by the MCP schema, and cancellation of a non-active run was rejected by the live API.
+A final operational handoff was written through `docstore_handoff_write` and read back
+as active `document:i5ygmg5kucat5wx0pmn3`; the write explicitly did not trigger
+indexing.
+
 ## Deployment boundary
 
 The current worker image copies only Probata `docs/` plus `scripts/docstore/`.
