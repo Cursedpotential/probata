@@ -32,7 +32,7 @@ disagreement between code and the newer contract is an implementation gap.
 | `xplorer-copilot-buildkit.zip` | `B10358E6EA3684E9D5B24D0C0BD3D33D4FB2CC108E4DF89FA09C74B1B6A34EBE` | Xplorer agent/copilot surface build kit |
 | `surreal-docstore.zip` | `9B71FF53115FDD5D1ED8B721929DC14511DECC63A7EEC4F06EE3CEAE22014892` | Original Docstore plugin/agent/schema build kit |
 | `repair_tool_kit_buildkit_v2.zip` | `F2A32904D98697ECA6B6A5DEB31D1B1BD388C5D84CC33F2871B759F3D7BD4D9A` | Original extraction and repair build kit |
-| `Merged_Output-20260908T233006Z-1-001.zip` | `9006009A45AACB5F06CE6C3E871B18806D64A5BD3E763269643688E9287F88FC` | Three small entity/timeline/narrative spreadsheets supplied as product test material, not an architecture contract |
+| `Merged_Output-20260908T233006Z-1-001.zip` | `9006009A45AACB5F06CE6C3E871B18806D64A5BD3E763269643688E9287F88FC` | Claude-produced entity/timeline/narrative graph-extraction sample and schema-coverage probe |
 | `md.md` | `8EF6CD0CECB3C0837A321FEB0BDF2D8C0C13982BD86EE7F659EECC859B1917D4` | Forensic-software-editor research input |
 | `drive-download-20260907T133916Z-1-001.zip` | `0C143FCBFE1CED8AFB66F98749F04219D2EFC8443E363CDAA6F3024723E8BB5B` | Large legal/corpus/export bundle; historical source and test material |
 | `drive-download-20260907T133641Z-1-001.zip` | `E1DA91A49C246BF017FB370345AFA90E51CF39F272E79261B49B2775642650C2` | Legal document parsing guidance plus prompt corpus |
@@ -41,6 +41,18 @@ disagreement between code and the newer contract is an implementation gap.
 The sources remain in `F:\Users\matts\Downloads`. They were read in place.
 The ZIPs were inventoried through `System.IO.Compression`; they were not
 extracted into the repository.
+
+The three workbooks in `Merged_Output-20260908T233006Z-1-001.zip` are the
+result of asking Claude to analyze a group of source files and extract a graph
+plus summaries. They are a useful starting sample: their entity, timeline, and
+narrative coverage is broader in places than the schema draft that was being
+developed. They also omit important parts of Probata's current source,
+provenance, temporal, review, and authority structure. They are therefore a
+diagnostic coverage probe and candidate field/relationship inventory. They are
+not an authoritative schema, verified fact set, or product test fixture. Their
+use is to compare what the current schema captures, what this unconstrained
+extraction captured, what each missed, and which candidate concepts should be
+adopted through an explicit contract decision.
 
 ## Binding corrections recovered from the original context
 

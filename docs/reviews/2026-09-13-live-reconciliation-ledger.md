@@ -51,6 +51,13 @@ their titles:
   reconciliation and the warning that exploratory extractions are diagnostic
   probes, not canonical schemas.
 
+The supplied `Merged_Output` people, timeline, and narrative workbooks are one
+such diagnostic graph extraction. They are more complete than the earlier
+schema attempt in several dimensions while still missing required current
+structure. Preserve them as a candidate coverage map for a fit-gap review;
+never silently promote their rows, interpretations, or columns into canonical
+facts or schema.
+
 ## Current implementation lanes
 
 - Root integration owns the n8n checked-in preview exports, their contract
