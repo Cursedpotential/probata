@@ -173,10 +173,11 @@ def verify_install(plan):
     probe=plugin/'smart_explore.py'
     cp=subprocess.run([str(plugin/'search.cmd'),'search','central store','--path',str(plugin),'--max','3','--json','--db',str(Path(plan['index_store'])/'verify.duckdb')],cwd=plugin,env=runenv,text=True,capture_output=True,timeout=180)
     checks['tree_sitter_duckdb_query']={'ok':cp.returncode==0 and 'central_store' in cp.stdout,'output':(cp.stdout or cp.stderr)[:300]}
-    mcp=subprocess.run([str(py),'-c',
-      "import sys;sys.path.insert(0,r'"+str(plugin)+"');import mcp_server;assert len(mcp_server.TOOLS)>=16;print(len(mcp_server.TOOLS))"],
-      text=True,capture_output=True,timeout=60)
-    checks['mcp_catalog']={'ok':mcp.returncode==0,'output':mcp.stdout.strip() or mcp.stderr.strip()}
+    request=json.dumps({'jsonrpc':'2.0','id':1,'method':'initialize','params':{}}).encode()
+    frame=f'Content-Length: {len(request)}\r\n\r\n'.encode()+request
+    mcp=subprocess.run([str(py),str(plugin/'mcp_server.py')],input=frame,capture_output=True,timeout=60)
+    output=mcp.stdout.decode('utf-8','replace')
+    checks['mcp_initialize']={'ok':mcp.returncode==0 and 'propria-search' in output,'output':output[:300] or mcp.stderr.decode('utf-8','replace')[:300]}
     settings=(Path(plan['target'])/'.cocoindex_code'/'settings.yml').read_text(encoding='utf-8')
     checks['docs_exclusion']={'ok':all(x in settings for x in ('**/docs/**','**/*.py')) and '**/*.md' not in settings}
     checks['ok']=all(v.get('ok',False) for v in checks.values() if isinstance(v,dict))

@@ -17,6 +17,20 @@ customizer installs one pinned Search plugin engine instance per approved target
 through scan, immutable plan, exact human approval, target-bound apply, and
 verify/report stages.
 
+The locked runtime pins DuckDB 1.5.5 and Tree-sitter Language Pack 1.9.1 in
+pyproject.toml, requirements.txt, and uv.lock. The target environment lives in
+the target's ignored .runtime/search/env. uv is preferred; the documented
+fallback uses python -m venv plus exact requirements pins and never ambient site
+packages.
+
+The isolated HITL proof under Propria/to_be_deleted used plan ID
+03BE3B022765C066ADD0661457A4A890963367A0C15610833C0AFE8956915DB6.
+It rejected implicit mutation by construction, then used a labeled test approval
+fixture bound to the exact target and package hash. Apply and verify proved
+DuckDB 1.5.5 imports, Tree-sitter structural search, CLI help, MCP initialize,
+and CCC documentation exclusions. The entire proof remains quarantined for the
+owner; it was not installed into a live product.
+
 ## Why E:\data\codex-smart-explore existed
 
 The directory was selected on 2026-09-12 by a transient historical
