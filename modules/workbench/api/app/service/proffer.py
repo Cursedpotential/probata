@@ -35,6 +35,7 @@ from app.types.proffer import (
     ProfferRepairDecisionRequest,
     ProfferRepairDecisionResponse,
     ProfferPreviewMessagesResponse,
+    ProfferContentResponse,
     ProfferPreviewResponse,
     ProfferStartRequest,
     ProfferStartResponse,
@@ -270,6 +271,32 @@ async def preview_messages(
     )
     if result.preview_handle != preview_handle:
         raise ProfferError("Proffer preview message correlation failed", 502)
+    return result
+
+
+async def preview_content(
+    preview_handle: str,
+    *,
+    mode: MatterMode,
+    record_cursor: str | None,
+    chunk_cursor: str | None,
+    limit: int,
+) -> ProfferContentResponse:
+    """Read exact retained-package, generic-record, and pre-publication chunk data."""
+    _mode_call(require_preview_mode, preview_handle, mode)
+    params: dict[str, str | int] = {"limit": limit}
+    if record_cursor:
+        params["record_cursor"] = record_cursor
+    if chunk_cursor:
+        params["chunk_cursor"] = chunk_cursor
+    response = await _request("GET", f"/reference-import/previews/{preview_handle}/content", params=params)
+    result = _validated(
+        ProfferContentResponse,
+        _mode_payload(_json_payload(response, "preview content page"), "preview content page", mode),
+        "preview content page",
+    )
+    if result.preview_handle != preview_handle or result.matter_mode != mode:
+        raise ProfferError("Proffer preview content correlation failed", 502)
     return result
 
 

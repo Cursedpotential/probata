@@ -90,3 +90,16 @@ test("n8n visibility is explicit without inventing execution or activation ident
   assert.match(surface, /run_or_execution_id/);
   assert.doesNotMatch(surface, /n8n\.io|\/executions\//);
 });
+
+test("generic records and exact chunks use the durable content projection", () => {
+  assert.match(client, /getProfferPreviewContent/);
+  assert.match(client, /record_cursor/);
+  assert.match(client, /chunk_cursor/);
+  assert.match(preview, /content\.records\.every/);
+  assert.match(surface, /exact persisted normalized_payload objects/);
+  assert.match(surface, /Exact pre-publication chunks/);
+  assert.match(surface, /piece\.byte_start/);
+  assert.match(surface, /piece\.sha256/);
+  assert.match(surface, /does not publish to Weaviate, promote evidence, or establish custody/);
+  assert.match(surface, /Compare attempts and edit-template rerun remain unavailable/);
+});

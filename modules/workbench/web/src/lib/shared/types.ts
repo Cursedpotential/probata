@@ -1335,6 +1335,94 @@ export interface ProfferPreviewMessagesResponse {
   next_cursor?: string | null;
 }
 
+export interface ProfferPackageProjection {
+  source_version_ref: string;
+  original_ref?: string | null;
+  original_filename?: string | null;
+  declared_format: string;
+  status: string;
+  original_sha256?: string | null;
+  original_bytes?: number | null;
+  storage_class?: string | null;
+  metadata_count: number;
+  attachment_count: number;
+}
+
+export interface ProfferAttemptProjection {
+  attempt_ref?: string;
+  projection_ref: string;
+  source_version_ref: string;
+  raw_generation_ref: string;
+  normalized_generation_ref: string;
+  parser?: { parser_id: string; parser_version: string; config_digest: string } | null;
+  selection_ref?: string;
+  parser_options_ref?: string;
+  receipts: ProfferPreviewReceipt[];
+}
+
+export interface ProfferGenericRecord {
+  record_id: string;
+  ordinal: number;
+  record_type: "message" | "call" | "event" | "media" | "document" | "other";
+  occurred_at?: string | null;
+  payload: Record<string, unknown>;
+  source_locator_ref: string;
+}
+
+export interface ProfferPackageAttachment {
+  object_ref: string;
+  parent_object_ref?: string | null;
+  member_locator: Record<string, unknown>;
+  sha256: string;
+  byte_length: number;
+  storage_class: string;
+}
+
+export interface ProfferChunkGeneration {
+  generation_ref: string;
+  generation_ordinal: number;
+  status: "open" | "sealed" | "aborted";
+  policy_id: string;
+  policy_version: string;
+  chunker_id: string;
+  chunker_version: string;
+  schema_version: string;
+  source_view: string;
+  source_sha256: string;
+  manifest_sha256?: string | null;
+  chunk_count?: number | null;
+  receipt_ref: string;
+  reassembly_result?: string | null;
+  sealed_at?: string | null;
+}
+
+export interface ProfferContentChunk {
+  chunk_ref: string;
+  index: number;
+  content: string;
+  sha256: string;
+  derivation_mode: "verbatim_span" | "composed" | "unverified_derived";
+  token_count?: number | null;
+  locator_ref: string;
+  byte_start: number;
+  byte_end: number;
+}
+
+export interface ProfferContentResponse {
+  preview_handle: string;
+  matter_mode: MatterMode;
+  package: ProfferPackageProjection;
+  attempt: ProfferAttemptProjection;
+  attempts_complete: boolean;
+  attempts_reason?: string;
+  records: ProfferGenericRecord[];
+  attachments: ProfferPackageAttachment[];
+  chunk_generation?: ProfferChunkGeneration | null;
+  chunks: ProfferContentChunk[];
+  next_record_cursor?: string | null;
+  next_chunk_cursor?: string | null;
+}
+
 export interface ProfferPreviewEvent {
   event_id: number;
   event_type: "phase_changed" | "receipt_recorded" | "messages_available" | "decision_requested" | "decision_recorded" | "completed" | "failed";

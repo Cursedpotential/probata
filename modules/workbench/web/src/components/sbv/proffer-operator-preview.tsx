@@ -19,6 +19,7 @@ import type {
   ProfferPreviewMessage,
   ProfferPreviewParticipant,
   ProfferPreviewResponse,
+  ProfferContentResponse,
 } from "@/lib/shared/types";
 import { cn } from "@/lib/utils";
 
@@ -54,10 +55,14 @@ export function ProfferOperatorPreview({
   messages,
   participants,
   events,
+  content,
+  contentLoading,
+  contentError,
   messagesLoading,
   messageError,
   hasMore,
   onLoadMore,
+  onLoadMoreContent,
   onRefresh,
   onApprove,
   onReject,
@@ -71,10 +76,14 @@ export function ProfferOperatorPreview({
   messages: ProfferPreviewMessage[];
   participants: ProfferPreviewParticipant[];
   events: ProfferPreviewEvent[];
+  content: ProfferContentResponse | null;
+  contentLoading: boolean;
+  contentError: string | null;
   messagesLoading: boolean;
   messageError: string | null;
   hasMore: boolean;
   onLoadMore: () => void;
+  onLoadMoreContent: (recordCursor?: string, chunkCursor?: string) => void;
   onRefresh: () => void;
   onApprove: () => void;
   onReject: (reason: string) => void;
@@ -115,7 +124,8 @@ export function ProfferOperatorPreview({
 
       <nav className="flex gap-1 overflow-x-auto border bg-card px-2 pt-2" role="tablist" aria-label="Proffer preview data">
         {TABS.map(({ id, label }) => {
-          const state = snapshot.surfaces[id === "graph" ? "graph" : id];
+          const durableContentAvailable = Boolean(content && ((id === "records" && content.records.length >= 0) || (id === "chunks" && content.chunk_generation)));
+          const state = durableContentAvailable ? { status: "available" } : snapshot.surfaces[id === "graph" ? "graph" : id];
           return (
             <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)} className={cn("flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-xs font-semibold", tab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground")}>
               {label}<span className={cn("size-1.5 rounded-full", state.status === "available" ? "bg-[#2f9d67]" : state.status === "pending" ? "bg-[#c69027]" : "bg-muted-foreground/50")} />
@@ -127,6 +137,17 @@ export function ProfferOperatorPreview({
       <section className="min-h-[31rem] border bg-card p-4" role="tabpanel">
         {tab === "source" && <div className="space-y-5">
           <header><p className="platform-kicker">Extraction package</p><h2 className="mt-1 text-xl font-semibold">Original, package, and authority boundary</h2></header>
+          {content && <section className="border-l-4 border-l-primary bg-accent/30 p-4 text-xs">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div><strong>Retained source version</strong><p className="mt-1 break-all font-mono text-[10px]">{content.package.source_version_ref}</p></div>
+              <div><strong>Original object</strong><p className="mt-1 break-all font-mono text-[10px]">{content.package.original_ref ?? "Not retained yet"}</p></div>
+              <div><strong>Original SHA-256</strong><p className="mt-1 break-all font-mono text-[10px]">{content.package.original_sha256 ?? "Not available"}</p></div>
+              <div><strong>Declared format / state</strong><p className="mt-1">{content.package.declared_format} · {content.package.status}</p></div>
+            </div>
+            <p className="mt-3 text-muted-foreground">{content.package.metadata_count} metadata records · {content.package.attachment_count} retained attachments · {content.package.original_bytes?.toLocaleString() ?? "unknown"} bytes · {content.package.storage_class ?? "storage class unavailable"}</p>
+            {content.attachments.length > 0 && <ol className="mt-3 divide-y border bg-card">{content.attachments.map((attachment) => <li key={attachment.object_ref} className="p-3"><strong>Attachment object</strong><p className="mt-1 break-all font-mono text-[10px]">{attachment.object_ref}</p><p className="mt-1">{attachment.byte_length.toLocaleString()} bytes · {attachment.storage_class}</p><p className="mt-1 break-all font-mono text-[10px]">SHA-256 {attachment.sha256}</p><pre className="mt-2 overflow-auto whitespace-pre-wrap text-[10px] text-muted-foreground">{JSON.stringify(attachment.member_locator, null, 2)}</pre></li>)}</ol>}
+          </section>}
+          {contentError && <p className="border border-[#ead5a9] bg-[#fff4dd] p-3 text-xs text-[#684b18]" role="status">Package projection unavailable: {contentError}</p>}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <Availability label="Original source reference" value={snapshot.package.original} />
             <Availability label="Original fingerprint" value={snapshot.package.original_fingerprint} />
@@ -173,13 +194,24 @@ export function ProfferOperatorPreview({
           <div className="border-l-4 border-l-primary bg-accent/40 p-4 text-sm"><ShieldCheck className="mr-2 inline size-4" />{snapshot.write_boundary}</div>
         </div>}
 
-        {tab === "records" && <PlatformMessageViewer key={snapshot.preview_handle} messages={messages} participants={participants} loading={messagesLoading} error={messageError} previewHandle={snapshot.preview_handle} hasMore={hasMore} onLoadMore={onLoadMore} />}
+        {tab === "records" && (content ? <div className="space-y-3">
+          <header><p className="platform-kicker">Authoritative normalized projection</p><h2 className="mt-1 text-xl font-semibold">All record types</h2><p className="mt-1 text-xs text-muted-foreground">Payloads below are the exact persisted normalized_payload objects. Messages are one record type within this view.</p></header>
+          <ol className="divide-y border">{content.records.map((record) => <li key={record.record_id} className="p-4"><div className="flex flex-wrap justify-between gap-2"><strong>#{record.ordinal} · {record.record_type}</strong><span className="text-xs text-muted-foreground">{record.occurred_at ?? "No occurrence time"}</span></div><p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">{record.record_id} · {record.source_locator_ref}</p><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap border bg-muted/30 p-3 text-xs">{JSON.stringify(record.payload, null, 2)}</pre></li>)}</ol>
+          {!content.records.length && <p className="border p-6 text-center text-sm text-muted-foreground">No normalized records are projected for this attempt.</p>}
+          {content.next_record_cursor && <Button variant="outline" disabled={contentLoading} onClick={() => onLoadMoreContent(content.next_record_cursor ?? undefined, undefined)}>Load more records</Button>}
+        </div> : <PlatformMessageViewer key={snapshot.preview_handle} messages={messages} participants={participants} loading={messagesLoading || contentLoading} error={contentError ?? messageError} previewHandle={snapshot.preview_handle} hasMore={hasMore} onLoadMore={onLoadMore} />)}
 
-        {tab === "chunks" && <UnavailablePanel title="Chunks and context" availability={snapshot.surfaces.chunks} />}
+        {tab === "chunks" && (content?.chunk_generation ? <div className="space-y-4">
+          <header><p className="platform-kicker">Exact pre-publication chunks</p><h2 className="mt-1 text-xl font-semibold">Sealed chunk generation {content.chunk_generation.generation_ordinal}</h2><p className="mt-1 text-xs text-muted-foreground">These chunks remain context candidates. Viewing them does not publish to Weaviate, promote evidence, or establish custody.</p></header>
+          <dl className="grid gap-px border bg-border text-xs md:grid-cols-3"><div className="bg-card p-3"><dt>Generation / receipt</dt><dd className="mt-1 break-all font-mono text-[10px]">{content.chunk_generation.generation_ref}<br />{content.chunk_generation.receipt_ref}</dd></div><div className="bg-card p-3"><dt>Chunker / policy</dt><dd className="mt-1">{content.chunk_generation.chunker_id}@{content.chunk_generation.chunker_version}<br />{content.chunk_generation.policy_id}@{content.chunk_generation.policy_version}</dd></div><div className="bg-card p-3"><dt>Completeness</dt><dd className="mt-1">{content.chunk_generation.status} · {content.chunk_generation.reassembly_result ?? "not reported"}<br />{content.chunk_generation.chunk_count ?? content.chunks.length} chunks</dd></div></dl>
+          <ol className="space-y-3">{content.chunks.map((piece) => <li key={piece.chunk_ref} className="border p-4"><div className="flex flex-wrap items-center justify-between gap-2"><strong>Chunk {piece.index}</strong><Badge variant="outline">{piece.derivation_mode}</Badge></div><p className="mt-2 break-all font-mono text-[10px] text-muted-foreground">Bytes [{piece.byte_start}, {piece.byte_end}) · {piece.locator_ref}<br />SHA-256 {piece.sha256}</p><pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap border bg-muted/30 p-3 text-xs">{piece.content}</pre></li>)}</ol>
+          {content.next_chunk_cursor && <Button variant="outline" disabled={contentLoading} onClick={() => onLoadMoreContent(undefined, content.next_chunk_cursor ?? undefined)}>Load more chunks</Button>}
+        </div> : <UnavailablePanel title="Chunks and context" availability={contentError ? { ...snapshot.surfaces.chunks, reason: contentError } : snapshot.surfaces.chunks} />)}
         {tab === "entities" && <UnavailablePanel title="Extracted entities" availability={snapshot.surfaces.entities} />}
         {tab === "graph" && <UnavailablePanel title="Governed graph candidates" availability={snapshot.surfaces.graph} />}
 
         {tab === "workflow" && <div className="space-y-5">
+          {content && <section className="border p-4 text-xs"><div className="flex items-center justify-between gap-3"><h2 className="platform-rule-title">Projected extraction attempt</h2><Badge variant="outline">{content.attempts_complete ? "history complete" : "current projection only"}</Badge></div><div className="mt-3 grid gap-2 md:grid-cols-2"><p className="break-all"><strong>Attempt ref:</strong> {content.attempt.attempt_ref || "Unavailable"}</p><p className="break-all"><strong>Projection ref:</strong> {content.attempt.projection_ref}</p><p className="break-all"><strong>Selection:</strong> {content.attempt.selection_ref || "Unavailable"}</p><p className="break-all"><strong>Options:</strong> {content.attempt.parser_options_ref || "Unavailable"}</p><p><strong>Parser:</strong> {content.attempt.parser ? `${content.attempt.parser.parser_id}@${content.attempt.parser.parser_version}` : "Unavailable"}</p></div>{!content.attempts_complete && <p className="mt-3 border-l-4 border-l-[#c69027] bg-[#fff4dd] p-3 text-[#684b18]">Compare attempts and edit-template rerun remain unavailable: {content.attempts_reason}</p>}</section>}
           <div className="grid gap-3 lg:grid-cols-2">
             {snapshot.layers.map((layer) => <article key={layer.layer} className="border p-4">
               <div className="flex items-center justify-between"><h2 className="text-base font-semibold uppercase">{layer.layer}</h2><Badge variant="outline">{layer.status.replaceAll("_", " ")}</Badge></div>

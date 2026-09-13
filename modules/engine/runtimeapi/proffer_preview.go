@@ -75,12 +75,49 @@ type PreviewMessage = previewmodel.Message
 type PreviewEvent = previewmodel.Event
 type PreviewPage = previewmodel.Page
 type PreviewStore = previewmodel.Store
+type PreviewContentPage = previewmodel.ContentPage
+type PreviewContentStore = previewmodel.ContentStore
 
 type memoryPreview struct {
 	binding     PreviewBinding
 	projections []memoryPreviewProjection
+	content     *PreviewContentPage
 	decisions   map[[sha256.Size]byte]struct{}
 	events      []PreviewEvent
+}
+
+func (s *MemoryPreviewStore) Content(_ context.Context, handle string, recordOffset, chunkOffset, limit int) (PreviewContentPage, error) {
+	if recordOffset < 0 || chunkOffset < 0 || limit < 1 || limit > maxPreviewPage {
+		return PreviewContentPage{}, errors.New("preview content page bounds are invalid")
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry := s.entries[handle]
+	if entry == nil {
+		return PreviewContentPage{}, ErrPreviewNotFound
+	}
+	if entry.content == nil {
+		return PreviewContentPage{}, ErrPreviewNotReady
+	}
+	page := clonePreviewContent(*entry.content)
+	page.Records, page.NextRecordOffset = contentWindow(page.Records, recordOffset, limit)
+	page.Chunks, page.NextChunkOffset = contentWindow(page.Chunks, chunkOffset, limit)
+	return page, nil
+}
+
+func contentWindow[T any](values []T, offset, limit int) ([]T, *int) {
+	if offset > len(values) {
+		return []T{}, nil
+	}
+	end := offset + limit
+	if end > len(values) {
+		end = len(values)
+	}
+	window := append([]T(nil), values[offset:end]...)
+	if end < len(values) {
+		return window, &end
+	}
+	return window, nil
 }
 
 type memoryPreviewProjection struct {
@@ -340,6 +377,33 @@ func (s *MemoryPreviewStore) PutProjection(handle string, snapshot PreviewSnapsh
 	return nil
 }
 
+// PutContent is importer/test scaffolding parallel to PutProjection. Durable
+// deployments resolve this projection from PostgreSQL through Content.
+func (s *MemoryPreviewStore) PutContent(handle string, content PreviewContentPage) error {
+	if content.Package.SourceVersionRef == "" || content.Attempt.ProjectionRef == "" || content.Attempt.SourceVersionRef != content.Package.SourceVersionRef {
+		return errors.New("preview content package and attempt correlation is invalid")
+	}
+	for _, record := range content.Records {
+		if record.RecordID == "" || record.Ordinal < 0 || record.RecordType == "" || record.SourceLocatorRef == "" || len(record.Payload) > 4<<20 || !json.Valid(record.Payload) {
+			return errors.New("preview content record is invalid")
+		}
+	}
+	for _, piece := range content.Chunks {
+		if piece.ChunkRef == "" || piece.Index < 0 || piece.Content == "" || !previewmodel.ValidDigest(piece.SHA256) || piece.LocatorRef == "" || piece.ByteStart < 0 || piece.ByteEnd <= piece.ByteStart || len(piece.Content) > 4<<20 {
+			return errors.New("preview content chunk is invalid")
+		}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entry := s.entries[handle]
+	if entry == nil {
+		return ErrPreviewNotFound
+	}
+	clone := clonePreviewContent(content)
+	entry.content = &clone
+	return nil
+}
+
 func memoryDecisionKey(handle string, approved bool, reason, actor string, selection, options proffer.Ref) [sha256.Size]byte {
 	return sha256.Sum256([]byte(fmt.Sprintf("%s\x00%t\x00%s\x00%s\x00%s\x00%s", handle, approved, reason, actor, selection, options)))
 }
@@ -400,6 +464,30 @@ func clonePreviewMessages(messages []PreviewMessage) []PreviewMessage {
 			clone[index].SenderParticipantID = &value
 		}
 	}
+	return clone
+}
+
+func clonePreviewContent(content PreviewContentPage) PreviewContentPage {
+	clone := content
+	clone.Attempt.Receipts = append([]previewmodel.Receipt(nil), content.Attempt.Receipts...)
+	if content.Attempt.Parser != nil {
+		parser := *content.Attempt.Parser
+		clone.Attempt.Parser = &parser
+	}
+	clone.Records = append([]previewmodel.Record(nil), content.Records...)
+	for index := range clone.Records {
+		clone.Records[index].Payload = append(json.RawMessage(nil), content.Records[index].Payload...)
+	}
+	clone.Attachments = append([]previewmodel.PackageAttachment(nil), content.Attachments...)
+	for index := range clone.Attachments {
+		clone.Attachments[index].MemberLocator = append(json.RawMessage(nil), content.Attachments[index].MemberLocator...)
+	}
+	clone.Chunks = append([]previewmodel.ContentChunk(nil), content.Chunks...)
+	if content.ChunkGeneration != nil {
+		generation := *content.ChunkGeneration
+		clone.ChunkGeneration = &generation
+	}
+	clone.NextRecordOffset, clone.NextChunkOffset = nil, nil
 	return clone
 }
 
@@ -477,6 +565,7 @@ func (h *PreviewHTTPHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /reference-import/operations/{preview_handle}", h.auth(h.operation))
 	mux.HandleFunc("GET /reference-import/previews/{preview_handle}", h.auth(h.snapshot))
 	mux.HandleFunc("GET /reference-import/previews/{preview_handle}/messages", h.auth(h.messages))
+	mux.HandleFunc("GET /reference-import/previews/{preview_handle}/content", h.auth(h.content))
 	mux.HandleFunc("GET /reference-import/previews/{preview_handle}/events", h.auth(h.events))
 	mux.HandleFunc("POST /reference-import/previews/{preview_handle}/decision", h.auth(h.decide))
 	mux.HandleFunc("POST /reference-import/previews/{preview_handle}/repair-decision", h.auth(h.decideRepair))
@@ -885,6 +974,69 @@ func (h *PreviewHTTPHandler) messages(w http.ResponseWriter, r *http.Request) {
 	}{handle, page.Participants, page.Messages, next})
 }
 
+func (h *PreviewHTTPHandler) content(w http.ResponseWriter, r *http.Request) {
+	handle := r.PathValue("preview_handle")
+	store, ok := h.store.(PreviewContentStore)
+	if !ok {
+		previewError(w, http.StatusNotImplemented, errors.New("durable package, record, and chunk preview is not available from this preview store"))
+		return
+	}
+	limit := 100
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > maxPreviewPage {
+			previewError(w, http.StatusUnprocessableEntity, errors.New("limit must be between 1 and 250"))
+			return
+		}
+		limit = value
+	}
+	recordOffset, chunkOffset := 0, 0
+	if raw := r.URL.Query().Get("record_cursor"); raw != "" {
+		value, err := h.decodeScopedCursor(handle, "records", raw)
+		if err != nil {
+			previewError(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+		recordOffset = value
+	}
+	if raw := r.URL.Query().Get("chunk_cursor"); raw != "" {
+		value, err := h.decodeScopedCursor(handle, "chunks", raw)
+		if err != nil {
+			previewError(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+		chunkOffset = value
+	}
+	page, err := store.Content(r.Context(), handle, recordOffset, chunkOffset, limit)
+	if err != nil {
+		h.storeError(w, err)
+		return
+	}
+	var nextRecord, nextChunk *string
+	if page.NextRecordOffset != nil {
+		encoded := h.encodeScopedCursor(handle, "records", *page.NextRecordOffset)
+		nextRecord = &encoded
+	}
+	if page.NextChunkOffset != nil {
+		encoded := h.encodeScopedCursor(handle, "chunks", *page.NextChunkOffset)
+		nextChunk = &encoded
+	}
+	previewJSON(w, http.StatusOK, struct {
+		PreviewHandle    string                           `json:"preview_handle"`
+		Package          previewmodel.Package             `json:"package"`
+		Attempt          previewmodel.Attempt             `json:"attempt"`
+		AttemptsComplete bool                             `json:"attempts_complete"`
+		AttemptsReason   string                           `json:"attempts_reason,omitempty"`
+		Records          []previewmodel.Record            `json:"records"`
+		Attachments      []previewmodel.PackageAttachment `json:"attachments"`
+		ChunkGeneration  *previewmodel.ChunkGeneration    `json:"chunk_generation,omitempty"`
+		Chunks           []previewmodel.ContentChunk      `json:"chunks"`
+		NextRecordCursor *string                          `json:"next_record_cursor,omitempty"`
+		NextChunkCursor  *string                          `json:"next_chunk_cursor,omitempty"`
+	}{handle, page.Package, page.Attempt, page.AttemptsComplete, page.AttemptsReason, page.Records,
+		page.Attachments, page.ChunkGeneration, page.Chunks, nextRecord, nextChunk})
+}
+
 type previewDecisionRequest struct {
 	Approved bool   `json:"approved"`
 	Reason   string `json:"reason"`
@@ -1127,6 +1279,36 @@ func (h *PreviewHTTPHandler) decodeCursor(handle, cursor string) (int, error) {
 		return 0, errors.New("cursor signature is invalid")
 	}
 	offset, err := strconv.Atoi(parts[1])
+	if err != nil || offset < 0 {
+		return 0, errors.New("cursor offset is invalid")
+	}
+	return offset, nil
+}
+
+func (h *PreviewHTTPHandler) encodeScopedCursor(handle, scope string, offset int) string {
+	payload := fmt.Sprintf("%s:%s:%d", handle, scope, offset)
+	mac := hmac.New(sha256.New, h.cursorKey)
+	_, _ = mac.Write([]byte(payload))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload + ":" + hex.EncodeToString(mac.Sum(nil))))
+}
+
+func (h *PreviewHTTPHandler) decodeScopedCursor(handle, scope, cursor string) (int, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil || len(decoded) > 512 {
+		return 0, errors.New("cursor is malformed")
+	}
+	parts := strings.Split(string(decoded), ":")
+	if len(parts) != 4 || parts[0] != handle || parts[1] != scope {
+		return 0, errors.New("cursor does not belong to this preview surface")
+	}
+	payload := strings.Join(parts[:3], ":")
+	mac := hmac.New(sha256.New, h.cursorKey)
+	_, _ = mac.Write([]byte(payload))
+	actual, err := hex.DecodeString(parts[3])
+	if err != nil || !hmac.Equal(actual, mac.Sum(nil)) {
+		return 0, errors.New("cursor signature is invalid")
+	}
+	offset, err := strconv.Atoi(parts[2])
 	if err != nil || offset < 0 {
 		return 0, errors.New("cursor offset is invalid")
 	}

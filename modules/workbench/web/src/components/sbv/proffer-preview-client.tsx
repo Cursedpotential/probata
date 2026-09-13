@@ -19,6 +19,7 @@ import {
   decideProfferHandler,
   decideProfferRepair,
   getProfferOperatorSnapshot,
+  getProfferPreviewContent,
   getProfferPreview,
   getProfferPreviewMessages,
 } from "@/lib/api-client";
@@ -32,6 +33,7 @@ import type {
   ProfferPreviewResponse,
   ProfferOperatorSnapshot,
   ProfferParserCandidate,
+  ProfferContentResponse,
 } from "@/lib/shared/types";
 
 function initialHandle(mode: "TEST" | "REAL") {
@@ -53,6 +55,9 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
   const [operatorSnapshot, setOperatorSnapshot] = useState<ProfferOperatorSnapshot | null>(null);
   const [messages, setMessages] = useState<ProfferPreviewMessage[]>([]);
   const [participants, setParticipants] = useState<ProfferPreviewParticipant[]>([]);
+  const [content, setContent] = useState<ProfferContentResponse | null>(null);
+  const [contentError, setContentError] = useState<string | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [events, setEvents] = useState<ProfferPreviewEvent[]>([]);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -66,6 +71,7 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
   const activeHandleRef = useRef(initialUrlHandle);
   const snapshotControllerRef = useRef<AbortController | null>(null);
   const messageControllersRef = useRef(new Map<string, AbortController>());
+  const contentControllerRef = useRef<AbortController | null>(null);
   const requestedCursorsRef = useRef(new Set<string>());
 
   const activateHandle = useCallback((handle: string) => {
@@ -73,12 +79,16 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     activeHandleRef.current = handle;
     snapshotControllerRef.current?.abort();
     messageControllersRef.current.forEach((controller) => controller.abort());
+    contentControllerRef.current?.abort();
     messageControllersRef.current.clear();
     requestedCursorsRef.current.clear();
     setPreview(null);
     setOperatorSnapshot(null);
     setMessages([]);
     setParticipants([]);
+    setContent(null);
+    setContentError(null);
+    setContentLoading(false);
     setNextCursor(null);
     setEvents([]);
     setSnapshotError(null);
@@ -169,6 +179,39 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     }
   }, [previewHandle, mode]);
 
+  const loadContent = useCallback(async (recordCursor?: string, chunkCursor?: string) => {
+    const handle = previewHandle;
+    if (!handle) return;
+    const generation = generationRef.current;
+    contentControllerRef.current?.abort();
+    const controller = new AbortController();
+    contentControllerRef.current = controller;
+    setContentLoading(true);
+    try {
+      const page = await getProfferPreviewContent(handle, mode, recordCursor, chunkCursor, 100, controller.signal);
+      if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
+      setContent((current) => {
+        const append = Boolean(recordCursor || chunkCursor);
+        const records = new Map((append && current ? current.records : []).map((item) => [item.record_id, item]));
+        page.records.forEach((item) => records.set(item.record_id, item));
+        const chunks = new Map((append && current ? current.chunks : []).map((item) => [item.chunk_ref, item]));
+        page.chunks.forEach((item) => chunks.set(item.chunk_ref, item));
+        return {
+          ...page,
+          records: [...records.values()].sort((left, right) => left.ordinal - right.ordinal),
+          chunks: [...chunks.values()].sort((left, right) => left.index - right.index),
+        };
+      });
+      setContentError(null);
+    } catch (error) {
+      if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
+      setContentError(error instanceof Error ? error.message : "Package, record, and chunk preview is unavailable");
+    } finally {
+      if (contentControllerRef.current === controller) contentControllerRef.current = null;
+      if (generation === generationRef.current && activeHandleRef.current === handle) setContentLoading(false);
+    }
+  }, [previewHandle, mode]);
+
   useEffect(() => {
     if (!previewHandle) return;
     const generation = generationRef.current;
@@ -204,6 +247,7 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
       window.clearTimeout(initialLoad);
       source.close();
       snapshotControllerRef.current?.abort();
+      contentControllerRef.current?.abort();
       messageControllers.forEach((controller) => controller.abort());
       messageControllers.clear();
       requestedCursors.clear();
@@ -214,9 +258,12 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
 
   useEffect(() => {
     if (!previewHandle || !contextFlowComplete) return;
-    const timer = window.setTimeout(() => void loadMessages(), 0);
+    const timer = window.setTimeout(() => {
+      void loadMessages();
+      void loadContent();
+    }, 0);
     return () => window.clearTimeout(timer);
-  }, [contextFlowComplete, loadMessages, previewHandle]);
+  }, [contextFlowComplete, loadContent, loadMessages, previewHandle]);
 
   function attach() {
     const handle = draftHandle.trim();
@@ -298,16 +345,9 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     () => PROFFER_CONTEXT_CHECKPOINTS.map(({ type }) => type),
     [],
   );
-  const participantIds = useMemo(
-    () => new Set(participants.map((participant) => participant.participant_id)),
-    [participants],
-  );
-  const provenanceLoaded = messages.length > 0 && messages.every((message) =>
-    Boolean(message.source_locator_ref) &&
-    message.participant_ids.every((id) => participantIds.has(id)) &&
-    (!message.sender_participant_id || participantIds.has(message.sender_participant_id)) &&
-    message.attachments.every((attachment) => Boolean(attachment.source_locator_ref)),
-  );
+  const provenanceLoaded = Boolean(content && content.records.length > 0 && content.records.every((record) =>
+    Boolean(record.source_locator_ref),
+  ));
   const receiptsComplete = requiredReceiptTypes.every((receiptType) =>
     preview?.receipts?.some((receipt) => receipt.receipt_type === receiptType && receipt.status === "completed"),
   );
@@ -315,8 +355,10 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     awaitingDecision &&
     preview?.preview_handle === previewHandle &&
     messagesLoaded &&
+    content &&
     !snapshotError &&
     !messageError &&
+    !contentError &&
     provenanceLoaded &&
     receiptsComplete,
   );
@@ -377,10 +419,14 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
             messages={messages}
             participants={participants}
             events={events}
+            content={content}
+            contentLoading={contentLoading}
+            contentError={contentError}
             messagesLoading={messagesLoading}
             messageError={messageError}
             hasMore={Boolean(nextCursor)}
             onLoadMore={() => void loadMessages(nextCursor ?? undefined)}
+            onLoadMoreContent={(recordCursor, chunkCursor) => void loadContent(recordCursor, chunkCursor)}
             onRefresh={() => void loadSnapshot()}
             onApprove={() => decisionEligible && void decide(true)}
             onReject={(reason) => decisionEligible && void decide(false, reason)}

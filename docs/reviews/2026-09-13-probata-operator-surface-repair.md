@@ -199,3 +199,30 @@ This audit is source proof only. It establishes where n8n and Temporal appear in
 - Focused UI contract tests cover tabs, package/promotion identity, action omission, mode isolation, repair gate, operation ledger, records/provenance, n8n truth, and DuckDB bounds.
 
 No live service was called and no deployment occurred in this lane. Real-file execution, live n8n activation/execution identity, live Temporal state, and write receipts still require a deployed environment and real source proof.
+
+## Follow-up implementation: generic package, record, and chunk projection
+
+The browser preview is no longer structurally limited to normalized messages. The bounded `GET /reference-import/previews/{preview_handle}/content` endpoint reads existing durable PostgreSQL state and returns the retained source and original-object identity, original SHA-256, byte length, storage class, declared format, package members/attachments, exact normalized records of every supported record type, the currently projected extraction attempt, and the latest sealed chunk generation with exact chunk text, hashes, source byte ranges, locators, and reassembly receipt.
+
+This endpoint is a read projection over the existing `context.source_version`, `context.retained_object`, `context.source_version_object`, `context.source_metadata`, `context.normalized_record_identity`, `working.content_chunk_generation`, `working.content_chunk`, `working.content_chunk_source_span`, `context.source_range_locator`, and `working.content_chunk_reassembly_receipt` contracts. It creates no table, generic-text duplicate, publication write, evidence admission, or custody state. Record and chunk pagination use separately scoped authenticated cursors, so a record cursor cannot be replayed against the chunk stream.
+
+The Workbench now renders retained-package and attachment truth on Source, all normalized record types on Records, exact pre-publication chunks and completeness coordinates on Chunks/Context, and the currently projected extraction attempt on Workflow. Preview approval also requires the correlated generic-record projection and its locators. A missing content endpoint or projection keeps approval locked and displays the backend error.
+
+The owner-confirmed product boundary remains intact: Probata/Proffer is app 1. Xplorer plus Case Bible/Consignatio is one combined app/tool (app 2); this lane did not modify, split, or fold app 2 into Probata.
+
+### Remaining control gaps
+
+| Required control | Exact backend gap after this read slice |
+|---|---|
+| Parser/extractor and engine-profile override | A compatible-candidate contract and authenticated Temporal decision must persist the selected implementation/profile against a new attempt. Current handler selection covers only its existing wait. |
+| Editable template and bounded options | No versioned editable template resource, validation endpoint, or immutable options receipt exists in the browser contract. |
+| Rerun retained immutable package | No authenticated command names package, representation, prior attempt, template/options refs, expected state, and idempotency coordinate. |
+| Compare attempts | The current schema identifies the projected normalized generation but does not expose a complete attempt history joining template/options, stage outputs, errors, and receipts. The endpoint returns `attempts_complete=false` with this reason. |
+| Bind chunks to a rerun attempt | The read path currently selects the latest source-version chunk generation because the preview snapshot has no attempt/chunk-generation ref. Workflow publication must persist and return `package_ref`, `attempt_ref`, `source_representation_ref`, `chunk_generation_ref`, and `chunk_receipt_ref`. |
+| Guarantee chunks before decision/publication | `chunk_document_activity` must run in Proffer before preview publication. The read endpoint never creates or infers chunks. |
+| Stop/cancel, exact-stage retry, checkpoint resume | Authenticated Temporal commands, state preconditions, and append-only receipts remain absent. No controls were invented. |
+| n8n operational truth | The projection still lacks n8n workflow, version, activation, execution, and node coordinates. |
+
+The source-only latest-generation lookup is valid for the current single-attempt executable path. It is not final acceptance once reruns exist; direct attempt binding is required before comparable reruns are complete.
+
+Follow-up checks passed: Go runtime API and PostgreSQL packages; Ruff over changed Workbench API files; 51 focused API tests; TypeScript/Vite production build; ESLint with zero errors and the same 12 existing fast-refresh warnings; and 18 focused UI contract tests. No live PostgreSQL projection or real-file workflow ran. The opt-in schema-backed test still requires `PLATFORM_PREVIEW_STORE_TEST_DSN`.

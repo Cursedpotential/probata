@@ -4,6 +4,7 @@ package previewmodel
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -128,6 +129,104 @@ type Page struct {
 	Participants []Participant
 	Messages     []Message
 	NextOffset   *int
+}
+
+// ContentProjection is a browser-safe read projection over the retained
+// package, normalized records, and a sealed chunk generation. It does not
+// define a second extraction format: Record.Payload is the exact persisted
+// normalized_payload object and every other value is an existing durable
+// identity, digest, locator, or receipt.
+type Package struct {
+	SourceVersionRef string  `json:"source_version_ref"`
+	OriginalRef      *string `json:"original_ref,omitempty"`
+	OriginalFilename *string `json:"original_filename,omitempty"`
+	DeclaredFormat   string  `json:"declared_format"`
+	Status           string  `json:"status"`
+	OriginalSHA256   *string `json:"original_sha256,omitempty"`
+	OriginalBytes    *int64  `json:"original_bytes,omitempty"`
+	StorageClass     *string `json:"storage_class,omitempty"`
+	MetadataCount    int64   `json:"metadata_count"`
+	AttachmentCount  int64   `json:"attachment_count"`
+}
+
+type Attempt struct {
+	AttemptRef              string    `json:"attempt_ref,omitempty"`
+	ProjectionRef           string    `json:"projection_ref"`
+	SourceVersionRef        string    `json:"source_version_ref"`
+	RawGenerationRef        string    `json:"raw_generation_ref"`
+	NormalizedGenerationRef string    `json:"normalized_generation_ref"`
+	Parser                  *Parser   `json:"parser,omitempty"`
+	SelectionRef            string    `json:"selection_ref,omitempty"`
+	ParserOptionsRef        string    `json:"parser_options_ref,omitempty"`
+	Receipts                []Receipt `json:"receipts"`
+}
+
+type Record struct {
+	RecordID         string          `json:"record_id"`
+	Ordinal          int64           `json:"ordinal"`
+	RecordType       string          `json:"record_type"`
+	OccurredAt       *time.Time      `json:"occurred_at,omitempty"`
+	Payload          json.RawMessage `json:"payload"`
+	SourceLocatorRef string          `json:"source_locator_ref"`
+}
+
+type PackageAttachment struct {
+	ObjectRef       string          `json:"object_ref"`
+	ParentObjectRef *string         `json:"parent_object_ref,omitempty"`
+	MemberLocator   json.RawMessage `json:"member_locator"`
+	SHA256          string          `json:"sha256"`
+	ByteLength      int64           `json:"byte_length"`
+	StorageClass    string          `json:"storage_class"`
+}
+
+type ChunkGeneration struct {
+	GenerationRef     string     `json:"generation_ref"`
+	GenerationOrdinal int        `json:"generation_ordinal"`
+	Status            string     `json:"status"`
+	PolicyID          string     `json:"policy_id"`
+	PolicyVersion     string     `json:"policy_version"`
+	ChunkerID         string     `json:"chunker_id"`
+	ChunkerVersion    string     `json:"chunker_version"`
+	SchemaVersion     string     `json:"schema_version"`
+	SourceView        string     `json:"source_view"`
+	SourceSHA256      string     `json:"source_sha256"`
+	ManifestSHA256    *string    `json:"manifest_sha256,omitempty"`
+	ChunkCount        *int64     `json:"chunk_count,omitempty"`
+	ReceiptRef        string     `json:"receipt_ref"`
+	ReassemblyResult  *string    `json:"reassembly_result,omitempty"`
+	SealedAt          *time.Time `json:"sealed_at,omitempty"`
+}
+
+type ContentChunk struct {
+	ChunkRef       string `json:"chunk_ref"`
+	Index          int64  `json:"index"`
+	Content        string `json:"content"`
+	SHA256         string `json:"sha256"`
+	DerivationMode string `json:"derivation_mode"`
+	TokenCount     *int64 `json:"token_count,omitempty"`
+	LocatorRef     string `json:"locator_ref"`
+	ByteStart      int64  `json:"byte_start"`
+	ByteEnd        int64  `json:"byte_end"`
+}
+
+type ContentPage struct {
+	Package          Package             `json:"package"`
+	Attempt          Attempt             `json:"attempt"`
+	AttemptsComplete bool                `json:"attempts_complete"`
+	AttemptsReason   string              `json:"attempts_reason,omitempty"`
+	Records          []Record            `json:"records"`
+	Attachments      []PackageAttachment `json:"attachments"`
+	ChunkGeneration  *ChunkGeneration    `json:"chunk_generation,omitempty"`
+	Chunks           []ContentChunk      `json:"chunks"`
+	NextRecordOffset *int                `json:"-"`
+	NextChunkOffset  *int                `json:"-"`
+}
+
+// ContentStore is optional so old preview stores and test doubles remain
+// source-compatible. The HTTP endpoint fails closed when a store cannot
+// supply the durable package/record/chunk projection.
+type ContentStore interface {
+	Content(context.Context, string, int, int, int) (ContentPage, error)
 }
 
 type Store interface {

@@ -140,6 +140,70 @@ def test_unknown_handle_fails_closed_after_process_binding_loss() -> None:
     assert "no active TEST/REAL binding" in captured.value.detail
 
 
+def test_generic_content_projection_preserves_exact_chunks_and_mode(monkeypatch) -> None:
+    from app.service.matter_mode import bind_preview_mode
+
+    bind_preview_mode(PREVIEW_HANDLE, "TEST")
+
+    async def fake_request(method, path, **kwargs):
+        assert method == "GET"
+        assert path.endswith("/content")
+        assert kwargs["params"] == {"limit": 25, "record_cursor": "records-next"}
+        return httpx.Response(
+            200,
+            json={
+                "preview_handle": PREVIEW_HANDLE,
+                "package": {
+                    "source_version_ref": "source-version-1",
+                    "declared_format": "document",
+                    "status": "retained",
+                    "metadata_count": 2,
+                    "attachment_count": 0,
+                },
+                "attempt": {
+                    "attempt_ref": "",
+                    "projection_ref": "normalized-1",
+                    "source_version_ref": "source-version-1",
+                    "raw_generation_ref": "raw-1",
+                    "normalized_generation_ref": "normalized-1",
+                    "receipts": [],
+                },
+                "attempts_complete": False,
+                "attempts_reason": "complete history is unavailable",
+                "records": [{
+                    "record_id": "record-1", "ordinal": 0, "record_type": "document",
+                    "payload": {"title": "Exact record"},
+                    "source_locator_ref": "context.normalized_record_identity/record-1",
+                }],
+                "attachments": [],
+                "chunk_generation": {
+                    "generation_ref": "generation-1", "generation_ordinal": 1, "status": "sealed",
+                    "policy_id": "document", "policy_version": "1", "chunker_id": "offsets",
+                    "chunker_version": "1", "schema_version": "1", "source_view": "original",
+                    "source_sha256": "a" * 64, "receipt_ref": "receipt-1",
+                },
+                "chunks": [{
+                    "chunk_ref": "chunk-1", "index": 0, "content": "Exact chunk",
+                    "sha256": "b" * 64, "derivation_mode": "verbatim_span",
+                    "locator_ref": "locator-1", "byte_start": 0, "byte_end": 11,
+                }],
+            },
+        )
+
+    monkeypatch.setattr(proffer, "_request", fake_request)
+    result = asyncio.run(proffer.preview_content(
+        PREVIEW_HANDLE, mode="TEST", record_cursor="records-next", chunk_cursor=None, limit=25
+    ))
+
+    assert result.matter_mode == "TEST"
+    assert result.records[0].payload == {"title": "Exact record"}
+    assert result.chunks[0].content == "Exact chunk"
+    with pytest.raises(proffer.ProfferError, match="different matter mode"):
+        asyncio.run(proffer.preview_content(
+            PREVIEW_HANDLE, mode="REAL", record_cursor=None, chunk_cursor=None, limit=25
+        ))
+
+
 def test_handler_choice_is_flat_actor_bound_and_mode_correlated(monkeypatch) -> None:
     calls: list[tuple[str, str, dict]] = []
 
@@ -356,6 +420,7 @@ def test_mode_is_required_on_every_scoped_http_operation() -> None:
         ("/api/proffer/start", "post"),
         ("/api/proffer/previews/{preview_handle}", "get"),
         ("/api/proffer/previews/{preview_handle}/messages", "get"),
+        ("/api/proffer/previews/{preview_handle}/content", "get"),
         ("/api/proffer/previews/{preview_handle}/events", "get"),
         ("/api/proffer/previews/{preview_handle}/decision", "post"),
         ("/api/proffer/previews/{preview_handle}/repair-decision", "post"),
