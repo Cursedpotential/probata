@@ -1,17 +1,167 @@
 {
   "name": "Universal Import - preview",
   "nodes": [
-    {"parameters":{"httpMethod":"GET","path":"proffer/preview","responseMode":"responseNode","authentication":"headerAuth","options":{}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000501","name":"Webhook - preview","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[-640,0],"webhookId":"7a5ab1a0-1c9c-4c0e-8ae6-000000000502","credentials":{"httpHeaderAuth":{"id":"REPLACE_ME","name":"N8N_PROFFER_WEBHOOK (placeholder)"}}},
-    {"parameters":{"jsCode":"const input=$input.first()||{};const envelope=input.json||{};const query=envelope.query||{};const workflowId=query.workflow_id;if(typeof workflowId!=='string'||workflowId.trim()==='')throw new Error('preview: workflow_id query parameter is required');return[{json:{workflow_id:workflowId.trim()}}];"},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000503","name":"Validate + Shape Preview Request","type":"n8n-nodes-base.code","typeVersion":2,"position":[-360,0]},
-    {"parameters":{"method":"GET","url":"={{ 'https://reference-import-starter.example.invalid/reference-import/' + $json.workflow_id + '/preview' }}","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendHeaders":true,"specifyHeaders":"enterBelow","headerParameters":{"parameters":[{"name":"X-Workflow-ID","value":"={{ $json.workflow_id }}"}]},"options":{"response":{"response":{"neverError":false,"fullResponse":false}},"timeout":10000}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000504","name":"HTTP - reference import starter preview","type":"n8n-nodes-base.httpRequest","typeVersion":4.4,"position":[-80,0],"credentials":{"httpHeaderAuth":{"id":"REPLACE_ME","name":"REFERENCE_IMPORT_STARTER (placeholder)"}}},
-    {"parameters":{"jsCode":"const response=$input.first()||{};const body=response.json||{};const allowed=['phase','select_ref','select_receipt_ref','reason'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('preview: starter returned a non-object response');const unknown=Object.keys(body).filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('preview: response contains unsupported field(s): '+unknown.join(','));if(typeof body.phase!=='string'||body.phase.trim()==='')throw new Error('preview: response requires a non-empty phase');const out={phase:body.phase,select_ref:typeof body.select_ref==='string'?body.select_ref:'',select_receipt_ref:typeof body.select_receipt_ref==='string'?body.select_receipt_ref:''};if(typeof body.reason==='string'&&body.reason!=='')out.reason=body.reason;return[{json:out}];"},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000505","name":"Validate Compact Preview Response","type":"n8n-nodes-base.code","typeVersion":2,"position":[200,0]},
-    {"parameters":{"respondWith":"json","responseBody":"={{ JSON.stringify($json) }}","options":{}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000506","name":"Respond to Webhook - Preview Response","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[480,0]}
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "proffer/preview",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000501",
+      "name": "Webhook - preview",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        0
+      ],
+      "webhookId": "7a5ab1a0-1c9c-4c0e-8ae6-000000000502",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "N8N_PROFFER_WEBHOOK (placeholder)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()||{};const envelope=input.json||{};const query=envelope.query||{};const previewHandle=query.preview_handle;if(typeof previewHandle!=='string'||previewHandle.trim()==='')throw new Error('preview: preview_handle query parameter is required');return[{json:{preview_handle:previewHandle.trim()}}];"
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000503",
+      "name": "Validate + Shape Preview Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://reference-import-starter.example.invalid/reference-import/previews/' + $json.preview_handle }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "enterBelow",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Preview-Handle",
+              "value": "={{ $json.preview_handle }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": false,
+              "fullResponse": false
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000504",
+      "name": "HTTP - reference import starter preview",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -80,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "REFERENCE_IMPORT_STARTER (placeholder)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$input.first()||{};const body=response.json||{};if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('preview: starter returned a non-object response');if(typeof body.preview_handle!=='string'||body.preview_handle.trim()==='')throw new Error('preview: response requires preview_handle');if(typeof body.phase!=='string'||body.phase.trim()==='')throw new Error('preview: response requires phase');return[{json:body}];"
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000505",
+      "name": "Validate Compact Preview Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000506",
+      "name": "Respond to Webhook - Preview Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ]
+    }
   ],
-  "connections":{"Webhook - preview":{"main":[[{"node":"Validate + Shape Preview Request","type":"main","index":0}]]},"Validate + Shape Preview Request":{"main":[[{"node":"HTTP - reference import starter preview","type":"main","index":0}]]},"HTTP - reference import starter preview":{"main":[[{"node":"Validate Compact Preview Response","type":"main","index":0}]]},"Validate Compact Preview Response":{"main":[[{"node":"Respond to Webhook - Preview Response","type":"main","index":0}]]}},
-  "active":false,
-  "settings":{"executionOrder":"v1"},
-  "pinData":{},
-  "meta":{"templateCredsSetupCompleted":false},
-  "versionId":"7a5ab1a0-1c9c-4c0e-8ae6-000000000507",
-  "tags":[]
+  "connections": {
+    "Webhook - preview": {
+      "main": [
+        [
+          {
+            "node": "Validate + Shape Preview Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate + Shape Preview Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP - reference import starter preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - reference import starter preview": {
+      "main": [
+        [
+          {
+            "node": "Validate Compact Preview Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Compact Preview Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook - Preview Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "7a5ab1a0-1c9c-4c0e-8ae6-000000000507",
+  "tags": []
 }
