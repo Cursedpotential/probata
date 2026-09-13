@@ -1,0 +1,41 @@
+import importlib.util, json, os, sys, tempfile, unittest
+from pathlib import Path
+from unittest.mock import patch
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+import reconciliation as rec
+import mcp_server
+
+class ReconciliationTests(unittest.TestCase):
+ def test_store_selection(self):
+  self.assertEqual(rec.select_stores('selected',['ccc','docstore']),['ccc','docstore'])
+  with self.assertRaises(ValueError): rec.select_stores('selected',[])
+  with self.assertRaises(ValueError): rec.select_stores('selected',['bogus'])
+
+ def test_every_store_reports_state(self):
+  data=rec.inventory(str(ROOT))
+  self.assertEqual(set(data),set(rec.STORE_NAMES))
+  for value in data.values(): self.assertIn('available',value)
+
+ def test_filesystem_recall_and_provenance(self):
+  with tempfile.TemporaryDirectory() as td:
+   p=Path(td)/'decision.md'; p.write_text('Owner decision: final canonical contract alpha',encoding='utf-8')
+   fake={s:{'available':False,'adapter':None,'identity':{}} for s in rec.STORE_NAMES}
+   fake['codex_memory']={'available':True,'adapter':'filesystem-text','identity':{'roots':[td]}}
+   with patch.object(rec,'inventory',return_value=fake):
+    out=rec.recall('canonical contract',td,'selected',['codex_memory'],5)
+   self.assertEqual(len(out['store_runs']),8)
+   self.assertTrue(next(x for x in out['store_runs'] if x['store']=='codex_memory')['queried'])
+   self.assertTrue(out['decisions']); self.assertTrue(out['contracts'])
+   self.assertEqual(out['results'][0]['store'],'codex_memory')
+
+ def test_conflict_detection(self):
+  rows=[{'title':'Final Contract','store':'ccc','content_hash':'a'}, {'title':'final-contract','store':'docstore','content_hash':'b'}]
+  self.assertTrue(rec.discover_conflicts(rows)[0]['requires_adjudication'])
+
+ def test_mcp_catalog(self):
+  names={x['name'] for x in mcp_server.TOOLS}
+  expected={'structural_search','semantic_code_search','code_index_refresh','code_index_status','code_index_doctor','structural_grep','selected_store_recall','conflict_discovery','decisions_final_contracts','reconcile_run','reconcile_repair','reconcile_status','reconcile_export','store_inventory'}
+  self.assertEqual(names,expected)
+
+if __name__=='__main__': unittest.main()

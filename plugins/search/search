@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+PY="/c/Users/matts/.agents/skills/smart-explore/.venv/Scripts/python.exe"
+exec "$PY" "$(cd "$(dirname "$0")" && pwd)/smart_explore.py" "$@"

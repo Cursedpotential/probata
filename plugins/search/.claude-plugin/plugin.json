@@ -1,0 +1,8 @@
+{
+  "name": "search",
+  "version": "1.0.0",
+  "description": "Canonical Propria structural search, CCC semantic code search, selectable memory recall, conflict discovery, and adjudication packets.",
+  "author": {"name": "Matt Salem"},
+  "license": "UNLICENSED",
+  "keywords": ["search", "smart-explore", "ccc", "cocoindex-code", "memory", "reconcile"]
+}

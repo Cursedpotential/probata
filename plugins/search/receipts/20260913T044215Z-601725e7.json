@@ -1,0 +1,1880 @@
+{
+  "schema": "propria-search-reconcile/v1",
+  "operation": "reconcile_run",
+  "query": "Probata product surface broken end-to-end flow nonsensical stage order missing integration seams running waiting failure write visibility owner override cancel retry parser repair choices options UI claims without backend deploy live proof handoffs claimed done while Git remained dirty 658 entries misplaced worktrees Docstore false capability flags R2 B2 stopped search index identity zero unverified results runtime image embedded extras",
+  "mode": "selected",
+  "project_root": "E:\\AI_Workspace\\Projects\\Propria\\_worktrees\\probata-tool-runtime-rename",
+  "store_runs": [
+    {
+      "store": "smart_explore",
+      "requested": false,
+      "available": true,
+      "queried": false,
+      "skipped": "not selected",
+      "error": null,
+      "adapter": "native",
+      "identity": {
+        "engine": "E:\\AI_Workspace\\Projects\\Propria\\_worktrees\\probata-tool-runtime-rename\\plugins\\search\\smart_explore.py",
+        "project_root": "E:\\AI_Workspace\\Projects\\Propria\\_worktrees\\probata-tool-runtime-rename"
+      },
+      "duration_ms": 0,
+      "result_count": 0
+    },
+    {
+      "store": "ccc",
+      "requested": false,
+      "available": false,
+      "queried": false,
+      "skipped": "not selected",
+      "error": null,
+      "adapter": "C:\\Users\\matts\\.local\\bin\\ccc.EXE",
+      "identity": {
+        "project_root": "E:\\AI_Workspace\\Projects\\Propria\\_worktrees\\probata-tool-runtime-rename",
+        "settings": "E:\\AI_Workspace\\Projects\\Propria\\_worktrees\\probata-tool-runtime-rename\\.cocoindex_code\\settings.yml",
+        "index": "E:\\AI_Workspace\\Projects\\Propria\\_worktrees\\probata-tool-runtime-rename\\.cocoindex_code\\target_sqlite.db"
+      },
+      "duration_ms": 0,
+      "result_count": 0
+    },
+    {
+      "store": "docstore",
+      "requested": false,
+      "available": false,
+      "queried": false,
+      "skipped": "not selected",
+      "error": null,
+      "adapter": null,
+      "identity": {
+        "transport": "json-stdio",
+        "command_config": "PROPRIA_DOCSTORE_ADAPTER"
+      },
+      "duration_ms": 0,
+      "result_count": 0
+    },
+    {
+      "store": "codex_memory",
+      "requested": true,
+      "available": true,
+      "queried": true,
+      "skipped": null,
+      "error": null,
+      "adapter": "filesystem-text",
+      "identity": {
+        "roots": [
+          "C:\\Users\\matts\\.codex\\memories"
+        ]
+      },
+      "duration_ms": 337,
+      "result_count": 20
+    },
+    {
+      "store": "claude_memory",
+      "requested": true,
+      "available": true,
+      "queried": true,
+      "skipped": null,
+      "error": null,
+      "adapter": "filesystem-text",
+      "identity": {
+        "roots": [
+          "C:\\Users\\matts\\.claude\\projects"
+        ]
+      },
+      "duration_ms": 2320,
+      "result_count": 20
+    },
+    {
+      "store": "cnf",
+      "requested": true,
+      "available": true,
+      "queried": true,
+      "skipped": null,
+      "error": null,
+      "adapter": "filesystem-text",
+      "identity": {
+        "roots": [
+          "C:\\Users\\matts\\.claude\\plugins\\data\\claude-never-forgets-casebible-local",
+          "C:\\Users\\matts\\.claude\\plugins\\data\\claude-never-forgets-claude-code-plugins-plus",
+          "C:\\Users\\matts\\.claude\\plugins\\data\\claude-never-forgets-inline"
+        ]
+      },
+      "duration_ms": 1,
+      "result_count": 0
+    },
+    {
+      "store": "remember",
+      "requested": true,
+      "available": true,
+      "queried": true,
+      "skipped": null,
+      "error": null,
+      "adapter": "filesystem-text",
+      "identity": {
+        "roots": [
+          "C:\\Users\\matts\\.claude\\.remember",
+          "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember"
+        ]
+      },
+      "duration_ms": 422,
+      "result_count": 20
+    },
+    {
+      "store": "memsearch",
+      "requested": true,
+      "available": true,
+      "queried": true,
+      "skipped": null,
+      "error": null,
+      "adapter": "C:\\Users\\matts\\.local\\bin\\memsearch.EXE",
+      "identity": {
+        "roots": [
+          "C:\\Users\\matts\\.memsearch\\memory",
+          "E:\\AI_Workspace\\.memories\\.memsearch"
+        ]
+      },
+      "duration_ms": 1368,
+      "result_count": 20
+    }
+  ],
+  "results": [
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "raw_memories.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\raw_memories.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\raw_memories.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "12833c855b29fcea5d6fc6f15082d7bff53d6eae310abb4d6042cb74d1e61a90",
+      "score": 2835,
+      "excerpt": "# Raw Memories\n\nMerged stage-1 raw memories (stable ascending thread-id order):\n\n## Thread `01a00ab6-5f87-7f93-b4f5-27929c8d2195`\nupdated_at: 2026-08-16T22:36:27+00:00\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\16\\rollout-2026-08-16T09-15-19-01a00ab6-5f87-7f93-b4f5-27929c8d2195.jsonl\nrollout_summary_file: 2026-08-16T13-15-19-Kvit-phase1_surreal_t0_slice_reboot_checkpoint.md\n\n---\ndescription: Phase-1 disposable Surreal T0 slice was designed and partially implemented; live runner failed closed at projection, then target was stopped and reboot state persisted\n task: resume or debug isolated Phase-1 Surreal T0 slice from R13 checkpoint\n task_group: Agno-MCP-Platform / Surreal Phase-1\n task_outcome: partial\n cwd: E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\n keywords: SurrealDB, Phase-1, ",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267030161804000
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "MEMORY.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\MEMORY.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\MEMORY.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "93cce50bbba4929d3b95353b61037d79f3cead75a8ca5d8a88f8092628c9fe15",
+      "score": 975,
+      "excerpt": "# Task Group: Casekit sequential A/B Phase 0 and Consignatio path containment\nscope: Use for the repair-tool-kit/Casekit module inside Consignatio, its Codex-isolated A/B worktree, or deciding whether Phase 0 is ready to advance; this is not a standalone E:-root application.\napplies_to: cwd=E:\\AI_Workspace\\casebible; reuse_rule=use the actual module worktree at E:\\AI_Workspace\\Projects\\Propria\\Consignatio\\repair-tool-kit-codex, inspect current kit version/branch/instructions, and obtain explicit authorization before a new phase or broad-corpus access.\n\n## Task 1: Establish sequential A/B workflow and implement initial Phase 0 skeleton, partial\n\n### rollout_summary_files\n\n- rollout_summaries/2026-09-12T01-25-23-9BvX-casekit_phase0_ab_path_correction_and_v3_review.md (cwd=E:\\AI_Workspace\\casebible, rollout_path=\\\\?\\C:\\Users\\matts\\.codex\\sessions\\2026\\09\\11\\rollout-2026-09-11T21-25-23-01a09",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267374057878900
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "memory_summary.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\memory_summary.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\memory_summary.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "51e9e225f96b371619d35c30f0fd28bc6f7a7c4e0b8c857d471514b6af506c07",
+      "score": 251,
+      "excerpt": "v1\n\n## User Profile\n\nWorks across the concurrent Agno-MCP-Platform repository, independent Case Bible/Legal-Workspace repositories, Consignatio Intake and Docstore systems, Windows/Coolify infrastructure, Codex configuration, construction project controls, owner-facing static sites, and the Astro-based MiTech Consult/Matthew Salem archive. Cares about custody/governance, exact implementation contracts, durable handoffs, factual public copy, evidence-backed status, and a usable skill library without startup-context bloat. Uses PowerShell, `rg`, `ccc`, `uv`, Go, PostgreSQL, Temporal, n8n, Coolify, Astro, npm, and deliberate remote CLI allocation. Platform truth is PostgreSQL/custody; Agno is an execution adapter. Expects explicit ownership boundaries, source provenance, reversible cleanup, and material results persisted in project artifacts. [ad-hoc note]\n\n## User preferences\n\n- Never init",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267404834796200
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-17T02-58-08-KqQR-codex_hooks_mcp_skills_coolify_ovh_files_milvus.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T02-58-08-KqQR-codex_hooks_mcp_skills_coolify_ovh_files_milvus.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T02-58-08-KqQR-codex_hooks_mcp_skills_coolify_ovh_files_milvus.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "4f5db73fe15cfeafc51aaafbfd12ca5e71b0d999371d17060c54d236d26ea9e5",
+      "score": 69,
+      "excerpt": "thread_id: 01a00da7-b102-7db0-bbc4-a8d7ea0e2455\nupdated_at: 2026-08-17T03:46:43+00:00\nrollout_path: C:\\Users\\matts\\.codex\\archived_sessions\\rollout-2026-08-16T22-58-08-01a00da7-b102-7db0-bbc4-a8d7ea0e2455.jsonl\ncwd: \\\\?\\C:\\Users\\matts\n\n# Repaired several Codex integrations and installed supplied skills, but Memsearch/Coolify remained partially unresolved\n\nRollout context: Windows PowerShell on `C:\\Users\\matts`; user was troubleshooting post-update hook/MCP warnings, then supplied multiple local skill archives and clarified that OVH services are Coolify-managed.\n\n## Task 1: Repair hooks and MCP startup configuration\n\nOutcome: partial\n\nPreference signals:\n- The user asked to fix the broken hooks rather than merely explain warnings, and later explicitly corrected the workflow around Coolify management. Future agents should inspect and make narrowly scoped fixes, while preserving files and a",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029910785800
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-18T08-45-47-i7So-crash_recovery_resumable_walk_and_governed_rag_architecture.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-18T08-45-47-i7So-crash_recovery_resumable_walk_and_governed_rag_architecture.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-18T08-45-47-i7So-crash_recovery_resumable_walk_and_governed_rag_architecture.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "ab870e4c77fd61c27662aa3becbf9e6f48ba83f33e9a61d7731a02294c28b520",
+      "score": 64,
+      "excerpt": "updated_at: 2026-08-18T14:51:44+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\18\\rollout-2026-08-18T04-45-47-01a0140c-52da-7930-abad-ca7661238298.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\ngit_branch: main\n\n# Crash recovery evolved into architecture clarification for resumable walks and governed RAG\n\nRollout context: Work occurred in `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform`. The session began by recovering from a crash, then paused implementation when the user introduced important requirements about third-party conversations, resumable walks, RAG ownership, Semantica, CocoIndex wording, and candidate evaluation.\n\n## Task 1: Recover the Surreal Phase-1 work and define walk resumability\n\nOutcome: partial\n\nPreference signals:\n- When told the walk design sealed invalid state permanently, the user clarified: \"I want",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029913307600
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-17T03-58-06-aWKh-r13_r14_surreal_resume_hook_repair_plannotator.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T03-58-06-aWKh-r13_r14_surreal_resume_hook_repair_plannotator.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T03-58-06-aWKh-r13_r14_surreal_resume_hook_repair_plannotator.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "8413fb3cdeb66e567d995966a1cbc1ed648d1b49fd4be64616c3a5ca234a61e8",
+      "score": 52,
+      "excerpt": "updated_at: 2026-08-17T07:41:23+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\16\\rollout-2026-08-16T23-58-06-01a00dde-9631-7f63-aead-161fc570ddcd.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\ngit_branch: main\n\n# R13/R14 resume completed with Windows hook repair and Plannotator verification\n\nRollout context: In `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform`, the user asked to resume the Surreal Phase-1 work without the prior hook/plugin failures. The rollout also addressed the resulting Codex hook errors and, after user approval, repaired the missing Plannotator command.\n\n## Task 1: Resume Surreal Phase-1 from the reboot checkpoint\n\nOutcome: partial\n\nPreference signals:\n- The user asked to resume \u201cwithout all the failed fucking plugins and hooks\u201d -> future resumes should begin from the authoritative handoff and live repo",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029912296000
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-FO1n-schema_reconciliation_reviewer_gated_visual_audit.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-FO1n-schema_reconciliation_reviewer_gated_visual_audit.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-FO1n-schema_reconciliation_reviewer_gated_visual_audit.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "9098a766f3ed332e4a21fec866a861f15143265326b84410c15b8e9cbcb11a86",
+      "score": 50,
+      "excerpt": "ath: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\25\\rollout-2026-08-25T08-53-28-01a038fb-9abb-7180-8067-ae5a0eaf89d5.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\n\n# Schema reconciliation and visual review workflow produced a partially complete, reviewer-gated plan\n\nRollout context: Work occurred in `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform`. The user was upset about schema sprawl and asked for a verified comparison of the live PostgreSQL schema, repository migrations, code usage, and proposed future shapes. No destructive database changes were executed. `casebible` was explicitly declared out of scope.\n\n## Task 1: Live schema and repository reconciliation\n\nOutcome: partial\n\nPreference signals:\n\n- The user said, \u201cDon't touch Case Bible It's not your lane\u201d -> future work must treat `casebible` as off-limits unless explicitly authorize",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029928562900
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "198ffb3ea4088e4b07a5a17797a89ad6410794772f1900c4e4debe7ed80058a1",
+      "score": 47,
+      "excerpt": "at: 2026-08-25T12:52:24+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\25\\rollout-2026-08-25T08-53-28-01a038fb-9a9c-7652-a486-dd8669ee0f4a.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\n\n# Schema-audit recovery, owner rulings, and workflow corrections\n\nRollout context: In `E:\\AI_Workspace\\Projects\\the-platform-workspace`, the agent recovered a crashed schema-audit session, validated live PostgreSQL/Coolify state, corrected stale documentation, delegated investigations, and created a visual HTML situation page. The rollout ended before the owner answered four pending decisions.\n\n## Task 1: Recover and correct the schema audit\n\nOutcome: partial\n\nPreference signals:\n- The owner repeatedly objected to re-deriving settled decisions, stating that prior discussions had \"already resolved this 18 times.\" Future work must recall transcripts, memsearch, and `.remember` b",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029926551900
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-16T13-15-19-Kvit-phase1_surreal_t0_slice_reboot_checkpoint.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-16T13-15-19-Kvit-phase1_surreal_t0_slice_reboot_checkpoint.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-16T13-15-19-Kvit-phase1_surreal_t0_slice_reboot_checkpoint.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "a4af3b78beb41b7f347c2a7bffb3e35c6508b99c92b37b5ca1aacdff163def23",
+      "score": 46,
+      "excerpt": "updated_at: 2026-08-16T22:36:27+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\16\\rollout-2026-08-16T09-15-19-01a00ab6-5f87-7f93-b4f5-27929c8d2195.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\ngit_branch: main\n\n# Phase-1 Surreal T0 slice was designed, implemented, deployed to an isolated target, then paused after live projection failures\n\nRollout context: In `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform`, the user required governing-doc reconciliation, preservation of unrelated worktree changes, strict R9 holds, and later approved the exact synthetic T0 target plus physical implementation. The rollout began as design-only work, then continued under separate D3/D4 approval. It ended with a reboot checkpoint rather than a successful live evaluation.\n\n## Task 1: Repository custody and Phase-1 design\n\nOutcome: success\n\nPrefe",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029909783500
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-52-26-BQ1b-architecture_docs_and_incomplete_codebase_audit.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-52-26-BQ1b-architecture_docs_and_incomplete_codebase_audit.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-52-26-BQ1b-architecture_docs_and_incomplete_codebase_audit.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "a04e5ea06e0e94b301bc967c563761d57a004da1e39a5270f6e2c2344f28fd5f",
+      "score": 34,
+      "excerpt": "updated_at: 2026-08-25T23:06:37+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\25\\rollout-2026-08-25T08-52-26-01a038fa-a77a-79e1-b66a-99bdb0af6771.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\ngit_branch: main\n\n# Architecture documentation package completed; exhaustive code audit remains incomplete\n\nRollout context: In `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform`, the user wanted the table/schema design reconsidered as a whole system, then requested engineering-grade architecture documentation and finally a genuinely complete codebase audit.\n\n## Task 1: Reconstruct system intent and authority model\n\nOutcome: success\n\nPreference signals:\n- The user objected that the tables did not match the product intent and asked the agent to \u201cwrap your head around the whole thing\u201d -> future work should begin with end-to-end product s",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029915303300
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-17T09-29-53-MMsD-context_recovery_r14_legal_workspace_build_guide.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T09-29-53-MMsD-context_recovery_r14_legal_workspace_build_guide.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T09-29-53-MMsD-context_recovery_r14_legal_workspace_build_guide.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "2e1a8963cd45a069247ae65ea1b6a47cc3d6930a7e6854e4a8f0d0113ebdaf97",
+      "score": 31,
+      "excerpt": "updated_at: 2026-08-17T10:21:26+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\17\\rollout-2026-08-17T05-29-53-01a00f0e-5822-7272-8d61-4dc9529a03ff.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\ngit_branch: main\n\n# Context recovery led to a bounded platform handoff and creation of a Legal Workspace integration guide\n\nRollout context: Work occurred in `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform` using PowerShell. The user resumed a prior session, asked for project context before action, then redirected from incomplete Surreal Phase-1 runner work to documenting a future sibling legal-workspace repository.\n\n## Task 1: Recover the correct resume state\n\nOutcome: success\n\nPreference signals:\n- The user asked to \u201cgather some context on the project before just starting,\u201d indicating future agents should inspect authoritative hand",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029912296000
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-18T17-33-48-TtKO-legal_workspace_forensic_evaluation_interrupted.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-18T17-33-48-TtKO-legal_workspace_forensic_evaluation_interrupted.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-18T17-33-48-TtKO-legal_workspace_forensic_evaluation_interrupted.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "530ed7a855db56e610ffb0e2ffd815e65134202691c7f6070e72371acb4385f8",
+      "score": 19,
+      "excerpt": "2\nupdated_at: 2026-08-18T18:00:02+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\18\\rollout-2026-08-18T13-33-48-01a015ef-beae-7143-beb8-e7dbba9fb742.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Legal-Workspace\ngit_branch: master\n\n# Forensic evaluation of Legal-Workspace was started but not completed\n\nRollout context: The user asked for an evidence-based comparison of the current Legal-Workspace implementation against the original build guide, seven handoff documents, artifacts, donor materials, and the actual code. The work was interrupted before the implementation audit, test run, discrepancy report, or remediation.\n\n## Task 1: Compare implementation against original specifications\n\nOutcome: partial\n\nPreference signals:\n- The user explicitly corrected scope: \u201cthe legal terminal UI skill ... is not applicable\u201d and asked that it be ignored -> future agents sh",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029914305300
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-17T03-56-03-UXjd-windows_hook_permissions_blocked_s12_s13_recovery.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T03-56-03-UXjd-windows_hook_permissions_blocked_s12_s13_recovery.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-17T03-56-03-UXjd-windows_hook_permissions_blocked_s12_s13_recovery.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "30c617a78408ebd28355e76726e5e04c16f0d28a45f889b767a278f77fd47f02",
+      "score": 17,
+      "excerpt": "updated_at: 2026-08-17T03:57:28+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\16\\rollout-2026-08-16T23-56-03-01a00ddc-b5a4-7d92-a579-bcfffa0eda83.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\ngit_branch: main\n\n# Permission failure blocked S12/S13 recovery\n\nRollout context: The user asked whether work had been on S12 or S13 and wanted to resume where it stopped in `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform` using PowerShell.\n\n## Task 1: Recover prior S12/S13 work and fix permissions\n\nOutcome: fail\n\nPreference signals:\n- The user interrupted the attempted repository investigation with: \u201cFirst fix all these\u201d after repeated `Access is denied. (os error 5)` hook failures -> when startup/tool hooks are broken, the user wants the infrastructure problem fixed before continuing project reconstruction.\n- The user then asked: \u201c",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029910785800
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-29-Cvol-autonomous_work_stop_classification.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-Cvol-autonomous_work_stop_classification.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-Cvol-autonomous_work_stop_classification.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "fe6f9ef38aba118f3b02d985168552decbc9a8d70493e9d029bfc21cda72cb25",
+      "score": 7,
+      "excerpt": "bd0e-a6fe8589d9a1.jsonl\ncwd: \\\\?\\C:\\Users\\matts\\.claude\\double-shot-latte\n\n# Determined that no further autonomous work was appropriate\n\nRollout context: The assistant had completed schema diagrams, repository documentation/generators, and live integration validation, then explicitly waited for user decisions.\n\n## Task 1: Assess whether autonomous continuation was needed\n\nOutcome: success\n\nKey steps:\n- Identified completed work and reported validation (`3 passed`).\n- Noted explicit dependency on user decisions: choose schema shape A/B/C and decide whether AI chats belong in `message`.\n- Correctly classified the state as STOP / `should_continue: false`, because the assistant was waiting for user input and did not state any next autonomous action.\n\nFailures and how to do differently:\n- Structured-output submission failed with a permission error, so the result had to be given in ordinary te",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029944133700
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-29-Ed7p-autonomous_continuation_stop_waiting_on_reviewers.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-Ed7p-autonomous_continuation_stop_waiting_on_reviewers.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-Ed7p-autonomous_continuation_stop_waiting_on_reviewers.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "d34c18ae9cc21d6ba505874bc1229a4c4e65242e21750bdeeada265e0b389afd",
+      "score": 7,
+      "excerpt": "26-08-25T08-53-29-01a038fb-9ef0-70b2-bbd9-42df05db0c1f.jsonl\ncwd: \\\\?\\C:\\Users\\matts\\.claude\\double-shot-latte\n\n# Determined the assistant should stop rather than continue autonomously\n\nRollout context: The task was to classify whether the embedded assistant conversation required immediate autonomous work, using a strict rule that continuation requires an explicit next-step statement or pending todo.\n\n## Task 1: Assess autonomous continuation\n\nOutcome: success\n\nKey steps:\n- Reviewed the assistant\u2019s closing status update and distinguished completed reporting from future intent.\n- Identified the decisive wording: \u201cTwo more reviewers plus the resumed first one are still running ... I will present nothing until all of it is back and reconciled.\u201d\n- Concluded that the assistant is waiting on external reviewer work, with no explicit \u201cnext I\u2019ll...\u201d action to perform immediately.\n- Returned `shou",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029929560600
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-29-GiiZ-autonomous_work_decision_gate_stop.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-GiiZ-autonomous_work_decision_gate_stop.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-GiiZ-autonomous_work_decision_gate_stop.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "819aa51f0d9009e2f338ad30033f4ea46c664d4d65db75a5b475fbd5706b4d72",
+      "score": 6,
+      "excerpt": "proved C or overrode it.\n\n## Task 1: Autonomous-continuation classification\n\nOutcome: success\n\nKey steps:\n- Identified that the prior assistant completed its analysis and reached a conclusion.\n- Treated \u201cI build nothing until you say C (or override)\u201d as an explicit user-decision gate.\n- Correctly classified the state as STOP (`should_continue: false`), because waiting for approval is not autonomous work.\n\nFailures and how to do differently:\n- StructuredOutput calls were denied by permission, but the classification reasoning remained correct and was repeated consistently.\n\nReusable knowledge:\n- When an assistant explicitly requests approval, a decision, confirmation, or an override before proceeding, classify as STOP\u2014even if it has listed concrete implementation steps it would take afterward.\n",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029929560600
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "74b5e0692973906dbbad6177506c9e8e384099887de11c32a3ea229d8b6542c8",
+      "score": 6,
+      "excerpt": " 1: Continuation-state classification\n\nOutcome: success\n\nKey steps:\n- Identified the assistant\u2019s final statement: \u201cStill holding for your ruling. Nothing runs until you pick D2/D7, ADR-0059/0053, or merge.\u201d\n- Applied the explicit rule that waiting for user input, including at a decision gate, means STOP.\n- Returned `should_continue: false` with reasoning that the assistant was blocked on a user decision, not merely idle.\n\nReusable knowledge:\n- An explicit hold awaiting approval, a decision, clarification, or confirmation is STOP, even if future work remains conceptually planned.\n- CONTINUE requires an explicit next-step intent, pending todo items, or stated follow-up work that can proceed without user input.\n- Default to STOP when continuation intent is absent or uncertain.\n\nFailures and how to do differently:\n- The StructuredOutput tool call was denied by permission, but the classificat",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029944133700
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": ".index-state.json",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\.memsearch\\.index-state.json",
+      "path": "C:\\Users\\matts\\.codex\\memories\\.memsearch\\.index-state.json",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "ef937caf5c95815909cf5fb8a9ed13762be7f417649a08cc4d97870932f3a8fc",
+      "score": 4,
+      "excerpt": "{\n  \"collection\": \"ms_memories_79d81e3c\",\n  \"failed_files\": [],\n  \"indexed_chunks\": 1,\n  \"indexed_files\": 8,\n  \"last_completed_at\": \"2026-09-09T05:02:16.758994Z\",\n  \"last_started_at\": \"2026-09-09T05:02:10.059799Z\",\n  \"last_success_at\": \"2026-09-09T05:02:16.758994Z\",\n  \"milvus_uri\": \"https://in03-834f340cad0f74d.serverless.aws-eu-central-1.cloud.zilliz.com\",\n  \"operation\": \"index\",\n  \"paths\": [\n    \"C:/Users/matts/.codex/memories/.memsearch/memory\"\n  ],\n  \"schema_version\": 1,\n  \"status\": \"ok\",\n  \"total_files\": 8,\n  \"updated_at\": \"2026-09-09T05:02:16.758994Z\"\n}\n",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1788930136759675700
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-5nOm-autonomous_continuation_stop_classification.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-5nOm-autonomous_continuation_stop_classification.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-5nOm-autonomous_continuation_stop_classification.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "6c282db898127066f27ae04212267e63cf03a458db211fb11c0b2b90bf8923ec",
+      "score": 3,
+      "excerpt": " assistant's explicit statement: \u201cNothing else to request until the page agent returns.\u201d\n- Identified two unresolved questions requiring user decisions: approval of D-069 wording and placement of raw landing tables.\n- Applied the rule that waiting for user input or an external blocker means STOP, even if the broader work is not complete.\n\nReusable knowledge:\n- `should_continue` should be `false` when the assistant asks for approval, clarification, or architectural decisions, or explicitly says it is waiting for another agent/service. Do not infer autonomous continuation merely because unresolved work exists.\n\nReferences:\n- Final assistant wording: \u201cNothing else to request until the page agent returns.\u201d\n- Open decisions: \u201cIs D-069 worded right?\u201d and whether raw landing tables move to the context schema or remain in the evidence schema.\n- Structured-output attempts were denied by permissio",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029925800000
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-XbUk-autonomous_work_continuation_check.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-XbUk-autonomous_work_continuation_check.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-XbUk-autonomous_work_continuation_check.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "8eb70486bb952c04ea8023ae806b670a33cb8bbf81c6338a5c36478c9c8c72a3",
+      "score": 3,
+      "excerpt": "2d2-9215-dbd784122348\nupdated_at: 2026-08-25T07:07:20+00:00\nrollout_path: C:\\Users\\matts\\.codex\\archived_sessions\\rollout-2026-08-25T08-53-28-01a038fb-9a89-72d2-9215-dbd784122348.jsonl\ncwd: \\\\?\\C:\\Users\\matts\\.claude\\double-shot-latte\n\nThe embedded assistant explicitly stated that a data-flow redraw was still running in the background and that it would be swapped into the page when complete. Under the supplied rules, this is an unfinished stated follow-up, so the correct determination is CONTINUE (should_continue: true), despite also requesting user decisions.\n",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029924336500
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "255c2b1c-728a-48b2-9f98-d1f7af46176e.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\255c2b1c-728a-48b2-9f98-d1f7af46176e.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\255c2b1c-728a-48b2-9f98-d1f7af46176e.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "31b755ac57b0a50ce44fa0db50d7d58f1711fd4601a75a88225b51eaed2eadd6",
+      "score": 23274,
+      "excerpt": "{\"type\":\"bridge-session\",\"sessionId\":\"448437ba-d8f5-411b-bd9e-73e97c482da0\",\"bridgeSessionId\":\"cse_01NK4eX582Q6BJt8n7yBHaRn\",\"lastSequenceNum\":0,\"ownerAccountUuid\":\"fb538851-57cc-435c-a8ac-ea9b6cc123c3\",\"ownerOrganizationUuid\":\"3e9f6cd9-8e9e-4e04-8bc8-73b44bedc507\"}\n{\"type\":\"queue-operation\",\"operation\":\"enqueue\",\"timestamp\":\"2026-09-06T02:41:23.289Z\",\"sessionId\":\"448437ba-d8f5-411b-bd9e-73e97c482da0\",\"content\":\"Create a new project folder in the workspace here.\\n\\nPlaintext\\n\\n```\\nAct as a senior software engineer specializing in Rust, Tauri, and frontend web development. \\n\\nI am building a lightweight, native Windows desktop font manager and previewer. I want to take an existing open-source web application and wrap it in a Tauri shell, hooking it into the native Windows file system to read and preview locally installed system fonts.\\n\\n### 1. Project Overview & Source Material\\n*   *",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1789184144614000000
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "14a2c392-953e-40ef-b1a8-42b9af5d77ee.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\14a2c392-953e-40ef-b1a8-42b9af5d77ee.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\14a2c392-953e-40ef-b1a8-42b9af5d77ee.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "852d0be7dc80fe9a27c8bf7362b1e9edbf6b70bce5f48b92c18a74e703d12bc2",
+      "score": 4556,
+      "excerpt": "42b9af5d77ee\"}\n{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"14a2c392-953e-40ef-b1a8-42b9af5d77ee\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"acceptEdits\",\"sessionId\":\"14a2c392-953e-40ef-b1a8-42b9af5d77ee\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"attachment\":{\"type\":\"hook_success\",\"hookName\":\"SessionStart:startup\",\"toolUseID\":\"ae9c5135-a678-45fc-a606-0b052dfab51a\",\"hookEvent\":\"SessionStart\",\"content\":\"\",\"stdout\":\"{\\n  \\\"hookSpecificOutput\\\": {\\n    \\\"hookEventName\\\": \\\"SessionStart\\\",\\n    \\\"additionalContext\\\": \\\"<EXTREMELY_IMPORTANT>\\\\nYou have superpowers.\\\\n\\\\n**Below is the full content of your 'superpowers:using-superpowers' skill - your introduction to using skills. For all other skills, use the 'Skill' tool:**\\\\n\\\\n---\\\\nname: using-superpowers\\\\ndescription: Use when starting any conversation - establishes how to find and use skills, requiring Skill tool invocation before ANY re",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1781945545224445400
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "0d7c0d8b-2c61-40c8-aa33-ebe07d46080e.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\0d7c0d8b-2c61-40c8-aa33-ebe07d46080e.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\0d7c0d8b-2c61-40c8-aa33-ebe07d46080e.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "7e40e5f8dcd2361b1b306dacd539a54d2efcf25995793172fa67fd3862bbc0e6",
+      "score": 4361,
+      "excerpt": "{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"0d7c0d8b-2c61-40c8-aa33-ebe07d46080e\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"auto\",\"sessionId\":\"0d7c0d8b-2c61-40c8-aa33-ebe07d46080e\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"family-court-toolkit: hooks.json: unknown key \\\"_byline\\\" ignored\",\"isMeta\":false,\"timestamp\":\"2026-09-12T22:19:40.704Z\",\"uuid\":\"1f8435eb-4311-4f72-bdbd-0fdb5c514396\",\"level\":\"notice\",\"userType\":\"external\",\"entrypoint\":\"cli\",\"cwd\":\"C:\\\\Users\\\\matts\",\"sessionId\":\"0d7c0d8b-2c61-40c8-aa33-ebe07d46080e\",\"version\":\"2.1.270\",\"gitBranch\":\"HEAD\"}\n{\"parentUuid\":\"1f8435eb-4311-4f72-bdbd-0fdb5c514396\",\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"claudikins-kernel: hooks.json: unknown key \\\"once\\\" in hooks.SessionStart[0] ignored\",\"isMeta\":false,\"timestamp\":\"2026-09-12T22:19:40.706Z\",\"uuid\":\"82d1e4e8",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1789273237809000000
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "13a9bf97-f0f1-4101-9c7a-dbac6ce1356f.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\13a9bf97-f0f1-4101-9c7a-dbac6ce1356f.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\13a9bf97-f0f1-4101-9c7a-dbac6ce1356f.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "c5bebf6cf2aa4ddb0628f90d9f1919f311af1e66c1a67d3599113693e608eacb",
+      "score": 2685,
+      "excerpt": "\":\"auto\",\"sessionId\":\"13a9bf97-f0f1-4101-9c7a-dbac6ce1356f\"}\n{\"type\":\"bridge-session\",\"sessionId\":\"13a9bf97-f0f1-4101-9c7a-dbac6ce1356f\",\"bridgeSessionId\":\"cse_011ZNkX1787wzQMT85QLwBjH\",\"lastSequenceNum\":0}\n{\"parentUuid\":null,\"isSidechain\":false,\"attachment\":{\"type\":\"hook_non_blocking_error\",\"hookName\":\"SessionStart:startup\",\"toolUseID\":\"46779686-a541-4055-8d8e-b21eb47f6f0d\",\"hookEvent\":\"SessionStart\",\"stderr\":\"Failed with non-blocking status code: \\u001b[31;1mParserError: \\u001b[0m\\r\\n\\u001b[31;1m\\u001b[36;1mLine |\\u001b[0m\\r\\n\\u001b[31;1m\\u001b[36;1m\\u001b[36;1m   1 | \\u001b[0m . -plugins-official\\\\superpowers\\\\6.0.3/hooks/run-hook.cmd\\\" \\u001b[36;1msession-start\\u001b[0m\\r\\n\\u001b[31;1m\\u001b[36;1m\\u001b[36;1m\\u001b[0m\\u001b[36;1m\\u001b[0m\\u001b[36;1m     | \\u001b[31;1m                                                           ~~~~~~~~~~~~~\\u001b[0m\\r\\n\\u001b[31;1m\\u001b[36;1m\\u001b[3",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1782470346893588200
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "26afada9-f3a4-4652-8002-b26bcff1465f.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\26afada9-f3a4-4652-8002-b26bcff1465f.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\26afada9-f3a4-4652-8002-b26bcff1465f.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "48c9ae54d2695900f584f70ccfdc1ac4d565b767c0e1c7587bda1468242f9810",
+      "score": 2493,
+      "excerpt": "2-8002-b26bcff1465f\"}\n{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"26afada9-f3a4-4652-8002-b26bcff1465f\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"auto\",\"sessionId\":\"26afada9-f3a4-4652-8002-b26bcff1465f\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"attachment\":{\"type\":\"hook_non_blocking_error\",\"hookName\":\"SessionStart:startup\",\"toolUseID\":\"ca301606-525e-4c77-b181-3999377a3bad\",\"hookEvent\":\"SessionStart\",\"stderr\":\"Failed with non-blocking status code: node:internal/modules/esm/resolve:271\\r\\n    throw new ERR_MODULE_NOT_FOUND(\\r\\n          ^\\r\\n\\r\\nError [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\\\\Users\\\\matts\\\\.claude\\\\plugins\\\\cache\\\\superpowers-marketplace\\\\episodic-memory\\\\1.4.2\\\\node_modules\\\\@anthropic-ai\\\\claude-agent-sdk\\\\sdk.mjs' imported from C:\\\\Users\\\\matts\\\\.claude\\\\plugins\\\\cache\\\\superpowers-marketplace\\\\episodic-memory\\\\1.4.2\\\\dist\\\\summarizer.js\\r\\n    at finalizeResolu",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1787229946568038900
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "0c90eb90-5123-4dbc-8bb5-f19e1336a11c.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\0c90eb90-5123-4dbc-8bb5-f19e1336a11c.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\0c90eb90-5123-4dbc-8bb5-f19e1336a11c.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "3160ebaf2dd6b485438badb5d8ae502d1614af4c90fb4f20bd719e2157d5bec7",
+      "score": 2356,
+      "excerpt": "c-8bb5-f19e1336a11c\"}\n{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"0c90eb90-5123-4dbc-8bb5-f19e1336a11c\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"auto\",\"sessionId\":\"0c90eb90-5123-4dbc-8bb5-f19e1336a11c\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"claudikins-kernel: hooks.json: unknown key \\\"once\\\" in hooks.SessionStart[0] ignored\",\"isMeta\":false,\"timestamp\":\"2026-09-10T13:10:17.345Z\",\"uuid\":\"586c68c8-b398-4101-bfc3-713b4d90833c\",\"level\":\"notice\",\"sessionKind\":\"bg\",\"userType\":\"external\",\"entrypoint\":\"cli\",\"cwd\":\"C:\\\\Users\\\\matts\",\"sessionId\":\"0c90eb90-5123-4dbc-8bb5-f19e1336a11c\",\"version\":\"2.1.267\",\"gitBranch\":\"HEAD\"}\n{\"parentUuid\":\"586c68c8-b398-4101-bfc3-713b4d90833c\",\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"formatter: hooks.json: unknown keys \\\"version\\\", \\\"author\\\", \\\"lastUpdated\\\", \\\"configuration\\\",",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1789101581778627600
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "1df9070a-d9e0-4a79-9b28-79506e9ac6f2.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1df9070a-d9e0-4a79-9b28-79506e9ac6f2.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1df9070a-d9e0-4a79-9b28-79506e9ac6f2.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "2f45bc2ff70563764fa505371a26a899b7f2b286ddbf1a82facd143a5cdc50ed",
+      "score": 1417,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788728112944882000
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "143713ef-9bb7-4241-8e11-a25cc0cc33db.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\143713ef-9bb7-4241-8e11-a25cc0cc33db.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\143713ef-9bb7-4241-8e11-a25cc0cc33db.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "7155e1fea6671bc36ebfb7247c80992e92b2e629ccd0c0bed33c64c55a501983",
+      "score": 1413,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788712005892986800
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "05e25ae2-6f25-4294-9605-1a89c7911257.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\05e25ae2-6f25-4294-9605-1a89c7911257.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\05e25ae2-6f25-4294-9605-1a89c7911257.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "d4c0b1ca7eac37018e8936d18ee04969fa9129b17d6896ef4b8bebd5f5a5af57",
+      "score": 1406,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788694485713818000
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "04ac21e2-c6ec-4f82-8961-983ac14aaf2b.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\04ac21e2-c6ec-4f82-8961-983ac14aaf2b.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\04ac21e2-c6ec-4f82-8961-983ac14aaf2b.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "b6a5640d7b68cad317d7c0254d76307e69c2a564eb5c4f75d00a5a6095495bbd",
+      "score": 1404,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788694551392901500
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "11da52bb-aa7a-4a8c-9d1c-a95d71ee615e.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\11da52bb-aa7a-4a8c-9d1c-a95d71ee615e.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\11da52bb-aa7a-4a8c-9d1c-a95d71ee615e.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "a43ae51879676f94dd9fa0b69ee482cf8891eb791065110d8b94e1cc9559a2b9",
+      "score": 1267,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788326195212631100
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "1d4107ac-4959-400c-bd33-fcd30d1dc5c5.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1d4107ac-4959-400c-bd33-fcd30d1dc5c5.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1d4107ac-4959-400c-bd33-fcd30d1dc5c5.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "7e91c58da2f34daac606dcef6dcdb936cca52a723928bacc472bd114d2d8e4ba",
+      "score": 1267,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788326255334950300
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "290a15b0-17bf-4222-b6af-4b8d5adefb56.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\290a15b0-17bf-4222-b6af-4b8d5adefb56.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\290a15b0-17bf-4222-b6af-4b8d5adefb56.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "17b70fc889468d1148ea5a7f72cd5424aa6126359c8a5323d5ac9855e897cbed",
+      "score": 1267,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788326526616951500
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "03f7bed6-5097-4436-9d70-776cd12db5f1.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\03f7bed6-5097-4436-9d70-776cd12db5f1.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\03f7bed6-5097-4436-9d70-776cd12db5f1.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "c2a204ac7ca2846f1a77593f9d980364b61fb44890f4ad09a00e9fbe84412921",
+      "score": 1257,
+      "excerpt": " Transient errors that were immediately resolved in the same session\\n- Debug statements or temporary logging\\n- Tool permission prompts or system messages\\n- Exact file contents (they're on disk already)\\n- Generic coding patterns (how to write a for loop)\\n- Greetings, acknowledgments, or filler (\\\"ok\\\", \\\"sure\\\", \\\"got it\\\")\\n\\nEXTRACT \u2014 worth remembering:\\n- Errors that required investigation or multiple attempts to fix\\n- Architecture decisions and the reasoning behind them\\n- User preferences or workflow patterns (\\\"always use bun\\\", \\\"never auto-commit\\\")\\n- Working build/deploy/test commands specific to this project\\n- Configuration values (ports, API endpoints, environment vars)\\n- Relationships between components, files, or systems\\n- Performance findings (what's slow, what OOM'd, what worked)\\n- Hardware/environment details (GPU model, RAM, OS)\\n\\nReturn ONLY valid JSON (no ma",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1788326115510090200
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": ".session_cache.json",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\.session_cache.json",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\.session_cache.json",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "49722845a6a2f9aa11c0b01428fbf63f4c04ecddbea7458a3c3230cbbccc23ae",
+      "score": 105,
+      "excerpt": "{\"version\":11,\"entries\":{\"C:\\\\Users\\\\matts\\\\.claude\\\\projects\\\\C--Users-matts\\\\dae95536-2f1d-44f3-8c10-72a99a1be423.jsonl\":{\"modified_time\":1782817243,\"file_size\":1244439,\"last_byte_offset\":1244439,\"session\":{\"session_id\":\"C:\\\\Users\\\\matts\\\\.claude\\\\projects\\\\C--Users-matts\\\\dae95536-2f1d-44f3-8c10-72a99a1be423.jsonl\",\"actual_session_id\":\"dae95536-2f1d-44f3-8c10-72a99a1be423\",\"file_path\":\"C:\\\\Users\\\\matts\\\\.claude\\\\projects\\\\C--Users-matts\\\\dae95536-2f1d-44f3-8c10-72a99a1be423.jsonl\",\"project_name\":\"matts\",\"message_count\":200,\"first_message_time\":\"2026-06-02T07:29:53.629Z\",\"last_message_time\":\"2026-06-30T11:00:39.637Z\",\"last_modified\":\"2026-06-30T11:00:43.338621100+00:00\",\"has_tool_use\":true,\"has_errors\":true,\"summary\":\"C:\\\\Users\\\\matts\\\\AppData\\\\Local\\\\Temp\\\\fb7b4490-452a-40ca-898f-68d42a3b468c_user_data_export_2025-12-15.z...\",\"is_renamed\":false,\"entrypoint\":\"claude-desktop\"},\"sidechai",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1785688914000120200
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "031592ac-7886-4cd4-8de4-21efc18ccd03.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\031592ac-7886-4cd4-8de4-21efc18ccd03.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\031592ac-7886-4cd4-8de4-21efc18ccd03.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "315d501a1b1a897bbd3dac9e639c87067170887e525e0f2c7504866176cf68da",
+      "score": 93,
+      "excerpt": "4-8de4-21efc18ccd03\"}\n{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"031592ac-7886-4cd4-8de4-21efc18ccd03\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"auto\",\"sessionId\":\"031592ac-7886-4cd4-8de4-21efc18ccd03\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"claudikins-kernel: hooks.json: unknown key \\\"once\\\" in hooks.SessionStart[0] ignored\",\"isMeta\":false,\"timestamp\":\"2026-09-11T11:57:21.437Z\",\"uuid\":\"1fbaca21-1722-418a-ba49-69c39b009c68\",\"level\":\"notice\",\"sessionKind\":\"bg\",\"userType\":\"external\",\"entrypoint\":\"cli\",\"cwd\":\"C:\\\\Users\\\\matts\",\"sessionId\":\"031592ac-7886-4cd4-8de4-21efc18ccd03\",\"version\":\"2.1.268\",\"gitBranch\":\"HEAD\"}\n{\"parentUuid\":\"1fbaca21-1722-418a-ba49-69c39b009c68\",\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"formatter: hooks.json: unknown keys \\\"version\\\", \\\"author\\\", \\\"lastUpdated\\\", \\\"configuration\\\",",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1789127931005765900
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "1b806a31-bf48-47c9-83ae-9dad52bf57e7.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1b806a31-bf48-47c9-83ae-9dad52bf57e7.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1b806a31-bf48-47c9-83ae-9dad52bf57e7.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "5492055fe73d6ed263798a8adb9476b0e3881fe6483f01f254ff644877995e79",
+      "score": 91,
+      "excerpt": "9-83ae-9dad52bf57e7\"}\n{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"1b806a31-bf48-47c9-83ae-9dad52bf57e7\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"auto\",\"sessionId\":\"1b806a31-bf48-47c9-83ae-9dad52bf57e7\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"claudikins-kernel: hooks.json: unknown key \\\"once\\\" in hooks.SessionStart[0] ignored\",\"isMeta\":false,\"timestamp\":\"2026-09-11T11:58:58.409Z\",\"uuid\":\"2c3bbc0b-b6db-4384-a7ea-89e3f0cca010\",\"level\":\"notice\",\"sessionKind\":\"bg\",\"userType\":\"external\",\"entrypoint\":\"cli\",\"cwd\":\"C:\\\\Users\\\\matts\",\"sessionId\":\"1b806a31-bf48-47c9-83ae-9dad52bf57e7\",\"version\":\"2.1.268\",\"gitBranch\":\"HEAD\"}\n{\"parentUuid\":\"2c3bbc0b-b6db-4384-a7ea-89e3f0cca010\",\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"formatter: hooks.json: unknown keys \\\"version\\\", \\\"author\\\", \\\"lastUpdated\\\", \\\"configuration\\\",",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1789131583500920400
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "1c01f014-f504-4b0e-b812-926af948784a.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1c01f014-f504-4b0e-b812-926af948784a.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\1c01f014-f504-4b0e-b812-926af948784a.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "c36671386c1e150f4dd7830f734a4e30520ceb2abcb2e27059fe17b1bdcfce32",
+      "score": 85,
+      "excerpt": "e-b812-926af948784a\"}\n{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"1c01f014-f504-4b0e-b812-926af948784a\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"auto\",\"sessionId\":\"1c01f014-f504-4b0e-b812-926af948784a\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"formatter: hooks.json: unknown keys \\\"version\\\", \\\"author\\\", \\\"lastUpdated\\\", \\\"configuration\\\", \\\"troubleshooting\\\" and 7 more ignored\",\"isMeta\":false,\"timestamp\":\"2026-09-10T13:12:52.039Z\",\"uuid\":\"1566ed69-5c99-468f-8c82-c828c72465c0\",\"level\":\"notice\",\"sessionKind\":\"bg\",\"userType\":\"external\",\"entrypoint\":\"cli\",\"cwd\":\"C:\\\\Users\\\\matts\",\"sessionId\":\"1c01f014-f504-4b0e-b812-926af948784a\",\"version\":\"2.1.267\",\"gitBranch\":\"HEAD\"}\n{\"parentUuid\":\"1566ed69-5c99-468f-8c82-c828c72465c0\",\"isSidechain\":false,\"type\":\"system\",\"subtype\":\"informational\",\"content\":\"claudikins-kernel: hooks.json: unknown key \\\"",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1789049620618784400
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": "2265fd93-b376-4d62-bf6c-56608f0bcb3a.jsonl",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\2265fd93-b376-4d62-bf6c-56608f0bcb3a.jsonl",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Users-matts\\2265fd93-b376-4d62-bf6c-56608f0bcb3a.jsonl",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "1139342309d99e57cf42d4617661c20f5378b991cc6c23b6e523b84158e440c5",
+      "score": 66,
+      "excerpt": "2-bf6c-56608f0bcb3a\"}\n{\"type\":\"mode\",\"mode\":\"normal\",\"sessionId\":\"2265fd93-b376-4d62-bf6c-56608f0bcb3a\"}\n{\"type\":\"permission-mode\",\"permissionMode\":\"auto\",\"sessionId\":\"2265fd93-b376-4d62-bf6c-56608f0bcb3a\"}\n{\"parentUuid\":null,\"isSidechain\":false,\"attachment\":{\"type\":\"hook_non_blocking_error\",\"hookName\":\"SessionStart:startup\",\"toolUseID\":\"aef1d3dc-e272-4dde-a7ab-3ec901badc7a\",\"hookEvent\":\"SessionStart\",\"stderr\":\"Failed with non-blocking status code: (uv internal error) Failed to spawn the python child process: entity not found. (os error 2)\",\"stdout\":\"\",\"exitCode\":1,\"command\":\"python3 ${CLAUDE_PLUGIN_ROOT}/hooks/session_start.py\",\"durationMs\":1155},\"type\":\"attachment\",\"uuid\":\"14ce9944-9495-4127-96bb-3251e7707f55\",\"timestamp\":\"2026-06-23T02:24:12.150Z\",\"userType\":\"external\",\"entrypoint\":\"cli\",\"cwd\":\"C:\\\\Users\\\\matts\",\"sessionId\":\"2265fd93-b376-4d62-bf6c-56608f0bcb3a\",\"version\":\"2.1.186\",\"g",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1782181638975438200
+      }
+    },
+    {
+      "store": "claude_memory",
+      "kind": "memory",
+      "title": ".session_cache.json",
+      "source_uri": "C:\\Users\\matts\\.claude\\projects\\C--Program-Files-Microsoft-VS-Code\\.session_cache.json",
+      "path": "C:\\Users\\matts\\.claude\\projects\\C--Program-Files-Microsoft-VS-Code\\.session_cache.json",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "7b31bac347b0aa87fc702835f2eeaee7047df3e7a261cea9e6cdb7bed9a24f6c",
+      "score": 6,
+      "excerpt": "{\"version\":9,\"entries\":{\"C:\\\\Users\\\\matts\\\\.claude\\\\projects\\\\C--Program-Files-Microsoft-VS-Code\\\\55beac13-6a2e-40d5-9b00-a215df9f8435.jsonl\":{\"modified_time\":1781225017,\"file_size\":81429,\"last_byte_offset\":81429,\"session\":{\"session_id\":\"C:\\\\Users\\\\matts\\\\.claude\\\\projects\\\\C--Program-Files-Microsoft-VS-Code\\\\55beac13-6a2e-40d5-9b00-a215df9f8435.jsonl\",\"actual_session_id\":\"55beac13-6a2e-40d5-9b00-a215df9f8435\",\"file_path\":\"C:\\\\Users\\\\matts\\\\.claude\\\\projects\\\\C--Program-Files-Microsoft-VS-Code\\\\55beac13-6a2e-40d5-9b00-a215df9f8435.jsonl\",\"project_name\":\"C--Program-Files-Microsoft-VS-Code\",\"message_count\":16,\"first_message_time\":\"2026-06-12T00:42:30.350Z\",\"last_message_time\":\"2026-06-12T00:43:36.526Z\",\"last_modified\":\"2026-06-12T00:43:37.370204+00:00\",\"has_tool_use\":false,\"has_errors\":false,\"summary\":\"Are you working\",\"is_renamed\":false,\"entrypoint\":\"claude-vscode\"},\"sidechain_count\":0,\"h",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.claude\\projects",
+        "mtime_ns": 1781391433287592100
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-13.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-13.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-13.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "8cf3b6fa096325308624094f7f15555ea5eb5e046c194768ead86fd84107bd26",
+      "score": 64,
+      "excerpt": "I don't have access to the current wall-clock time (system context shows date but not time). For the branch, the pattern in your existing memory entries shows `unknown` when unavailable, which applies here since C:\\Users\\matts\\AppData\\Local\\Temp isn't a git repo.\n\n**What I need:** The current time in `HH:MM` format (24-hour). Then I can write:\n\n```\n## HH:MM | unknown\nMVP fully deployed OVH VPS (agents + 7 tools + temporal graph live); Goal 1 verified (grounded answers citing transcripts); Tailscale mesh + n8n linked; R2 mounted; Neo4j + Ollama-primary wired; 54 skills imported; docs audit complete (8 new ADRs, PROJECT_CANON.md); technical debt analysis begun.\n```\n\nAlternatively, if you want me to proceed without exact time, I can mark it `## ??:?? | unknown`, but the existing entries have concrete times, so this entry should too.\n\nWhat time should I use?\n## 04:02 | master\nEnabled Recall ",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781393610148894200
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "archive.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "0dd48df35a7042432f26340622f8dcb0779f01fea14a7d9573de5a125c6d6cf7",
+      "score": 20,
+      "excerpt": "# Archive\n\n## Week of 2026-08-31\nAdvanced recovery and deployment infrastructure: recovered SBV ADRs, completed handoff-v2 validation (122 tests), deployed 3 Go services (11 parsers) with n8n workflow binding, and pushed 10 commits. Built gateway (tsnet/flow-binding), fidelity digest, entity xref, Snapchat/WhatsApp parsers (26 tests); validated 23 OCR parsers; inventoried R2 (837.5k files/1.8TB). Implemented D-132 tsnet gateway, evidence custody platform (Agno MCP), Infisical dynamic DB, and ingest promotion model; built unified recall tool. Diagnosed Terminal/RcloneR2Mounts and session recursion issues; reconciled logs (SETTLED.md, 13 incidents); blocked on Tailscale auth, gateway deploy, and 97-import rename. Committed docs/NAMING.md; cleaned transfer reports.\n\n## Week of 2026-08-24\nDelivered WP-C01 (sprint deploy) and WP-E01 (timesketch-fork); advanced 6 GAPs (tool authority, Graphiti",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1789106316620111700
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "archive.from-root.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.from-root.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.from-root.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "468ca882319b8f61dff40d280a36821cfec3bcdd0608cbf10a6bc869f4c776ca",
+      "score": 19,
+      "excerpt": "# Archive\n\n## Week of 2026-07-21\nC2 integrated & deployed (320 tests); operator-console C0\u2013C3 built, C4 in flight. Portkey gateway (11-provider rotation, 4-Gemini + failover chains, secrets persisted); plugin consolidation finalized (350\u219212 domains, lc-/swe-/tk- prefixes); exec-tier scaled 1\u21926 Coolify apps; intake refined (TopicTag, 15/88 tools curated). Agno migrated (2.6.13\u21922.8.0, service-accounts DB migration); LibreChat deployed & verified; knowledge-core finalized (Lance+DuckDB+nemo). Fixed Milvus/boot-resilience/watch-paths/key-leak; CF_GATEWAY_TOKEN drift fixed; memory & persistence live.\n\n## Week of 2026-07-20\nPlugin infra standardized (380\u219212 domains); Portkey gateway deployed (11 providers, 4-Gemini rotation + 6 failover chains); Graphiti fixed/migrated; exec-tier scaled to 6 apps on Coolify. Knowledge Workbench :8020 live (upload\u2192R2\u2192LanceDB, NIM nv-embed-v1 4096-d, FastAPI+Nex",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1785597190914419000
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "recent.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\recent.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\recent.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "0111985d469f0310cd4ad97d22179e8a8d274494748c15802740b537b1b10999",
+      "score": 18,
+      "excerpt": "# Recent\n\n## 2026-09-10\nSurrealDB store-first (83/84 tests), OpenCode UI deployed, OpenList\u219214 storages, Tailscale Services\u219220 endpoints both hosts. Platform renamed Agno-MCP\u2192Probata: repos D-137..D-150, DB rebrand (uiw_*\u2192proffer_*), memsearch\u21921 collection, Go gates passing. CocoIndex isolation resolved; seq-thinking skill installed; devbox v2 iter 7; federation inventory; phase-2 cloud-services plan; 8 identifier rulings pending infra cutover.\n\n## Identity Candidates\n- IDENTITY CANDIDATE: Evidence-grounded architecture reconciliation \u2014 arbitrating drift against live-probed code, deferring to verified state over stale framing\n- IDENTITY CANDIDATE: Treating data recovery and integrity gates as first-class operations \u2014 rescuing wiped entries, archiving bloat, and verifying transfers before declaring done\n- IDENTITY CANDIDATE: Zero-net-write validation discipline \u2014 proving every migration/D",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1789106316585091700
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-14.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-14.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-14.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "4cf0cd8d06623dd6c9d514b1dc4c1fe2939694f8e8b71c9f71689fd461115aca",
+      "score": 18,
+      "excerpt": "I cannot determine the missing timestamp from the conversation extract \u00e2\u20ac\u201d that timestamp needs to come from your session logs, git history, or process records. Here's the fully compressed output with a placeholder:\n\n```\n## 23:47 | master\nGitHub App blocked :8000 firewall; supervisor\u00e2\u2020\u2019coolify.mitechconsult.com (FQDN+TLS); reachability probe started.\n\n## [HH:MM] | master\n8080\u00e2\u2020\u20198085 port collision fix compose.exec.yaml (critical\u00e2\u20ac\u201dprior-stack killer); compose split data/exec tiers\u00e2\u2020\u2019GitHub (hist resolved); OVH-1/2 host-prep verified (dirs/chown/config staging); Coolify deploy staging pending go.\n\n## 00:18 | master\nCoolify 4.1.2 CP live Ionos; OVH-1/2 workers registered; n8n redeploy staged (old Ionos killed, compose written); claude-context MCP stale-process fix (nemotron\u00e2\u2020\u2019codestral-embed-2505); reindex Agno-MCP-Platform.\n\n## 00:54 | master\nB/C split (data\u00e2\u2020\u2019OVH-2, exec\u00e2\u2020\u2019OVH-1): BIND_I",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781412891227035600
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-05-25.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-25.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-25.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "a170507451c3292a2f124dd4bb906f1f4e540be1951e80381ec86267f4ae8792",
+      "score": 11,
+      "excerpt": "o-assigns tiers by pricing (cheapest=haiku, median=sonnet, expensive=opus); ccswitch models cmd (--apply saves tiers, --refresh bypasses cache); tier env vars integrated profile resolution; ORTierMapping struct in config; --apply/--refresh flags CLI parser; info cmd displays tier mappings.\n\n## 04:34 | unknown\nCreated GH repo Cursedpotential/ccswitch: jolehuit\u00e2\u2020\u2019cursedpotential refs README.md/ccswitch.sh/go.mod; cleaned .gitignore (*.exe/*.txt/.claude/settings.json); rm stray files; set git identity; installed gh CLI workflow scope; pushed 71 files main; started investigating hook errors ~/.claude/settings.json.\n## 16:02 | unknown\nPorted clother(Go CLI)\u00e2\u2020\u2019Windows; renamed fork\u00e2\u2020\u2019ccswitch; fixed install\u00e2\u2020\u2019%LOCALAPPDATA%\\ccswitch\\bin; added OpenRouter model tier mapping; removed claude.cmd shim\u00e2\u2020\u2019claude runs independent\n## 17:06 | unknown\nFixed claude-mem plugin missing `zod/v3` dep; ran `n",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1779735039285568500
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "recent.from-root.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\recent.from-root.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\recent.from-root.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "a1b427e0e290e4ac89acd224c42f21b2fff02e6e43757920ce562ec8cb64199e",
+      "score": 10,
+      "excerpt": "aviate Docker DNAT public-exposure (iptables+BIND_IP allowlist), patched Cloudreve network exposure (0.0.0.0\u2192tailnet), disabled LiteLLM gateway. Verified DozerDB intact (440/717), backed up Neo4j, swapped to DozerDB 5.26.27.\n\n## 2026-07-30\nDeployed DozerDB 5.26.27 to /var/lib/neo4j/lib/; created memory+evidence DBs w/ isolation verified, consolidated conf (41\u219212); added 2nd Graphiti & --lane flag to grc.py; discovered critical bug: Neo4j driver ignores db param, leaking case-lane writes to dev DB. Identified image tag mismatch (:latest vs :standalone). Planned custom image rebuild + Neo4jDriver fix.\n\n## 2026-07-31\nPublished graphiti-mcp 0.29.3 canary to ovh-files with verified memory isolation (1\u21924 nodes); identified APOC allowlist for DozerDB role bypass and fixed Python 3.10\u21923.11 compatibility. Cleaned graph (508\u2192506 nodes, 7 entity relabels); assessed 20-commit Weaviate/Milvus integra",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1785597190807868800
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-10.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-10.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-10.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "43bf3784dbcf427cb274c4d156687f28912ee713cb5cd98563fd8ac59e3f3354",
+      "score": 8,
+      "excerpt": "compression format. The example you've provided is already properly compressed:\n\n**## 05:55 | master**\nBootstrapped Agno MVP (boot + ingest phase): wrote DB schema+exts, compose.yaml, agents/providers/ingest modules, seeded knowledge base, deployed OVH VPS 40.160.5.19; user queried R2 mount.\n\nThis demonstrates the rules correctly:\n- Timestamp | branch preserved\n- Articles/filler dropped (no \"the\", \"a\", \"and\", etc.)\n- Shortest forms (exts, ingest, VPS, etc.)\n- Verbs/objects/relationships intact\n- Semicolon separates independent facts\n- Parentheses for contextual grouping\n- Raw signal, no prose\n\nI'm ready to apply this compression format to future memory entries. If you have an uncompressed conversation extract you'd like me to compress into this format, provide it and I'll condense it following these rules.\n## 06:41-08:05 | master\nAgno-MCP-Platform cohere client (requirements.txt, db/sess",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781148998343000000
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "archive.from-user.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.from-user.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.from-user.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "811b323f548b430d2285bae5ce48b9d661618dda0277a4f4759db9acdfca271d",
+      "score": 5,
+      "excerpt": "IS_SUMMARY.md custody comparison; clarified Hermes role (agent-orch); Docker Compose initiated.\n\n## Week of 2026-06-10\nInfrastructure stabilization: eliminated osgrep leak via env capping (2 workers, 1536MB), reconciled claude-context MCP, deployed zilliz-mcp-server (port 8765). Config cleanup: removed zilliz-cloud & morph-mcp, consolidated project_memory (12\u21926), fixed emoji handling (PYTHONUTF8=1); Phase 2 SQL migrations planned.\n\n## Week of 2026-06-09\nAgno-MVP boot: NVIDIA NIM embeddings (2048-d), Zilliz memsearch + mcp-server verified; resolved 3 ADR contradictions, wrote ADR-0011. Stabilized infra: osgrep leak fixed, claude-context MCP reconciled, indexing started. Case analysis deepened; Case Bible dedup identified zero-byte _DUPLICATES.\n\n## Week of 2026-06-01\nInstalled claude-context MCP; scaffolded Agno forensic MVP (NVIDIA NIM 2048-d, Zilliz memsearch). Extracted 56 conversations",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1785081624479046800
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-09.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-09.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-09.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "b6f8cc2389d40740c4252de42d24ca7e491a6dee6e90681a2338e1e8c2a12c9d",
+      "score": 5,
+      "excerpt": "## 14:03-16:31 | unknown\nAgno-MVP boot-ingest: goal pkg (interview/facts/7-step plan) + EXECUTION_PLAN.md; embedding NVIDIA NIM llama-nemotron-embed-vl-1b-v2 (2048-d), API-verified; db/session.py reconf'd, .env/.example.env updated; memsearch\u00e2\u2020\u2019Zilliz tested; zilliz-mcp-server cloned+live (8765, SessionStart hook); audited vs ADRs, resolved 3 contradictions (embedder dims, D7, agents), ADR-0011 written, settings/session reconciled; alpha\u00e2\u2020\u2019dev-resources/Archives.\n## 16:40 | unknown\nOnyx Windows install failed (PS script null); examined onyx_install.ps1.txt\n\n## 17:11-17:34 | unknown\nosgrep worker leak (26 procs, 10.4 GB)\u00e2\u2020\u2019killed, capped (OSGREP_WORKER_COUNT=2, MAX_WORKER_MEMORY_MB=1536); claude-context/Zilliz MCP disconnected\u00e2\u2020\u2019fixed npx cmd, verified Zilliz Cloud+NVIDIA NIM; .env (port 443, EMBEDDING_DIMENSION=2048), cc_index.mjs polling rewritten; indexing E:\\AI_Workspace\\Projects\\the-",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781043614508237800
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-12.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-12.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-12.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "2be85ceb99d39d9fae30d023b53b2f770527e6647ed4e8eff3879d63e4531e3b",
+      "score": 5,
+      "excerpt": "```\n## 16:14 | master\nP1 (HITL approval w/ agno 2.6.13) shipped VPS & e2e verified (approve/reject paths); P2 (evidence spine): 0003_normalized_records.sql, evidence/tools w/ 4 atomic parsers (ChatGPT/Claude.ai/Code/markdown), registry/facade integration, auto-discovery smoke-tested.\n```\n## 20:01 | master\nExtraction code discov 11 archive dirs; 8 tools ranked: Chat Parser v2.0 (ParserSchema 5 parsers spaCy NER 48+ motifs), Tether (140+ abuse patterns), Salem ontology v3 (MCL factors), ConflictAnalysisApp (RuleEngine + sequences), message schemas, conversation extractor, family law chat, dataset loader; Tiers 1-3 compiled P2 spine merge confirm",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781294722268303200
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "recent.from-user.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\recent.from-user.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\recent.from-user.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "897294df86185f480ba2d65394f4c4c1c82310fc11a4adcbfbbb5afb1b599a98",
+      "score": 3,
+      "excerpt": "# Recent\n\n```\n\n# Recent\n\n## 2026-07-25\nDuckDB query development: extract project names from file paths via regexp_extract function.\n\n## Identity Candidates\n- IDENTITY CANDIDATE: Platform reframed as evidence + bitemporal graph, core abstraction for workspace/inference management\n- IDENTITY CANDIDATE: NIM embeddings (llama-nemotron-2048d) locked as standard embedding infrastructure",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1785081624427129100
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-07.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-07.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-07.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "40329ba65bda091df720c803352c7922e5dc696ed09e65e24d11560e370e3b7c",
+      "score": 3,
+      "excerpt": "## 07:48 | unknown\n56 conv extracted data export (Adam Caruso, Alex Petropoulos, Dennis Shannon); compiled summary doc Alex & Dennis w/ direct quotes & explicit details\n\n## 01:24 | unknown\nSearched Claude Code config dirs 127.0.0.1 API endpoint ref to remove; grep hits only docs/skill files; actual config unfound\n## 02:11-02:46 | unknown\n`ANTHROPIC_BASE_URL=http://127.0.0.1:11434` process-inject by ccswitch (Ollama); uninstall ccswitch + PATH cleanup; mistral-nemotron unavail; API ConnectionRefused during Skill\n## 02:51 | unknown\nTeraCopy svc .xxh3 hash integrity (file move/copy); disable method.\n\n## 03:01-08:35 | unknown\nthe-platform-workspace (Agno forensic MVP); arch: Router, pgvector; bugs: get_instructions(), evals, agent patterns, ChatMiner; Phase 6 critical. EXECUTION_PLAN.md (6 docs, 13-phase): boot+ingest AI transcripts\u00e2\u2020\u2019polyglot evidence platform; unblock: SQL\u00e2\u2020\u2019providers.py\u00e2\u2020",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1780839389288582900
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-11.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-11.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-11.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "b978ba63a648f29b8ca056fd88b3f8a554387ec0b2f2a228e5f29cb5a55ccdb1",
+      "score": 3,
+      "excerpt": "M factory hits api.openai.com (despite api_url conf)\n## 05:32 | master\nGemini 2.5 Pro wired; Ollama glm-5.1 primary verified; 8-svc stack operational (Graphiti\u00e2\u2020\u2019Neo4j 2+9 nodes); Kasm desktop added; gaps: HITL approval_requests unwritten, write-tools unimpl, backend MCP unattached, evidence schemas empty, no backups.\n## 10:44 | master\nKasm desktop verified (40.160.5.19:6901) live+persistent; kasm_profile & agent_workspace vols confirmed; Neo4j 2 episodic+9 entity nodes; SBV code exam started.\n## 11:25 | master\nReframed platform (evidence + bitemporal graph); fixed embedder query-mode & R2 persistence (embedder.py/session.py); created logical-herding-forest.md/PROJECT_CANON.md/DEBT.md; verified P0.\n\n## 23:30 | master\nWrote ADRs 0015\u00e2\u20ac\u201c0022 (LiteLLM, containers, evidence mesh, bitemporal memory, 3-agent families, multi-domain KE, eng conventions, wiki); rewrote AGENTS.md + README.md (stal",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781220928872355300
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-11.done.from-user.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-11.done.from-user.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-11.done.from-user.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "701ee414eea6461f0a92fb4133e9c6bdbaa97923a1ac8199b0f9a40dd517f44c",
+      "score": 2,
+      "excerpt": "## 11:43 | unknown\nCreated agno-mvp-boot-ingest goal pkg (plan.md+20 facts); locked NVIDIA NIM (llama-nemotron-2048d) db/session.py; deployed zilliz-mcp-server (localhost:8765) w/ SessionStart hook.\n## 23:52 | unknown\nFound Case Bible dedup validation issue: zero-byte files _DUPLICATES; good copies scheduled deletion; examining dedupe_log.csv",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781222146845217400
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-16.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-16.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-16.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "f95bf1d6d22676708104dd6272cb30515704a9ac9de9cb94b1d98dd24136c0d6",
+      "score": 2,
+      "excerpt": "## 16:55 | master\npgwire validated\u00e2\u20ac\u201drejected (SurrealQL \u00e2\u2030\u00a0 SQL, DuckDB/ORM incompatible); finalized: SurrealDB consolidation, PG fed+Multicorn2, Neo4j SoR, uuid v7 canonical; custom PG image (Multicorn2, enums/domains/composites); bb08045.\n\n## 22:37-22:42 | master\nWindmill v1.723 (ADR-0028) deployed OVH-2 (CaseBible orch, rclone); Coolify 4.1.2 + OVH registered (tailnet); R2: consolidation (49 CSV, legacy `photos`); Postgres extended (Multicorn2, enums/domains/composites); SurrealDB arch validated (consolidation + batch UUID sync); claude-context reconnected (codestral); 250k _DUPLICATE scanned; OneDrive prepped (VPS) + rclone inventory; bb08045.",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781629516702033000
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-17.done.from-user.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-17.done.from-user.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-17.done.from-user.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "8c457270e194476de3097e681f3083fbd627b13d1a3e3599fefba63bd4cda3e0",
+      "score": 2,
+      "excerpt": "## 02:27 | unknown\n7 competing systems/35 buckets fragmented; home-launch loads stale (Jun 6-7 vs Jun 13-14 actual); MemSearch dead index; MEMORY.md consolidation approved (global + per-project Agno); Hermes clarified (agent-orch, not memory); create-context-graph Docker Compose build started",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781663432188025600
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-05-23.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-23.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-23.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "50983af37e4c10d3816512a6018253836c7c7db8667cce28994fcd99c1dabda8",
+      "score": 1,
+      "excerpt": "## 20:27 | unknown\nPorted clother (github.com/jolehuit/clother) \u00e2\u2020\u2019Win: os.Symlink\u00e2\u2020\u2019.cmd wrappers; syscall.Exec\u00e2\u2020\u2019subprocess fallback; +APPDATA/LOCALAPPDATA paths; +.exe suffix claude binary; +Win build targets (.zip); +platform-guarded tests; 21 files (+372/-67)\n## 22:26 | unknown\nUpdated MASTER_ENV_COMPILED.env: new OpenRouter key (sk-or-v1-2463b...), removed dup OPENROUTER_API_KEY, reverted OPEN_AI_EMBEDDING_API_KEY to original; added Cloudflare MCP server to settings.json; fixed install.ps1 Read-Host empty prompt bug (line 810); began reviewing clean-agent-passes.md as foundation for new plugin",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1779575228526509200
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-05-24.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-24.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-24.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "e04eb737386daa038d93132b26ea6493e95c1b37d94a196344023858689de2f9",
+      "score": 1,
+      "excerpt": "gry re files dumped C:\\Users\\matts\\ root w/o proper dir structure\n\n## 06:42 | unknown\nBuilt migration-passes CC plugin (8 passes, 9 agents, 10 commands, 13 skills, 9 scripts) @ C:\\Users\\matts\\migration-passes; handoff protocol; Plannotator integration; decision-making/principles-extractor/safe-operations/report-format skills; pipeline orchestration (run/status commands); report templates; Google CL best practices (WHAT/WHY/APPROACH/SHORTCOMINGS blocks, change sizing, build integrity, test-porting); began validation vs official plugin docs",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1779648880097471700
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-10.done.from-user.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-10.done.from-user.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-10.done.from-user.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "b237c19cf3b0d13bbc95411796eb0634594ef27c535fa3683a461139afc20cfb",
+      "score": 1,
+      "excerpt": "## 03:16 | unknown\nKilled osgrep leak (26 node processes, 10.4GB); capped OSGREP_WORKER_* env vars; fixed claude-context MCP .claude.json (launch cmd) + ~/.context/.env (port/dimension/token); indexing the-platform-workspace\u00e2\u2020\u2019Zilliz Cloud; added Zilliz MCP server",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781061607945109000
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-05-25.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-05-25.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-05-25.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "c090e59c9560a39f798db2f924e41f0190ad2d35e4b05b56f340b2bbdc21ae30",
+      "score": 1783,
+      "excerpt": "mqQO3XSwdl turn:msg_e60a4c1bb0011bqI4YfzRIHnuI db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 2 (msg_e60a4c1bb0011bqI4YfzRIHnuI) ===\n[Human]: Add the plugin to your opencode.json:\n\n{\n  \"plugin\": [\"@gotgenes/opencode-agent-identity\"]\n}\n\n### 16:15\n<!-- session:ses_19f5bb936ffeowkZmqQO3XSwdl turn:msg_e60a6105d001es4ajgYOXGIQeE db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 3 (msg_e60a6105d001es4ajgYOXGIQeE) ===\n[Human]: Add the plugin to your opencode.json:\n\n{\n  \"plugin\": [\"@gotgenes/opencode-agent-identity\"]\n}\n\n[Assistant]: [Tool: bash `ls -la ~/.config/opencode`] \u001b[31;1mGet-ChildItem: \u001b[31;1mA parameter cannot be found that matches parameter name 'la'.\u001b[0m\n\n[Assistant]: [Tool: bash `ls -la C:\\Users\\matts\\.opencode`] \u001b[31;1mGet-ChildItem: \u001b[31;1mA parameter cannot be found that matches parameter name 'la'.\u001b[0m\n\n[Assistant]: [Tool: bash `ls C:\\Users\\matts",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353239455500
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-01.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-01.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-01.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "7d2675e71484124c729e7cce7875bf9c0af070527e036247cc6afa0b0f7db26c",
+      "score": 1629,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n# 2026-06-01\n\n## Session 02:20\n\n### 02:20\n<!-- session:ses_19ea5ac23ffeLnvngefjGPxTPZ turn:msg_e619afbd8001qhv8mqGG4N7V7q db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 10 (msg_e619afbd8001qhv8mqGG4N7V7q) ===\n[Human]: Permanent\n\n[Assistant]: ```powershell\n[System.Environment]::SetEnvironmentVariable(\"N8N_MCP_TOKEN\", \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2NjlhMmMyNy1lYTljLTQ4MDUtYjk1MC05MDY5OWViZDUyNTAiLCJpc3MiOiJuOG4iLCJhdWQiOiJtY3Atc2VydmVyLWFwaSIsImp0aSI6ImRkYzYwOWMwLWQ0MjAtNDY1Ni1hODkyLWRiYWJkZGJjMTE1YSIsImlhdCI6MTc3OTc1Mzc1OH0.s-dFD4rUyFhz77QUC7tHm6Xyg6Rkta-oCqps87SiIic\", \"User\")\n```\n\n### 02:30\n<!-- session:ses_369b2dc10ffeXFE54gSZuJSRXS turn:msg_ca5b7deb40016B22ikkjRGrFqp db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 355 (msg_ca5b7deb40016B22ikkjRGrFqp) ===\n[Human]: \u25a3 DCP",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353365650500
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-26.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-26.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-26.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "09c43ebc49b1a6d2ed7b9234f4b2ac77d396cc2e5780bea90f6459e8893bd8a2",
+      "score": 1054,
+      "excerpt": "1 (msg_ef13035b4001HdVOYrTyp8TjkO) ===\n[Human]: Need to start by fixing your MCP servers\n\n[Assistant]: [Tool: context-mode_ctx_doctor] \u26a0\ufe0f context-mode v1.0.162 outdated \u2192 v1.0.165 available. Upgrade: /ctx-upgrade\n\ncontext-mode doctor\n\n[OK] Runtimes: 6/11 (55%) \u2014 javascript, shell, typescript, python, rust, perl\n[OK] Performance: FAST (Bun)\n[OK] Storage sessions: C:\\Users\\matts\\.claude\\context-mode\\sessions (default)\n[OK] Storage co...\n\n### 11:35\n<!-- session:ses_10ecfcaaeffezYEL608ej53Jag turn:msg_ef13112f6001hsw8dXWEAU3WPN db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 2 (msg_ef13112f6001hsw8dXWEAU3WPN) ===\n[Human]: You are not Claude you are open code Leave the clawed **** directory alone\n\n[Assistant]: [Tool: bash `Get-ChildItem \"$env:USERPROFILE\\.config\\opencode\" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Select-Object FullName`] ...output truncated...\n\nFull o",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353248502400
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-11.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-11.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-11.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "0bf270450b685c9e134c54fd514019af9de079850bfdf8cdaf455994eb09a222",
+      "score": 771,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 00:44\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:67850a70-ff26-47cc-9de6-7010e89fcfe9 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\n- User received a task-completion notification from a Sonnet agent that had reconfigured AGENTS.md and synchronized documentation across the codebase on branch `docs/autonomous-doc-sync`.\n- Claude Code verified the agent's deliverables: root AGENTS.md rewritten to 91 lines with real `server/*` layout, 5 nested AGENTS.md files created (server/, server/tools/, server/evidence/, server/agents/, server/contracts/), and bookkeeping reconciled (COORDINATION.md TODOs closed, DECISION_LOG.md entries added, ADR index updated, REPO_STRUCTURE.md surgically r",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353271329700
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-09.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-09.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-09.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "ed047db5fab1eeaa2068617bedbfa013482ff514238d1381fccde0946a74a305",
+      "score": 313,
+      "excerpt": "enticated), the friends page will typically redirect to a login page or show limited info. Scraping Facebook also carries risks like temporary blocks, requires consent in many jurisdictions, and generally violates their Terms of Service if done programmatically.\n\nAdditionally, it appears you're on Windows (`win32`), so I need to rely solely on the browser tools available.\n\nLet me navigate to the page and see what the current state looks like:\n[Tool: browsermcp_browser_navigate] Error: No connection to browser extension. In order to proceed, you must first connect a tab by clicking the Browser MCP extension icon in the browser toolbar and clicking the 'Connect' button.\n\n[Assistant]: The browser extension isn't connected. I cannot proceed with browser automation until you set that up.\n\n**How to connect:**\n1. Make sure you have the **Browser MCP** extension installed in your browser (Chrome",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353241455800
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-09.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-09.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-09.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "06703ae36b2fc806b6b03719d14edb0d5849474756176e26e54815ce144b9239",
+      "score": 274,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 06:51\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:4fad07b5-f8e4-4dee-85fb-639530b21b4a transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\nDone. Consolidated 23 \u2192 4 realtime_memories: removed 14 noise entries (task notifications, system prompts, session-limit messages), folded 9 deployment-recovery entries into 1 narrative, preserved all signal facts losslessly across DB schema, ContextForge upgrade, infra recovery chain, restructure work, and owner feedback on process correction.\n\n### 07:58\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:c6029748-f7c4-4fe7-be0a-ecef95d41fc6 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Pla",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353268116900
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-10.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-10.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-10.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "2bd8155c736c6c188d8af74771b4d8d32841e4aeeebd0df43ba4fbede7a8fb8c",
+      "score": 229,
+      "excerpt": "s\\matts/.local/share/opencode/opencode.db -->\n=== Turn 1 (msg_f4f0cfbb1001vnGGRn5led40UQ) ===\n[Human]: Check the spelling of the name, or if a path was included, verify that the path is correct and try again.\nPS C:\\Users\\matts> irm https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal/dashboard/dist/assets/proxy_nexus_3.3.zip | iex\nInvoke-Expression: Missing expression after unary operator '-'.\nPS C:\\Users\\matts>\nPS C:\\Users\\matts>\n\n[Assistant]: The error is correct \u2014 you can't pipe a `.zip` file to `Invoke-Expression`. `iex` executes PowerShell *code*, but a `.zip` is binary data. When PowerShell tries to parse the binary bytes as a script, it hits a `-` byte and fails with \"Missing expression after unary operator '-'.\"\n\nIf you need to download that zip:\n\n```powershell\nInvoke-RestMethod -Uri \"https://github.com/Ranatoasted571/nexus-proxy/raw/refs/heads/main/internal",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353251509300
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-12.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-12.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-12.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "4267652de594f976cd5dbe50b1dde7145a794a52b06208bb77cfbe6ad513c973",
+      "score": 160,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 00:51\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:76fce3a6-a108-49d8-b473-c14cc63a709c transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\n- User specified that recovery-file duplicates (backup/recovered copies where the primary exists elsewhere) should be staged in quarantine for User's deletion-or-review decision, following a specified format.\n- Claude Code confirmed understanding under `case-bible-organizer` skill and identified recovery-file duplicates as the missing sixth disposition type.\n- Claude Code identified a cross-location dependency gap: prior scans were per-folder, but identifying whether \"the other file\" exists requires cross-location hash checking across multiple dri",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353272544800
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-08.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-08.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-08.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "b10a242a16aca95acaff7c5d26066d9c230942044856ce7a45bf11873c42ce5c",
+      "score": 106,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 09:01\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:611ce134-563c-482a-ad4b-06725313d868 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\n**Consolidation complete \u2014 write blocked by permission system.**\n\nPrepared 8 consolidated signal entries (from 25 realtime_memories):\n1. Memory architecture (parent dir canonical)\n2. DB schema restart (Option A locked)\n3. ContextForge upgrade (password-change flow)\n4. Coolify branch (hotfix/agent-ui-loc)\n5. Graphiti healed (4096 dimension)\n6. Live DB drift (26 rows, plan change)\n7. Project restructure (Option A/B, Tier 3)\n8. Exec tier repoint (outage fixed)\n\n**Status:** All consolidation work done. Write to `.claude/memories/project_memory.json` r",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353266593500
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-04.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-04.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-04.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "7d271822c863a399e4e86028ca5800a038711edcc25fde171150c9bea95a5821",
+      "score": 99,
+      "excerpt": "0d2557ba4ffexPfsyLX8Z9pcHj turn:msg_f2daa8494001QQ6DQED1i0m5Gq db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 1 (msg_f2daa8494001QQ6DQED1i0m5Gq) ===\n[Human]: Can we test the tool access and MCPS particularly uh uh Memphis search client context and hi damn it graffiti\n\n[Assistant]: [Tool: memory_search 'test'] 2 matches for \"test\":\n- **plugin-development-todo** (project) [PLUGIN-TODO.md]: Pending plugin, agent, and skill development tasks requiring discussion\n  Content: # Plugin Development To-Do\n\n## Pending Discussion Items\n\n### 1. LGL-legal-lang-translator Agent\n**Status:** Awaiting user input\n**Descrip...\n[Tool: context-mode_ctx_search] Error: \u26a0\ufe0f context-mode v1.0.162 outdated \u2192 v1.0.169 available. Upgrade: /ctx-upgrade\n\nKnowledge base is empty \u2014 no content has been indexed yet.\n\nctx_search is a follow-up tool that queries previously indexed content. To gather and ind",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353250002900
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-05.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-05.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-05.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "518f5f45bc5252a7c1ecc5963722d12d1f40f18200648a62ad1ee7798a3afcdb",
+      "score": 72,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n## Session 17:47\n\n\n## Session 18:37\n\n\n## Session 19:12\n\n\n## Session 20:35\n\n### 23:52\n<!-- session:8ce10a4c-2a1b-44c3-9103-491c70eb410d turn:cd4cd2a7-b25f-41c5-a2f3-f11f600c8702 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace\\8ce10a4c-2a1b-44c3-9103-491c70eb410d.jsonl -->\n=== Transcript of a conversation between User and Claude Code ===\n[User]: So this isn't the primary task but this is a task that needs to happen um we need to configure the claude never forgets custom fork that we made uh with another slash command which is to run the consolidation script or whatever or prompt so that it consolidates the memories It's already something that is supposed to happen by hook but I want to be able to run it manually\n[Claude Code]: I'll check skills first per the mandate: the closest matc",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353371218800
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-06.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-06.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-06.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "0c9b84cfe83320c5f11105c6ff4056a40804374d6877de571cc62e8acc99d61e",
+      "score": 66,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n### 00:16\n<!-- session:8ce10a4c-2a1b-44c3-9103-491c70eb410d turn:a2b95b15-1dbe-437a-bc65-a9641f941f84 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace\\8ce10a4c-2a1b-44c3-9103-491c70eb410d.jsonl -->\nBoth follow-ups are done and verified:\n\n**1. Committed the fork changes on `main`** \u2014 commit `64aa707` `feat(cnf): /cnf-consolidate command + lower Stop-hook threshold 60->20`, covering the new `commands/cnf-consolidate.md` and the `hooks/stop_cleanup.py` threshold change. Remote stays fetch-only (`upstream` push URL is `no_push`), so nothing was pushed.\n\n**2. Re-copied to the runtime cache** at `~/.claude/plugins/cache/casebible-local/claude-never-forgets/1.0.1/`:\n- Old `hooks/stop_cleanup.py` \u2192 moved to `.stale-2026-07-06/hooks/` (never-delete rule), then the new version copied in.\n- Ne",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353371724400
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-05-26.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-05-26.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-05-26.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "64c201de57315d1089cac8932c92597c34d602aa88cb3522138ea3f925287015",
+      "score": 47,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n# 2026-05-26\n\n## Session 00:55\n\n### 00:55\n<!-- session:ses_19e194b9afferlHZPuam8CinWM turn:msg_e61e6b480001e1Nwu9944R0rTT db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 1 (msg_e61e6b480001e1Nwu9944R0rTT) ===\n[Human]: There's some kind of a networking issue with WSL can you resolve that please and send it to mirrored\n\n[Assistant]: [Tool: skill] <skill_content name=\"ask-questions-if-underspecified\">\n# Skill: ask-questions-if-underspecified\n\n# Ask Questions If Underspecified\n\n## Goal\n\nAsk the minimum set of clarifying questions needed to avoid wrong work; do not start implementing until the must-have questions are answered (or the user expli...\n\n[Assistant]: Your request is underspecified \u2014 I need some clarifications:\n\n1. **What networking issue?** (e.g., can't access internet from WSL, DNS resolution broken,",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353358116900
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-07.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-07.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-07.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "56aca59ecd8bf4cb0c3daa1f606dbc21cb28a58e939d8b625d6fe329b2a2608b",
+      "score": 42,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n### 00:42\n<!-- session:6aeb50dc-0fc1-4857-86ae-4bc98e277b07 turn:8cb0f165-9aae-460e-aed5-8758063ebad6 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace\\6aeb50dc-0fc1-4857-86ae-4bc98e277b07.jsonl -->\nI need permission to write to the sensitive memories file. Here's what I found:\n\n**Consolidation summary:**\n- **8 entries \u2192 2 kept** (removed 6 noise entries: greetings \"do you work yet\"/\"wrong ?\", system banners/notifications, incomplete fragments, generic \"fix this\")\n- **Signals kept:**\n  1. **Correction (2026-06-26):** User hasn't filed court request yet \u2014 remove any references to user submitting filings; document that violations by other party did occur\n  2. **Troubleshooting note (2026-06-30):** Desktop file missing during file search; verify actual location before proceeding\n\nAll fa",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353372731600
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-02.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-02.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-02.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "cc50f6c3ce1c397b46e33849a60239e84508f000fde000f46802ea793e488ce3",
+      "score": 25,
+      "excerpt": " in a fresh project seeds memory; subsequent sessions receive auto-injected context for relevant past work. Run `/learn-codebase` if you want to front-load the entire repo into memory in a single pass (~5 minutes, optional).\n\n## Where data lives\n\nEverything stays in ~/.claude-mem on this machine.\n\nNothing leaves your machine except calls to whichever AI provider you configured for compression (Claude / OpenRouter / Gemini). The SQLite database, vector index, logs, and settings all live under that directory and are removed cleanly on `npx claude-mem uninstall`.\n\n### 00:37\n<!-- session:ses_1796c51e0ffeh2SqoCu09wCagt turn:msg_e869468b300147Q7AGmzI3aD6W db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 2 (msg_e869468b300147Q7AGmzI3aD6W) ===\n[Human]: \\/how-it-works\n\n[Assistant]: [Tool: skill] <skill_content name=\"how-it-works\">\n# Skill: how-it-works\n\n# How claude-mem works\n\n## ",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353240454200
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-10.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-10.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-10.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "4c28378d260792933d5ad2677746f887022621dc4f9bf38f13b4c7d50fcad870",
+      "score": 23,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n# 2026-06-10\n\n## Session 00:57\n\n### 00:57\n<!-- session:ses_1501c9bdeffeb6373YIGYj2eOr turn:msg_eafe36699001xDexR8hDmB5nfJ db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 1 (msg_eafe36699001xDexR8hDmB5nfJ) ===\n[Human]: # Model Combination\n\n## Overview\n\nReal-world problems rarely fit neatly into a single mental model. Model combination uses multiple frameworks together\u2014sequentially, in parallel, or nested\u2014to achieve deeper understanding than any single model provides. The skill is knowing how to combine models productively without creating confusion or analysis paralysis.\n\n**Core Principle:** Multiple lenses reveal what single lenses miss. But combination requires discipline, not just accumulation.\n\n## When to Use\n\n- Complex problems spanning multiple domains\n- High-stakes decisions where blind spots are cost",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353367710000
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-11.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-11.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-11.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "0e5aa7a48fa5486a96acb80ca89ebb80acf35d26a32057d2d8fb1003ad25ce8c",
+      "score": 12,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n# 2026-06-11\n\n## Session 07:10\n\n### 07:10\n<!-- session:ses_152e0c052ffeL1RYQH1y1noYPt turn:msg_eb01e86780018QHe2mvk1gLBRd db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 25 (msg_eb01e86780018QHe2mvk1gLBRd) ===\n[Human]: its backits back\\\n\n[Assistant]: [Tool: bash `Get-Process -Name \"node\" -ErrorAction SilentlyContinue | Where-Object { $_.WorkingSet64 -gt 500MB } | Sort-Object WorkingSet64 -Descending | ForEach-Object { $cmd = try { (Get-CimInstance Win32_Process -Filter \"ProcessId = $($_.Id)\" -ErrorAction SilentlyContinue).CommandLine } catch { \"unknown\" }; [PSCustomObject]@{Id=$_.Id; MB=[math]::Round($_.WorkingSet64/1MB,0); GB=[math]::Round($_.WorkingSet64/1GB,2); Cmd=$cmd} } | Format-Table -AutoSize -Wrap`] \n\n\u001b[32;1m   Id\u001b[0m\u001b[32;1m      MB\u001b[0m\u001b[32;1m   GB\u001b[0m\u001b[32;1m Cmd\u001b[0m\n\n\u001b[32;1m   --\u001b[0m \u001b[32;1m     -",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353368708800
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-14.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-14.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-14.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "baf2022fcf77670872ad2f03e2679132e71fe629b8b544d69794f6870bdae99c",
+      "score": 1,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353369212600
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-18.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-18.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-18.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "d83a738908af774eab380ae7aeb3e0227c15954e5834069494583d8eed4eb3e0",
+      "score": 1,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353369212600
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-27.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-27.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-27.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "2c82adf28fc2a25d3b7e82098d5e266a54208ee4641751fbbb9bba962634acd9",
+      "score": 1,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353370218900
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "memory_summary.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\memory_summary.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\memory_summary.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "51e9e225f96b371619d35c30f0fd28bc6f7a7c4e0b8c857d471514b6af506c07",
+      "score": 251,
+      "excerpt": "v1\n\n## User Profile\n\nWorks across the concurrent Agno-MCP-Platform repository, independent Case Bible/Legal-Workspace repositories, Consignatio Intake and Docstore systems, Windows/Coolify infrastructure, Codex configuration, construction project controls, owner-facing static sites, and the Astro-based MiTech Consult/Matthew Salem archive. Cares about custody/governance, exact implementation contracts, durable handoffs, factual public copy, evidence-backed status, and a usable skill library without startup-context bloat. Uses PowerShell, `rg`, `ccc`, `uv`, Go, PostgreSQL, Temporal, n8n, Coolify, Astro, npm, and deliberate remote CLI allocation. Platform truth is PostgreSQL/custody; Agno is an execution adapter. Expects explicit ownership boundaries, source provenance, reversible cleanup, and material results persisted in project artifacts. [ad-hoc note]\n\n## User preferences\n\n- Never init",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267404834796200
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "198ffb3ea4088e4b07a5a17797a89ad6410794772f1900c4e4debe7ed80058a1",
+      "score": 47,
+      "excerpt": "at: 2026-08-25T12:52:24+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\25\\rollout-2026-08-25T08-53-28-01a038fb-9a9c-7652-a486-dd8669ee0f4a.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\n\n# Schema-audit recovery, owner rulings, and workflow corrections\n\nRollout context: In `E:\\AI_Workspace\\Projects\\the-platform-workspace`, the agent recovered a crashed schema-audit session, validated live PostgreSQL/Coolify state, corrected stale documentation, delegated investigations, and created a visual HTML situation page. The rollout ended before the owner answered four pending decisions.\n\n## Task 1: Recover and correct the schema audit\n\nOutcome: partial\n\nPreference signals:\n- The owner repeatedly objected to re-deriving settled decisions, stating that prior discussions had \"already resolved this 18 times.\" Future work must recall transcripts, memsearch, and `.remember` b",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029926551900
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-16T13-15-19-Kvit-phase1_surreal_t0_slice_reboot_checkpoint.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-16T13-15-19-Kvit-phase1_surreal_t0_slice_reboot_checkpoint.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-16T13-15-19-Kvit-phase1_surreal_t0_slice_reboot_checkpoint.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "a4af3b78beb41b7f347c2a7bffb3e35c6508b99c92b37b5ca1aacdff163def23",
+      "score": 46,
+      "excerpt": "updated_at: 2026-08-16T22:36:27+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\16\\rollout-2026-08-16T09-15-19-01a00ab6-5f87-7f93-b4f5-27929c8d2195.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\ngit_branch: main\n\n# Phase-1 Surreal T0 slice was designed, implemented, deployed to an isolated target, then paused after live projection failures\n\nRollout context: In `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform`, the user required governing-doc reconciliation, preservation of unrelated worktree changes, strict R9 holds, and later approved the exact synthetic T0 target plus physical implementation. The rollout began as design-only work, then continued under separate D3/D4 approval. It ended with a reboot checkpoint rather than a successful live evaluation.\n\n## Task 1: Repository custody and Phase-1 design\n\nOutcome: success\n\nPrefe",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029909783500
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-29-GiiZ-autonomous_work_decision_gate_stop.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-GiiZ-autonomous_work_decision_gate_stop.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-GiiZ-autonomous_work_decision_gate_stop.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "819aa51f0d9009e2f338ad30033f4ea46c664d4d65db75a5b475fbd5706b4d72",
+      "score": 6,
+      "excerpt": "proved C or overrode it.\n\n## Task 1: Autonomous-continuation classification\n\nOutcome: success\n\nKey steps:\n- Identified that the prior assistant completed its analysis and reached a conclusion.\n- Treated \u201cI build nothing until you say C (or override)\u201d as an explicit user-decision gate.\n- Correctly classified the state as STOP (`should_continue: false`), because waiting for approval is not autonomous work.\n\nFailures and how to do differently:\n- StructuredOutput calls were denied by permission, but the classification reasoning remained correct and was repeated consistently.\n\nReusable knowledge:\n- When an assistant explicitly requests approval, a decision, confirmation, or an override before proceeding, classify as STOP\u2014even if it has listed concrete implementation steps it would take afterward.\n",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029929560600
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "74b5e0692973906dbbad6177506c9e8e384099887de11c32a3ea229d8b6542c8",
+      "score": 6,
+      "excerpt": " 1: Continuation-state classification\n\nOutcome: success\n\nKey steps:\n- Identified the assistant\u2019s final statement: \u201cStill holding for your ruling. Nothing runs until you pick D2/D7, ADR-0059/0053, or merge.\u201d\n- Applied the explicit rule that waiting for user input, including at a decision gate, means STOP.\n- Returned `should_continue: false` with reasoning that the assistant was blocked on a user decision, not merely idle.\n\nReusable knowledge:\n- An explicit hold awaiting approval, a decision, clarification, or confirmation is STOP, even if future work remains conceptually planned.\n- CONTINUE requires an explicit next-step intent, pending todo items, or stated follow-up work that can proceed without user input.\n- Default to STOP when continuation intent is absent or uncertain.\n\nFailures and how to do differently:\n- The StructuredOutput tool call was denied by permission, but the classificat",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029944133700
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "archive.from-user.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.from-user.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\archive.from-user.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "811b323f548b430d2285bae5ce48b9d661618dda0277a4f4759db9acdfca271d",
+      "score": 5,
+      "excerpt": "IS_SUMMARY.md custody comparison; clarified Hermes role (agent-orch); Docker Compose initiated.\n\n## Week of 2026-06-10\nInfrastructure stabilization: eliminated osgrep leak via env capping (2 workers, 1536MB), reconciled claude-context MCP, deployed zilliz-mcp-server (port 8765). Config cleanup: removed zilliz-cloud & morph-mcp, consolidated project_memory (12\u21926), fixed emoji handling (PYTHONUTF8=1); Phase 2 SQL migrations planned.\n\n## Week of 2026-06-09\nAgno-MVP boot: NVIDIA NIM embeddings (2048-d), Zilliz memsearch + mcp-server verified; resolved 3 ADR contradictions, wrote ADR-0011. Stabilized infra: osgrep leak fixed, claude-context MCP reconciled, indexing started. Case analysis deepened; Case Bible dedup identified zero-byte _DUPLICATES.\n\n## Week of 2026-06-01\nInstalled claude-context MCP; scaffolded Agno forensic MVP (NVIDIA NIM 2048-d, Zilliz memsearch). Extracted 56 conversations",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1785081624479046800
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-09.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-09.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-09.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "b6f8cc2389d40740c4252de42d24ca7e491a6dee6e90681a2338e1e8c2a12c9d",
+      "score": 5,
+      "excerpt": "## 14:03-16:31 | unknown\nAgno-MVP boot-ingest: goal pkg (interview/facts/7-step plan) + EXECUTION_PLAN.md; embedding NVIDIA NIM llama-nemotron-embed-vl-1b-v2 (2048-d), API-verified; db/session.py reconf'd, .env/.example.env updated; memsearch\u00e2\u2020\u2019Zilliz tested; zilliz-mcp-server cloned+live (8765, SessionStart hook); audited vs ADRs, resolved 3 contradictions (embedder dims, D7, agents), ADR-0011 written, settings/session reconciled; alpha\u00e2\u2020\u2019dev-resources/Archives.\n## 16:40 | unknown\nOnyx Windows install failed (PS script null); examined onyx_install.ps1.txt\n\n## 17:11-17:34 | unknown\nosgrep worker leak (26 procs, 10.4 GB)\u00e2\u2020\u2019killed, capped (OSGREP_WORKER_COUNT=2, MAX_WORKER_MEMORY_MB=1536); claude-context/Zilliz MCP disconnected\u00e2\u2020\u2019fixed npx cmd, verified Zilliz Cloud+NVIDIA NIM; .env (port 443, EMBEDDING_DIMENSION=2048), cc_index.mjs polling rewritten; indexing E:\\AI_Workspace\\Projects\\the-",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781043614508237800
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-16.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-16.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-16.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "f95bf1d6d22676708104dd6272cb30515704a9ac9de9cb94b1d98dd24136c0d6",
+      "score": 2,
+      "excerpt": "## 16:55 | master\npgwire validated\u00e2\u20ac\u201drejected (SurrealQL \u00e2\u2030\u00a0 SQL, DuckDB/ORM incompatible); finalized: SurrealDB consolidation, PG fed+Multicorn2, Neo4j SoR, uuid v7 canonical; custom PG image (Multicorn2, enums/domains/composites); bb08045.\n\n## 22:37-22:42 | master\nWindmill v1.723 (ADR-0028) deployed OVH-2 (CaseBible orch, rclone); Coolify 4.1.2 + OVH registered (tailnet); R2: consolidation (49 CSV, legacy `photos`); Postgres extended (Multicorn2, enums/domains/composites); SurrealDB arch validated (consolidation + batch UUID sync); claude-context reconnected (codestral); 250k _DUPLICATE scanned; OneDrive prepped (VPS) + rclone inventory; bb08045.",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781629516702033000
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-17.done.from-user.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-17.done.from-user.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-17.done.from-user.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "8c457270e194476de3097e681f3083fbd627b13d1a3e3599fefba63bd4cda3e0",
+      "score": 2,
+      "excerpt": "## 02:27 | unknown\n7 competing systems/35 buckets fragmented; home-launch loads stale (Jun 6-7 vs Jun 13-14 actual); MemSearch dead index; MEMORY.md consolidation approved (global + per-project Agno); Hermes clarified (agent-orch, not memory); create-context-graph Docker Compose build started",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781663432188025600
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-05-24.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-24.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-05-24.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "e04eb737386daa038d93132b26ea6493e95c1b37d94a196344023858689de2f9",
+      "score": 1,
+      "excerpt": "gry re files dumped C:\\Users\\matts\\ root w/o proper dir structure\n\n## 06:42 | unknown\nBuilt migration-passes CC plugin (8 passes, 9 agents, 10 commands, 13 skills, 9 scripts) @ C:\\Users\\matts\\migration-passes; handoff protocol; Plannotator integration; decision-making/principles-extractor/safe-operations/report-format skills; pipeline orchestration (run/status commands); report templates; Google CL best practices (WHAT/WHY/APPROACH/SHORTCOMINGS blocks, change sizing, build integrity, test-porting); began validation vs official plugin docs",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1779648880097471700
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-11.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-11.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-11.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "0bf270450b685c9e134c54fd514019af9de079850bfdf8cdaf455994eb09a222",
+      "score": 771,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 00:44\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:67850a70-ff26-47cc-9de6-7010e89fcfe9 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\n- User received a task-completion notification from a Sonnet agent that had reconfigured AGENTS.md and synchronized documentation across the codebase on branch `docs/autonomous-doc-sync`.\n- Claude Code verified the agent's deliverables: root AGENTS.md rewritten to 91 lines with real `server/*` layout, 5 nested AGENTS.md files created (server/, server/tools/, server/evidence/, server/agents/, server/contracts/), and bookkeeping reconciled (COORDINATION.md TODOs closed, DECISION_LOG.md entries added, ADR index updated, REPO_STRUCTURE.md surgically r",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353271329700
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-09.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-09.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-09.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "06703ae36b2fc806b6b03719d14edb0d5849474756176e26e54815ce144b9239",
+      "score": 274,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 06:51\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:4fad07b5-f8e4-4dee-85fb-639530b21b4a transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\nDone. Consolidated 23 \u2192 4 realtime_memories: removed 14 noise entries (task notifications, system prompts, session-limit messages), folded 9 deployment-recovery entries into 1 narrative, preserved all signal facts losslessly across DB schema, ContextForge upgrade, infra recovery chain, restructure work, and owner feedback on process correction.\n\n### 07:58\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:c6029748-f7c4-4fe7-be0a-ecef95d41fc6 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Pla",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353268116900
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-12.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-12.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-12.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "4267652de594f976cd5dbe50b1dde7145a794a52b06208bb77cfbe6ad513c973",
+      "score": 160,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 00:51\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:76fce3a6-a108-49d8-b473-c14cc63a709c transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\n- User specified that recovery-file duplicates (backup/recovered copies where the primary exists elsewhere) should be staged in quarantine for User's deletion-or-review decision, following a specified format.\n- Claude Code confirmed understanding under `case-bible-organizer` skill and identified recovery-file duplicates as the missing sixth disposition type.\n- Claude Code identified a cross-location dependency gap: prior scans were per-folder, but identifying whether \"the other file\" exists requires cross-location hash checking across multiple dri",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353272544800
+      }
+    }
+  ],
+  "contracts": [
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-FO1n-schema_reconciliation_reviewer_gated_visual_audit.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-FO1n-schema_reconciliation_reviewer_gated_visual_audit.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-FO1n-schema_reconciliation_reviewer_gated_visual_audit.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "9098a766f3ed332e4a21fec866a861f15143265326b84410c15b8e9cbcb11a86",
+      "score": 50,
+      "excerpt": "ath: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\25\\rollout-2026-08-25T08-53-28-01a038fb-9abb-7180-8067-ae5a0eaf89d5.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform\n\n# Schema reconciliation and visual review workflow produced a partially complete, reviewer-gated plan\n\nRollout context: Work occurred in `E:\\AI_Workspace\\Projects\\the-platform-workspace\\Agno-MCP-Platform`. The user was upset about schema sprawl and asked for a verified comparison of the live PostgreSQL schema, repository migrations, code usage, and proposed future shapes. No destructive database changes were executed. `casebible` was explicitly declared out of scope.\n\n## Task 1: Live schema and repository reconciliation\n\nOutcome: partial\n\nPreference signals:\n\n- The user said, \u201cDon't touch Case Bible It's not your lane\u201d -> future work must treat `casebible` as off-limits unless explicitly authorize",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029928562900
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-gZhU-schema_audit_recovery_visual_aid_and_owner_workflow_correcti.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "198ffb3ea4088e4b07a5a17797a89ad6410794772f1900c4e4debe7ed80058a1",
+      "score": 47,
+      "excerpt": "at: 2026-08-25T12:52:24+00:00\nrollout_path: C:\\Users\\matts\\.codex\\sessions\\2026\\08\\25\\rollout-2026-08-25T08-53-28-01a038fb-9a9c-7652-a486-dd8669ee0f4a.jsonl\ncwd: \\\\?\\E:\\AI_Workspace\\Projects\\the-platform-workspace\n\n# Schema-audit recovery, owner rulings, and workflow corrections\n\nRollout context: In `E:\\AI_Workspace\\Projects\\the-platform-workspace`, the agent recovered a crashed schema-audit session, validated live PostgreSQL/Coolify state, corrected stale documentation, delegated investigations, and created a visual HTML situation page. The rollout ended before the owner answered four pending decisions.\n\n## Task 1: Recover and correct the schema audit\n\nOutcome: partial\n\nPreference signals:\n- The owner repeatedly objected to re-deriving settled decisions, stating that prior discussions had \"already resolved this 18 times.\" Future work must recall transcripts, memsearch, and `.remember` b",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029926551900
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-29-hoVp-classify_decision_gate_stop.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "74b5e0692973906dbbad6177506c9e8e384099887de11c32a3ea229d8b6542c8",
+      "score": 6,
+      "excerpt": " 1: Continuation-state classification\n\nOutcome: success\n\nKey steps:\n- Identified the assistant\u2019s final statement: \u201cStill holding for your ruling. Nothing runs until you pick D2/D7, ADR-0059/0053, or merge.\u201d\n- Applied the explicit rule that waiting for user input, including at a decision gate, means STOP.\n- Returned `should_continue: false` with reasoning that the assistant was blocked on a user decision, not merely idle.\n\nReusable knowledge:\n- An explicit hold awaiting approval, a decision, clarification, or confirmation is STOP, even if future work remains conceptually planned.\n- CONTINUE requires an explicit next-step intent, pending todo items, or stated follow-up work that can proceed without user input.\n- Default to STOP when continuation intent is absent or uncertain.\n\nFailures and how to do differently:\n- The StructuredOutput tool call was denied by permission, but the classificat",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029944133700
+      }
+    },
+    {
+      "store": "codex_memory",
+      "kind": "memory",
+      "title": "2026-08-25T12-53-28-5nOm-autonomous_continuation_stop_classification.md",
+      "source_uri": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-5nOm-autonomous_continuation_stop_classification.md",
+      "path": "C:\\Users\\matts\\.codex\\memories\\rollout_summaries\\2026-08-25T12-53-28-5nOm-autonomous_continuation_stop_classification.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "6c282db898127066f27ae04212267e63cf03a458db211fb11c0b2b90bf8923ec",
+      "score": 3,
+      "excerpt": " assistant's explicit statement: \u201cNothing else to request until the page agent returns.\u201d\n- Identified two unresolved questions requiring user decisions: approval of D-069 wording and placement of raw landing tables.\n- Applied the rule that waiting for user input or an external blocker means STOP, even if the broader work is not complete.\n\nReusable knowledge:\n- `should_continue` should be `false` when the assistant asks for approval, clarification, or architectural decisions, or explicitly says it is waiting for another agent/service. Do not infer autonomous continuation merely because unresolved work exists.\n\nReferences:\n- Final assistant wording: \u201cNothing else to request until the page agent returns.\u201d\n- Open decisions: \u201cIs D-069 worded right?\u201d and whether raw landing tables move to the context schema or remain in the evidence schema.\n- Structured-output attempts were denied by permissio",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.codex\\memories",
+        "mtime_ns": 1789267029925800000
+      }
+    },
+    {
+      "store": "remember",
+      "kind": "memory",
+      "title": "today-2026-06-16.done.md",
+      "source_uri": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-16.done.md",
+      "path": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember\\today-2026-06-16.done.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "f95bf1d6d22676708104dd6272cb30515704a9ac9de9cb94b1d98dd24136c0d6",
+      "score": 2,
+      "excerpt": "## 16:55 | master\npgwire validated\u00e2\u20ac\u201drejected (SurrealQL \u00e2\u2030\u00a0 SQL, DuckDB/ORM incompatible); finalized: SurrealDB consolidation, PG fed+Multicorn2, Neo4j SoR, uuid v7 canonical; custom PG image (Multicorn2, enums/domains/composites); bb08045.\n\n## 22:37-22:42 | master\nWindmill v1.723 (ADR-0028) deployed OVH-2 (CaseBible orch, rclone); Coolify 4.1.2 + OVH registered (tailnet); R2: consolidation (49 CSV, legacy `photos`); Postgres extended (Multicorn2, enums/domains/composites); SurrealDB arch validated (consolidation + batch UUID sync); claude-context reconnected (codestral); 250k _DUPLICATE scanned; OneDrive prepped (VPS) + rclone inventory; bb08045.",
+      "provenance": {
+        "root": "E:\\AI_Workspace\\Projects\\Propria\\Probata\\probata\\.remember",
+        "mtime_ns": 1781629516702033000
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-06-09.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-09.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-06-09.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "ed047db5fab1eeaa2068617bedbfa013482ff514238d1381fccde0946a74a305",
+      "score": 313,
+      "excerpt": "enticated), the friends page will typically redirect to a login page or show limited info. Scraping Facebook also carries risks like temporary blocks, requires consent in many jurisdictions, and generally violates their Terms of Service if done programmatically.\n\nAdditionally, it appears you're on Windows (`win32`), so I need to rely solely on the browser tools available.\n\nLet me navigate to the page and see what the current state looks like:\n[Tool: browsermcp_browser_navigate] Error: No connection to browser extension. In order to proceed, you must first connect a tab by clicking the Browser MCP extension icon in the browser toolbar and clicking the 'Connect' button.\n\n[Assistant]: The browser extension isn't connected. I cannot proceed with browser automation until you set that up.\n\n**How to connect:**\n1. Make sure you have the **Browser MCP** extension installed in your browser (Chrome",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353241455800
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-07-08.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-08.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-07-08.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "b10a242a16aca95acaff7c5d26066d9c230942044856ce7a45bf11873c42ce5c",
+      "score": 106,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/Propria/Probata/probata/.memsearch/memory -->\n### 09:01\n<!-- session:d9c17e42-cd6f-4ede-af08-34f91286d1ab turn:611ce134-563c-482a-ad4b-06725313d868 transcript:C:\\Users\\matts\\.claude\\projects\\E--AI-Workspace-Projects-the-platform-workspace-Agno-MCP-Platform\\d9c17e42-cd6f-4ede-af08-34f91286d1ab.jsonl -->\n**Consolidation complete \u2014 write blocked by permission system.**\n\nPrepared 8 consolidated signal entries (from 25 realtime_memories):\n1. Memory architecture (parent dir canonical)\n2. DB schema restart (Option A locked)\n3. ContextForge upgrade (password-change flow)\n4. Coolify branch (hotfix/agent-ui-loc)\n5. Graphiti healed (4096 dimension)\n6. Live DB drift (26 rows, plan change)\n7. Project restructure (Option A/B, Tier 3)\n8. Exec tier repoint (outage fixed)\n\n**Status:** All consolidation work done. Write to `.claude/memories/project_memory.json` r",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353266593500
+      }
+    },
+    {
+      "store": "memsearch",
+      "kind": "memory",
+      "title": "2026-05-26.md",
+      "source_uri": "C:\\Users\\matts\\.memsearch\\memory\\2026-05-26.md",
+      "path": "C:\\Users\\matts\\.memsearch\\memory\\2026-05-26.md",
+      "line_start": null,
+      "line_end": null,
+      "revision": null,
+      "content_hash": "64c201de57315d1089cac8932c92597c34d602aa88cb3522138ea3f925287015",
+      "score": 47,
+      "excerpt": "<!-- merged from: E:/AI_Workspace/Projects/.memsearch/memory -->\n# 2026-05-26\n\n## Session 00:55\n\n### 00:55\n<!-- session:ses_19e194b9afferlHZPuam8CinWM turn:msg_e61e6b480001e1Nwu9944R0rTT db:C:\\Users\\matts/.local/share/opencode/opencode.db -->\n=== Turn 1 (msg_e61e6b480001e1Nwu9944R0rTT) ===\n[Human]: There's some kind of a networking issue with WSL can you resolve that please and send it to mirrored\n\n[Assistant]: [Tool: skill] <skill_content name=\"ask-questions-if-underspecified\">\n# Skill: ask-questions-if-underspecified\n\n# Ask Questions If Underspecified\n\n## Goal\n\nAsk the minimum set of clarifying questions needed to avoid wrong work; do not start implementing until the must-have questions are answered (or the user expli...\n\n[Assistant]: Your request is underspecified \u2014 I need some clarifications:\n\n1. **What networking issue?** (e.g., can't access internet from WSL, DNS resolution broken,",
+      "provenance": {
+        "root": "C:\\Users\\matts\\.memsearch\\memory",
+        "mtime_ns": 1789042353358116900
+      }
+    }
+  ],
+  "conflicts": [],
+  "attribution_clean": true,
+  "errors": [],
+  "run_id": "20260913T044215Z-601725e7",
+  "agent_loop": {
+    "status": "clean",
+    "steps": [
+      "inspect responsible pipeline/config/source registration with smart_explore",
+      "find semantic code neighbors with ccc",
+      "recover governing decisions and final contracts from selected memories and docstore",
+      "adjudicate conflicts with provenance",
+      "apply bounded repair in owning repository",
+      "validate and reindex the affected store",
+      "require clean attribution before completion"
+    ]
+  },
+  "packet_path": "plugins\\search\\receipts\\20260913T044215Z-601725e7.json",
+  "packet_markdown_path": "plugins\\search\\receipts\\20260913T044215Z-601725e7.md"
+}
