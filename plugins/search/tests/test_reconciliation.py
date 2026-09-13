@@ -67,4 +67,12 @@ class ReconciliationTests(unittest.TestCase):
  def test_lock_retry_contract_has_bounded_default(self):
   self.assertEqual(os.environ.get('SMART_EXPLORE_LOCK_TIMEOUT','60'),'60')
 
+ def test_search_rebuilds_missing_fts_schema(self):
+  with tempfile.TemporaryDirectory() as td:
+   root=Path(td)/'project'; root.mkdir(); (root/'repair.py').write_text('def resolve_source_repair():\n return True\n',encoding='utf-8')
+   db=Path(td)/'index.duckdb'; con=smart_explore.connect(db); smart_explore.index_path(con,root); con.execute('DROP SCHEMA fts_main_symbols CASCADE'); con.close()
+   args=type('Args',(),{'path':str(root),'db':str(db),'file_pattern':None,'query':'resolve source repair','max':5,'json':True})()
+   with patch('builtins.print') as output: smart_explore.cmd_search(args)
+  payload=json.loads(output.call_args.args[0]); self.assertEqual(payload['results'][0]['name'],'resolve_source_repair')
+
 if __name__=='__main__': unittest.main()

@@ -238,10 +238,10 @@ def connect(db_path: Path) -> duckdb.DuckDBPyConnection:
     return con
 
 
-# NOTE: this tree-sitter binding (language-pack 1.9.1) exposes everything as
-# METHODS, not properties: node.kind(), node.start_byte(), node.child(i),
-# node.child_count(), node.start_position().row, tree.root_node(). parse()
-# takes str; all offsets are BYTE offsets, so slice the utf-8 `src` bytes.
+# NOTE: the pinned tree-sitter-language-pack 1.9.1 binding exposes node accessors
+# as methods: node.kind(), node.start_byte(), node.child(i), node.child_count(),
+# node.start_position().row, tree.root_node(). parse() takes str; offsets are
+# byte offsets, so slice the utf-8 `src` bytes.
 
 
 def node_name(node, src: bytes) -> str | None:
@@ -356,7 +356,7 @@ def index_path(con, root: Path, file_pattern: str | None = None, quiet: bool = F
             src_text = p.read_text("utf8", "replace")
             src = src_text.encode("utf8")          # byte view for offset slicing
             parser = get_parser(lang)
-            tree = parser.parse(src_text)           # this binding parses str
+            tree = parser.parse(src_text)
             syms = extract_symbols(tree, src)
             imps = extract_imports(tree, src)
         except Exception as e:
@@ -431,8 +431,7 @@ def cmd_search(args):
     like = f"%{args.query.lower()}%"
     # BM25 concept match over tokenized text + signature, UNION substring match
     # on the raw name (so partial identifiers like 'shut' still resolve).
-    rows = con.execute(
-        """
+    sql = """
         WITH bm AS (
             SELECT s.id, fts_main_symbols.match_bm25(s.id, ?) AS score
             FROM symbols s
@@ -444,9 +443,21 @@ def cmd_search(args):
         WHERE bm.score IS NOT NULL OR lower(s.name) LIKE ?
         ORDER BY score DESC, length(s.name)
         LIMIT ?
-        """,
-        [q, like, like, args.max],
-    ).fetchall()
+        """
+    params = [q, like, like, args.max]
+    if not con.execute("SELECT count(*) FROM symbols").fetchone()[0]:
+        rows = []
+    else:
+        try:
+            rows = con.execute(sql, params).fetchall()
+        except duckdb.CatalogException as exc:
+            if "fts_main_symbols.match_bm25" not in str(exc):
+                raise
+            con.execute(
+                "PRAGMA create_fts_index('symbols', 'id', 'search_text', 'signature', "
+                "stemmer='none', overwrite=1);"
+            )
+            rows = con.execute(sql, params).fetchall()
     results = [
         {"name": name, "kind": kind, "file": os.path.relpath(path, root), "line": line,
          "parent": parent, "signature": sig, "score": round(score, 3)}

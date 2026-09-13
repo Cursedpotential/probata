@@ -1,2 +1,2 @@
-tree-sitter-language-pack
+tree-sitter-language-pack==1.9.1
 duckdb
