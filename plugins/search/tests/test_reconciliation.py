@@ -60,7 +60,7 @@ class ReconciliationTests(unittest.TestCase):
   self.assertIn('rerun memsearch stats',data['next_action'])
 
  def test_active_wal_is_reported_and_never_stale(self):
-  with tempfile.TemporaryDirectory() as td, patch.object(smart_explore,'PROPRIA_SMART_EXPLORE_RUNTIME',Path(td)), patch.object(smart_explore,'USER_SMART_EXPLORE_RUNTIME',Path(td)/'user'):
+  with tempfile.TemporaryDirectory() as td, patch.object(smart_explore,'PROPRIA_SMART_EXPLORE_RUNTIME',Path(td)), patch.object(smart_explore,'USER_SMART_EXPLORE_HOME',Path(td)/'user'):
    indexes=Path(td)/'indexes'; indexes.mkdir()
    db=indexes/'active.duckdb'; db.write_bytes(b'not opened')
    db.with_suffix('.duckdb.wal').write_bytes(b'active')
@@ -73,6 +73,12 @@ class ReconciliationTests(unittest.TestCase):
   expected=Path(r'E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore\indexes')
   self.assertEqual(smart_explore.central_store(Path(r'E:\AI_Workspace\Projects\Propria\Probata\probata')),expected)
   self.assertEqual(smart_explore.central_store(Path(r'E:\another-repository')),Path.home()/'.smart-explore'/'indexes')
+
+ def test_propria_profile_cannot_drift(self):
+  with tempfile.TemporaryDirectory() as td, patch.object(smart_explore,'USER_SMART_EXPLORE_HOME',Path(td)):
+   profiles=Path(td)/'profiles';profiles.mkdir()
+   (profiles/'propria.json').write_text(json.dumps({'name':'propria','root':r'E:\wrong','index_store':r'E:\wrong'}))
+   with self.assertRaises(RuntimeError): smart_explore.runtime_profiles()
 
  def test_lock_retry_contract_has_bounded_default(self):
   self.assertEqual(os.environ.get('SMART_EXPLORE_LOCK_TIMEOUT','60'),'60')

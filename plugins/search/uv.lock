@@ -49,7 +49,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "duckdb" },
+    { name = "duckdb", specifier = "==1.5.5" },
     { name = "tree-sitter-language-pack", specifier = "==1.9.1" },
 ]
 

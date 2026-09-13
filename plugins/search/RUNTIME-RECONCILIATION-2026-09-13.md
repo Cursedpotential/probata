@@ -10,6 +10,13 @@ ignores /.runtime/; database and WAL files are never source artifacts. Shared
 runtime-root overrides and legacy repository-local indexes are rejected. --db
 remains available only for isolated diagnostics.
 
+C:\Users\matts\.smart-explore is the platform-agnostic profile/package home.
+It contains config, the Propria routing profile, two generalized skill
+entrypoints, and thin launchers. It contains no engine source. The generalized
+customizer installs one pinned Search plugin engine instance per approved target
+through scan, immutable plan, exact human approval, target-bound apply, and
+verify/report stages.
+
 ## Why E:\data\codex-smart-explore existed
 
 The directory was selected on 2026-09-12 by a transient historical

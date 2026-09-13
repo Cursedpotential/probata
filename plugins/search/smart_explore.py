@@ -539,25 +539,50 @@ PROPRIA_ROOT = Path(r"E:\AI_Workspace\Projects\Propria")
 PROPRIA_SMART_EXPLORE_RUNTIME = Path(
     r"E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore"
 )
-USER_SMART_EXPLORE_RUNTIME = Path.home() / ".smart-explore"
+USER_SMART_EXPLORE_HOME = Path.home() / ".smart-explore"
 
 
-def is_propria_path(root: Path) -> bool:
+def path_is_under(root: Path, parent: Path) -> bool:
     try:
-        root.resolve().relative_to(PROPRIA_ROOT.resolve())
+        root.resolve().relative_to(parent.resolve())
         return True
     except ValueError:
         return False
 
 
+def runtime_profiles() -> list[dict]:
+    """Load routing-only profiles; engine source always remains in this plugin."""
+    profiles = [{"name": "propria", "root": PROPRIA_ROOT,
+                 "index_store": PROPRIA_SMART_EXPLORE_RUNTIME / "indexes"}]
+    profile_dir = USER_SMART_EXPLORE_HOME / "profiles"
+    for profile_file in sorted(profile_dir.glob("*.json")) if profile_dir.exists() else []:
+        try:
+            value = json.loads(profile_file.read_text(encoding="utf-8"))
+            candidate = {"name": value["name"], "root": Path(value["root"]),
+                         "index_store": Path(value["index_store"])}
+        except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"invalid Smart Explore profile {profile_file}: {exc}") from exc
+        if candidate["name"] == "propria":
+            expected = profiles[0]
+            if (candidate["root"].resolve() != expected["root"].resolve()
+                    or candidate["index_store"].resolve() != expected["index_store"].resolve()):
+                raise RuntimeError(f"Propria profile drift in {profile_file}")
+            continue
+        profiles.append(candidate)
+    return profiles
+
+
 def central_store(root: Path) -> Path:
-    """Route generated indexes by ownership scope without configurable drift."""
-    runtime = PROPRIA_SMART_EXPLORE_RUNTIME if is_propria_path(root) else USER_SMART_EXPLORE_RUNTIME
-    return runtime / "indexes"
+    """Route through the longest matching profile, then the platform-neutral home."""
+    matches = [p for p in runtime_profiles() if path_is_under(root, p["root"])]
+    if matches:
+        return max(matches, key=lambda p: len(str(p["root"].resolve())))["index_store"]
+    return USER_SMART_EXPLORE_HOME / "indexes"
 
 
 def central_stores() -> list[Path]:
-    return [PROPRIA_SMART_EXPLORE_RUNTIME / "indexes", USER_SMART_EXPLORE_RUNTIME / "indexes"]
+    stores = [p["index_store"] for p in runtime_profiles()] + [USER_SMART_EXPLORE_HOME / "indexes"]
+    return list(dict.fromkeys(stores))
 
 
 def db_for(root: Path, override: str | None) -> Path:
