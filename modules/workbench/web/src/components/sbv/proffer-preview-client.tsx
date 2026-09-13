@@ -1,11 +1,13 @@
-// Byline: Codex · GPT-5.6 · 2026-08-29
+// Byline: Codex · GPT-5.6 · 2026-09-12 (hydrate deep-linked preview mode and handle atomically)
 "use client";
 
-import { Activity, Check, Link2, RefreshCw, ShieldCheck, X } from "lucide-react";
+import { Activity, Check, ChevronLeft, Link2, Loader2, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { PlatformMessageViewer } from "@/components/sbv/platform-message-viewer";
+import { ContextFlowRail } from "@/components/intake/context-flow-rail";
+import { MatterModeSelector } from "@/components/intake/matter-mode-selector";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +19,9 @@ import {
   getProfferPreview,
   getProfferPreviewMessages,
 } from "@/lib/api-client";
+import { checkpointLabel, PROFFER_CONTEXT_CHECKPOINTS, profferContextFlowComplete } from "@/lib/proffer-context-checkpoints";
+import { useFixedCase } from "@/lib/fixed-case-context";
+import { AppLink } from "@/lib/router-compat";
 import type {
   ProfferPreviewEvent,
   ProfferPreviewMessage,
@@ -24,14 +29,21 @@ import type {
   ProfferPreviewResponse,
 } from "@/lib/shared/types";
 
-function initialHandle() {
+function initialHandle(mode: "TEST" | "REAL") {
   if (typeof window === "undefined") return "";
-  return new URLSearchParams(window.location.search).get("preview_handle")?.trim() ?? "";
+  const query = new URLSearchParams(window.location.search);
+  return query.get("mode") === mode ? query.get("preview_handle")?.trim() ?? "" : "";
 }
 
 export function ProfferPreviewClient() {
-  const [draftHandle, setDraftHandle] = useState("");
-  const [previewHandle, setPreviewHandle] = useState("");
+  const { mode } = useFixedCase();
+  return <ModeScopedPreviewClient key={mode} mode={mode} />;
+}
+
+function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
+  const [initialUrlHandle] = useState(() => initialHandle(mode));
+  const [draftHandle, setDraftHandle] = useState(initialUrlHandle);
+  const [previewHandle, setPreviewHandle] = useState(initialUrlHandle);
   const [preview, setPreview] = useState<ProfferPreviewResponse | null>(null);
   const [messages, setMessages] = useState<ProfferPreviewMessage[]>([]);
   const [participants, setParticipants] = useState<ProfferPreviewParticipant[]>([]);
@@ -44,8 +56,8 @@ export function ProfferPreviewClient() {
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [decisionPending, setDecisionPending] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
-  const generationRef = useRef(0);
-  const activeHandleRef = useRef("");
+  const generationRef = useRef(initialUrlHandle ? 1 : 0);
+  const activeHandleRef = useRef(initialUrlHandle);
   const snapshotControllerRef = useRef<AbortController | null>(null);
   const messageControllersRef = useRef(new Map<string, AbortController>());
   const requestedCursorsRef = useRef(new Set<string>());
@@ -74,12 +86,15 @@ export function ProfferPreviewClient() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const handle = initialHandle();
-      setDraftHandle(handle);
-      activateHandle(handle);
+      const handle = initialHandle(mode);
+      const url = new URL(window.location.href);
+      url.search = "";
+      url.searchParams.set("mode", mode);
+      if (handle) url.searchParams.set("preview_handle", handle);
+      window.history.replaceState({}, "", url);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activateHandle]);
+  }, [mode]);
 
   const loadSnapshot = useCallback(async () => {
     const handle = previewHandle;
@@ -89,7 +104,7 @@ export function ProfferPreviewClient() {
     const controller = new AbortController();
     snapshotControllerRef.current = controller;
     try {
-      const result = await getProfferPreview(handle, controller.signal);
+      const result = await getProfferPreview(handle, mode, controller.signal);
       if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
       if (result.preview_handle !== handle) throw new Error("Preview snapshot correlation failed");
       setPreview(result);
@@ -100,7 +115,7 @@ export function ProfferPreviewClient() {
     } finally {
       if (snapshotControllerRef.current === controller) snapshotControllerRef.current = null;
     }
-  }, [previewHandle]);
+  }, [previewHandle, mode]);
 
   const loadMessages = useCallback(async (cursor?: string) => {
     const handle = previewHandle;
@@ -113,7 +128,7 @@ export function ProfferPreviewClient() {
     messageControllersRef.current.set(cursorKey, controller);
     setMessagesLoading(true);
     try {
-      const page = await getProfferPreviewMessages(handle, cursor, 100, controller.signal);
+      const page = await getProfferPreviewMessages(handle, mode, cursor, 100, controller.signal);
       if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
       if (page.preview_handle !== handle) throw new Error("Preview message correlation failed");
       setParticipants((current) => {
@@ -141,27 +156,26 @@ export function ProfferPreviewClient() {
         setMessagesLoading(messageControllersRef.current.size > 0);
       }
     }
-  }, [previewHandle]);
+  }, [previewHandle, mode]);
 
   useEffect(() => {
     if (!previewHandle) return;
     const generation = generationRef.current;
     const initialLoad = window.setTimeout(() => {
       void loadSnapshot();
-      void loadMessages();
     }, 0);
-    const source = createProfferPreviewEventSource(previewHandle);
+    const source = createProfferPreviewEventSource(previewHandle, mode);
     const onEvent = (raw: MessageEvent<string>) => {
       try {
         if (generation !== generationRef.current || activeHandleRef.current !== previewHandle) return;
         const event = JSON.parse(raw.data) as ProfferPreviewEvent;
         if (event.preview_handle !== previewHandle) throw new Error("Preview event correlation failed");
+        if (event.matter_mode !== mode) throw new Error("Preview event crossed the active TEST/REAL boundary");
         setEvents((current) => [...current.filter((item) => item.event_id !== event.event_id), event]
           .sort((left, right) => left.event_id - right.event_id)
           .slice(-100));
         setEventError(null);
         void loadSnapshot();
-        if (event.event_type === "messages_available") void loadMessages();
       } catch (error) {
         setEventError(error instanceof Error ? error.message : "Malformed preview event");
         source.close();
@@ -173,15 +187,25 @@ export function ProfferPreviewClient() {
         setEventError("The Proffer preview event stream is unavailable");
       }
     };
+    const messageControllers = messageControllersRef.current;
+    const requestedCursors = requestedCursorsRef.current;
     return () => {
       window.clearTimeout(initialLoad);
       source.close();
       snapshotControllerRef.current?.abort();
-      messageControllersRef.current.forEach((controller) => controller.abort());
-      messageControllersRef.current.clear();
-      requestedCursorsRef.current.clear();
+      messageControllers.forEach((controller) => controller.abort());
+      messageControllers.clear();
+      requestedCursors.clear();
     };
-  }, [loadMessages, loadSnapshot, previewHandle]);
+  }, [loadSnapshot, mode, previewHandle]);
+
+  const contextFlowComplete = profferContextFlowComplete(preview?.receipts, preview?.checkpoints);
+
+  useEffect(() => {
+    if (!previewHandle || !contextFlowComplete) return;
+    const timer = window.setTimeout(() => void loadMessages(), 0);
+    return () => window.clearTimeout(timer);
+  }, [contextFlowComplete, loadMessages, previewHandle]);
 
   function attach() {
     const handle = draftHandle.trim();
@@ -192,6 +216,7 @@ export function ProfferPreviewClient() {
     activateHandle(handle);
     const url = new URL(window.location.href);
     url.search = "";
+    url.searchParams.set("mode", mode);
     url.searchParams.set("preview_handle", handle);
     window.history.replaceState({}, "", url);
   }
@@ -209,7 +234,7 @@ export function ProfferPreviewClient() {
     }
     setDecisionPending(true);
     try {
-      const result = await decideProffer(handle, { approved, reason: approved ? "" : rejectionReason.trim() });
+      const result = await decideProffer(handle, mode, { approved, reason: approved ? "" : rejectionReason.trim() });
       if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
       if (result.preview_handle !== handle) throw new Error("Decision response correlation failed");
       toast.success(approved ? "Preview approved" : "Preview rejected");
@@ -225,7 +250,7 @@ export function ProfferPreviewClient() {
 
   const awaitingDecision = preview?.phase === "awaiting_decision";
   const requiredReceiptTypes = useMemo(
-    () => ["custody", "parser_selection", "parser_execution", "normalization", "storage", "completeness"] as const,
+    () => PROFFER_CONTEXT_CHECKPOINTS.map(({ type }) => type),
     [],
   );
   const participantIds = useMemo(
@@ -239,7 +264,7 @@ export function ProfferPreviewClient() {
     message.attachments.every((attachment) => Boolean(attachment.source_locator_ref)),
   );
   const receiptsComplete = requiredReceiptTypes.every((receiptType) =>
-    preview?.receipts.some((receipt) => receipt.receipt_type === receiptType && receipt.status === "completed"),
+    preview?.receipts?.some((receipt) => receipt.receipt_type === receiptType && receipt.status === "completed"),
   );
   const decisionEligible = Boolean(
     awaitingDecision &&
@@ -255,16 +280,26 @@ export function ProfferPreviewClient() {
     <div className="mx-auto w-full max-w-[1680px] space-y-4 p-4 md:p-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
+          <Button asChild variant="outline" size="sm" className="mb-4"><AppLink data-testid="back-to-proffer-intake" href="/intake"><ChevronLeft className="size-4" /> Back to intake</AppLink></Button>
           <p className="platform-kicker">Unified operator surface · bounded client</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Pipeline preview</h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
             Watch the durable import workflow and platform messages through one opaque preview boundary.
           </p>
         </div>
-        <Badge variant={previewHandle ? "default" : "outline"} className="gap-1.5">
-          <Link2 className="size-3" /> {previewHandle ? "Attached" : "Not attached"}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-2">
+          <MatterModeSelector />
+          <Badge variant={previewHandle ? "default" : "outline"} className="gap-1.5"><Link2 className="size-3" /> {previewHandle ? `${mode} attached` : `${mode} not attached`}</Badge>
+        </div>
       </header>
+
+      <ContextFlowRail
+        started={Boolean(previewHandle)}
+        phase={preview?.phase}
+        receipts={preview?.receipts}
+        checkpoints={preview?.checkpoints}
+        events={events}
+      />
 
       <Card className="platform-panel">
         <CardHeader className="pb-3"><CardTitle className="text-sm">Attach to an import preview</CardTitle></CardHeader>
@@ -284,15 +319,24 @@ export function ProfferPreviewClient() {
         </div>
       ) : (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(22rem,0.8fr)]">
-          <PlatformMessageViewer
-            messages={messages}
-            participants={participants}
-            loading={messagesLoading}
-            error={messageError}
-            previewHandle={previewHandle}
-            hasMore={Boolean(nextCursor)}
-            onLoadMore={() => void loadMessages(nextCursor ?? undefined)}
-          />
+          {!preview ? (
+            <section className="platform-panel flex min-h-[34rem] items-center justify-center p-6 text-sm text-muted-foreground" aria-label="Preview loading"><Loader2 className="mr-2 size-4 animate-spin" /> Loading the {mode} context checkpoints</section>
+          ) : !contextFlowComplete ? (
+            <section className="platform-panel flex min-h-[34rem] items-center justify-center p-6 text-center" aria-label="Preview locked">
+              <div className="max-w-md"><ShieldCheck className="mx-auto size-9 text-muted-foreground" /><h2 className="mt-3 text-base font-semibold">Full preview locked</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">The Import Source view remains available while context processing runs. Messages unlock only after all six checkpoints complete.</p></div>
+            </section>
+          ) : (
+            <PlatformMessageViewer
+              key={`${mode}:${previewHandle}`}
+              messages={messages}
+              participants={participants}
+              loading={messagesLoading}
+              error={messageError}
+              previewHandle={previewHandle}
+              hasMore={Boolean(nextCursor)}
+              onLoadMore={() => void loadMessages(nextCursor ?? undefined)}
+            />
+          )}
 
           <div className="space-y-4">
             <Card className="platform-panel">
@@ -304,19 +348,20 @@ export function ProfferPreviewClient() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {snapshotError && <p className="text-sm text-destructive" role="alert">{snapshotError}</p>}
+                {!preview && !snapshotError && <p className="text-sm text-muted-foreground" role="status">Waiting for the first workflow snapshot.</p>}
                 {preview && (
                   <>
                     <Badge variant={awaitingDecision ? "secondary" : "outline"}>{preview.phase}</Badge>
                     <dl className="grid gap-2 text-xs">
-                      <div><dt className="text-muted-foreground">Request</dt><dd className="break-all font-mono">{preview.correlation.request_id}</dd></div>
-                      <div><dt className="text-muted-foreground">Source version</dt><dd className="break-all font-mono">{preview.correlation.source_version_id}</dd></div>
-                      <div><dt className="text-muted-foreground">Raw generation</dt><dd className="break-all font-mono">{preview.correlation.raw_generation_id}</dd></div>
-                      <div><dt className="text-muted-foreground">Normalized generation</dt><dd className="break-all font-mono">{preview.correlation.normalized_generation_id}</dd></div>
-                      <div><dt className="text-muted-foreground">Preview digest</dt><dd className="break-all font-mono">{preview.preview_digest}</dd></div>
+                      <div><dt className="text-muted-foreground">Request</dt><dd className="break-all font-mono">{preview.correlation?.request_id ?? "Pending"}</dd></div>
+                      <div><dt className="text-muted-foreground">Source version</dt><dd className="break-all font-mono">{preview.correlation?.source_version_id ?? "Pending"}</dd></div>
+                      <div><dt className="text-muted-foreground">Raw generation</dt><dd className="break-all font-mono">{preview.correlation?.raw_generation_id ?? "Pending"}</dd></div>
+                      <div><dt className="text-muted-foreground">Normalized generation</dt><dd className="break-all font-mono">{preview.correlation?.normalized_generation_id ?? "Pending"}</dd></div>
+                      <div><dt className="text-muted-foreground">Preview digest</dt><dd className="break-all font-mono">{preview.preview_digest ?? "Pending"}</dd></div>
                       <div><dt className="text-muted-foreground">Parser</dt><dd>{preview.parser ? `${preview.parser.parser_id} · ${preview.parser.parser_version}` : "Not selected"}</dd></div>
                     </dl>
                     <ul className="space-y-1 border-t pt-3 text-xs">
-                      {preview.receipts.map((receipt) => <li key={receipt.receipt_ref} className="space-y-0.5 border-l-2 pl-2"><div>{receipt.receipt_type} · {receipt.status}</div><div className="break-all font-mono text-[10px] text-muted-foreground">{receipt.receipt_ref}{receipt.digest ? ` · ${receipt.digest}` : ""}</div><time className="text-[10px] text-muted-foreground" dateTime={receipt.recorded_at}>{new Date(receipt.recorded_at).toLocaleString()}</time></li>)}
+                      {preview.receipts?.map((receipt) => <li key={receipt.receipt_ref} className="space-y-0.5 border-l-2 pl-2"><div>{checkpointLabel(receipt.receipt_type)} · {receipt.status}</div><div className="break-all font-mono text-[10px] text-muted-foreground">{receipt.receipt_ref}{receipt.digest ? ` · ${receipt.digest}` : ""}</div><time className="text-[10px] text-muted-foreground" dateTime={receipt.recorded_at}>{new Date(receipt.recorded_at).toLocaleString()}</time></li>)}
                     </ul>
                     {awaitingDecision && (
                       <div className="space-y-2 border-t pt-3">

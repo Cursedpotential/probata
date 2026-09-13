@@ -12,7 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { StageOutputView } from "./stage-output-view";
-import { VerifyPanel } from "@/components/shared/verify-panel";
+import { ingestStageLabel } from "./stage-label";
 import { formatDate } from "@/lib/utils";
 import type { RunStageDetail } from "@/lib/shared/types";
 
@@ -20,8 +20,7 @@ interface StageDrawerProps {
   stage: RunStageDetail | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The run's sha256 (C3 Verify action) — only rendered on the custody
-   * stage. Optional so existing callers keep working untouched. */
+  /** Historical whole-source fingerprint, not a promotion seal. */
   sha256?: string | null;
 }
 
@@ -46,7 +45,7 @@ export function StageDrawer({ stage, open, onOpenChange, sha256 }: StageDrawerPr
           <>
             <SheetHeader>
               <SheetTitle className="flex items-center gap-2 capitalize">
-                {stage.name}
+                {ingestStageLabel(stage.name)}
                 <Badge variant={statusBadgeVariant(stage.status)}>{stage.status}</Badge>
               </SheetTitle>
               <SheetDescription>Stage {stage.seq}</SheetDescription>
@@ -100,18 +99,17 @@ export function StageDrawer({ stage, open, onOpenChange, sha256 }: StageDrawerPr
                 <StageOutputView stageName={stage.name} output={stage.output} />
               </div>
 
-              {/* C3 requirements addendum 2: active hash verification, only
-                  on the custody stage (the sha256 belongs to the whole run's
-                  source file, not to individual parse/store/knowledge
-                  stages). */}
-              {stage.name.toLowerCase() === "custody" && (
+              {/* Historical source digest only. The evidence-chain verification
+                  endpoint is deliberately not invoked from ingest. */}
+              {["custody", "raw_source_verification"].includes(stage.name.toLowerCase()) && (
                 <>
                   <Separator />
                   <div>
                     <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Custody — Verify
+                      Raw-source fingerprint
                     </p>
-                    <VerifyPanel sha256={sha256} />
+                    <p className="break-all font-mono text-xs">{sha256 || "No source fingerprint recorded."}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Recorded source SHA-256 only; not a custody seal or a new verification result.</p>
                   </div>
                 </>
               )}

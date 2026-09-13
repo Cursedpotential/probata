@@ -1,4 +1,4 @@
-"""Case Bible Sorted source-browser contract tests.
+"""Allowlisted Case Bible source-browser contract tests.
 
 Byline: Codex · GPT-5 · 2026-08-29.
 """
@@ -15,12 +15,12 @@ from fastapi.testclient import TestClient
 
 from app.repo import object_store_client
 from app.runtime import source_inspection as source_runtime
-from app.service import proffer
+from app.service import proffer, proffer_sources
 from app.service import source_inspection
 from app.types.source_context import SourceContextReceipt
 
 
-def test_browser_lists_fixed_bucket_with_delimiter_pagination_and_filter(monkeypatch) -> None:
+def test_browser_lists_selected_root_with_delimiter_and_file_details(monkeypatch) -> None:
     captured = {}
 
     def fake_list(**kwargs):
@@ -40,19 +40,62 @@ def test_browser_lists_fixed_bucket_with_delimiter_pagination_and_filter(monkeyp
             ],
         }
 
-    monkeypatch.setattr(proffer, "list_casebible_sorted_objects", fake_list)
+    monkeypatch.setattr(proffer_sources, "list_source_objects", fake_list)
     result = proffer.browse_sources(
-        prefix="exports/", continuation_token="opaque-current", filter_text="message", page_size=25
+        mode="TEST", root_id="r2-raw", prefix="exports/", continuation_token="opaque-current", page_size=25
     )
 
-    assert captured == {"prefix": "exports/", "continuation_token": "opaque-current", "max_keys": 25}
-    assert result.source == "casebible-sorted"
+    assert captured == {
+        "root_id": "r2-raw",
+        "prefix": "exports/",
+        "continuation_token": "opaque-current",
+        "max_keys": 25,
+    }
+    assert result.source == "casebible-raw" and result.active_root_id == "r2-raw"
     assert result.delimiter == "/"
-    assert result.filter == "message" and result.filter_applied is True
+    assert result.filter == "" and result.filter_applied is False
     assert result.is_truncated is True and result.continuation_token == "opaque-next"
-    assert [item.prefix for item in result.prefixes] == ["exports/messages/"]
-    assert [item.key for item in result.objects] == ["exports/messages/thread.json"]
+    assert [item.prefix for item in result.prefixes] == ["exports/messages/", "exports/photos/"]
+    assert [item.key for item in result.objects] == ["exports/messages/thread.json", "exports/photos/photo.jpg"]
+    assert result.objects[0].source_ref == "r2://casebible-raw/exports/messages/thread.json"
+    assert result.objects[0].file_kind == "structured_data"
+    assert {root.root_id for root in result.available_roots} == {"r2-raw", "r2-sorted", "r2-quarantine"}
     assert not hasattr(result.objects[0], "sha256"), "remote listings must not claim an acquisition digest"
+
+
+def test_root_search_scans_beyond_the_first_provider_page_and_filters_type(monkeypatch) -> None:
+    calls = []
+
+    def fake_list(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return {
+                "IsTruncated": True,
+                "NextContinuationToken": "provider-page-2",
+                "Contents": [{"Key": "unrelated/photo.jpg", "Size": 1}],
+            }
+        return {
+            "IsTruncated": False,
+            "Contents": [{"Key": "AI_Chats/export.zip", "Size": 14_794_205}],
+        }
+
+    monkeypatch.setattr(proffer_sources, "list_source_objects", fake_list)
+    result = proffer.browse_sources(
+        mode="TEST",
+        root_id="r2-raw",
+        prefix="ignored-while-root-searching/",
+        filter_text="AI_Chats",
+        filter_scope="root",
+        file_types=("archive",),
+        page_size=25,
+    )
+
+    assert len(calls) == 2
+    assert calls[0]["prefix"] == "" and calls[0]["delimiter"] is None
+    assert calls[1]["continuation_token"] == "provider-page-2"
+    assert [item.key for item in result.objects] == ["AI_Chats/export.zip"]
+    assert result.objects[0].archive_format == "zip"
+    assert result.search_complete is True and result.scanned_count == 2
 
 
 def test_object_store_client_never_accepts_a_bucket_from_the_browser(monkeypatch) -> None:
@@ -62,7 +105,7 @@ def test_object_store_client_never_accepts_a_bucket_from_the_browser(monkeypatch
             assert kwargs["Delimiter"] == "/"
             return {"Contents": [], "CommonPrefixes": []}
 
-    monkeypatch.setattr(object_store_client, "get_casebible_sorted_client", lambda: Client())
+    monkeypatch.setattr(object_store_client, "get_r2_client", lambda: Client())
     object_store_client.list_casebible_sorted_objects(prefix="", max_keys=10)
 
 
@@ -137,12 +180,12 @@ def test_runtime_client_uses_fixed_source_and_staging_buckets(monkeypatch) -> No
 
 def test_browser_rejects_escape_prefix_before_object_store_call(monkeypatch) -> None:
     monkeypatch.setattr(
-        proffer,
-        "list_casebible_sorted_objects",
+        proffer_sources,
+        "list_source_objects",
         lambda **_: (_ for _ in ()).throw(AssertionError("object store must not be called")),
     )
     try:
-        proffer.browse_sources(prefix="../wrong-case/")
+        proffer.browse_sources(mode="TEST", prefix="../wrong-case/")
     except proffer.ProfferError as error:
         assert error.status_code == 422
     else:
@@ -154,8 +197,8 @@ def test_source_inspection_hashes_immediately_without_claiming_a_custody_digest(
     modified = datetime(2026, 8, 30, tzinfo=UTC)
     monkeypatch.setattr(
         source_inspection,
-        "head_casebible_sorted_object",
-        lambda key: {
+        "head_source_object",
+        lambda root_id, key: {
             "ContentLength": len(payload),
             "ETag": '"object-etag"',
             "ContentType": "application/pdf",
@@ -164,15 +207,17 @@ def test_source_inspection_hashes_immediately_without_claiming_a_custody_digest(
     )
     monkeypatch.setattr(
         source_inspection,
-        "open_casebible_sorted_object",
-        lambda key, **kwargs: {"Body": io.BytesIO(payload)},
+        "open_source_object",
+        lambda root_id, key, **kwargs: {"Body": io.BytesIO(payload)},
     )
     app = FastAPI()
     app.include_router(source_runtime.router)
 
     response = TestClient(app).post(
-        "/api/proffer/source-inspection",
+        "/api/proffer/source-inspection?mode=TEST&root_id=r2-raw",
         json={
+            "root_id": "r2-raw",
+            "source_ref": "r2://casebible-raw/filings/source.pdf",
             "key": "filings/source.pdf",
             "expected_byte_length": len(payload),
             "expected_etag": '"object-etag"',
@@ -183,6 +228,8 @@ def test_source_inspection_hashes_immediately_without_claiming_a_custody_digest(
     body = response.json()
     assert body["sha256"] == hashlib.sha256(payload).hexdigest()
     assert body["digest_status"] == "preview_only"
+    assert body["matter_mode"] == "TEST"
+    assert body["active_root_id"] == "r2-raw"
     assert body["preview_kind"] == "pdf"
     assert body["preview_url"].startswith("/api/proffer/source-content?")
     assert body["parser_preflight"] == {
@@ -196,15 +243,21 @@ def test_source_inspection_hashes_immediately_without_claiming_a_custody_digest(
 def test_source_inspection_rejects_a_changed_listing_identity(monkeypatch) -> None:
     monkeypatch.setattr(
         source_inspection,
-        "head_casebible_sorted_object",
-        lambda key: {"ContentLength": 12, "ETag": '"new-etag"'},
+        "head_source_object",
+        lambda root_id, key: {"ContentLength": 12, "ETag": '"new-etag"'},
     )
     app = FastAPI()
     app.include_router(source_runtime.router)
 
     response = TestClient(app).post(
-        "/api/proffer/source-inspection",
-        json={"key": "source.pdf", "expected_byte_length": 11, "expected_etag": '"old-etag"'},
+        "/api/proffer/source-inspection?mode=TEST&root_id=r2-sorted",
+        json={
+            "root_id": "r2-sorted",
+            "source_ref": "r2://casebible-sorted/source.pdf",
+            "key": "source.pdf",
+            "expected_byte_length": 11,
+            "expected_etag": '"old-etag"',
+        },
     )
 
     assert response.status_code == 409
@@ -216,21 +269,21 @@ def test_source_content_is_same_origin_etag_pinned_and_range_bounded(monkeypatch
     captured = {}
     monkeypatch.setattr(
         source_inspection,
-        "head_casebible_sorted_object",
-        lambda key: {"ContentLength": len(payload), "ETag": '"etag"', "ContentType": "application/pdf"},
+        "head_source_object",
+        lambda root_id, key: {"ContentLength": len(payload), "ETag": '"etag"', "ContentType": "application/pdf"},
     )
 
-    def fake_open(key, **kwargs):
+    def fake_open(root_id, key, **kwargs):
         captured.update(kwargs)
         return {"Body": io.BytesIO(payload[2:6])}
 
-    monkeypatch.setattr(source_inspection, "open_casebible_sorted_object", fake_open)
+    monkeypatch.setattr(source_inspection, "open_source_object", fake_open)
     app = FastAPI()
     app.include_router(source_runtime.router)
 
     response = TestClient(app).get(
         "/api/proffer/source-content",
-        params={"key": "source.pdf", "etag": '"etag"'},
+        params={"root_id": "r2-sorted", "key": "source.pdf", "etag": '"etag"'},
         headers={"Range": "bytes=2-5"},
     )
 
@@ -244,14 +297,15 @@ def test_source_content_is_same_origin_etag_pinned_and_range_bounded(monkeypatch
 def test_source_context_route_uses_authenticated_actor_and_returns_only_receipt(monkeypatch) -> None:
     captured = {}
 
-    async def fake_create(body, actor):
-        captured.update(body=body, actor=actor)
+    async def fake_create(body, actor, *, mode):
+        captured.update(body=body, actor=actor, mode=mode)
         return SourceContextReceipt(
             source_context_ref="33333333-3333-3333-3333-333333333333",
             receipt_ref="proffer-source-context://33333333-3333-3333-3333-333333333333",
             content_digest="a" * 64,
             revision=1,
             recorded_at=datetime(2026, 8, 30, tzinfo=UTC),
+            matter_mode="TEST",
         )
 
     monkeypatch.setattr(source_runtime, "create_source_context", fake_create)
@@ -265,11 +319,11 @@ def test_source_context_route_uses_authenticated_actor_and_returns_only_receipt(
 
     app.include_router(source_runtime.router)
     response = TestClient(app).post(
-        "/api/proffer/source-contexts",
+        "/api/proffer/source-contexts?mode=TEST",
         json={
             "request_id": "request-1",
-            "matter_id": "11111111-1111-1111-1111-111111111111",
-            "court_case_id": "22222222-2222-2222-2222-222222222222",
+            "matter_id": "deadbeef-dead-beef-dead-beefdeadbeef",
+            "court_case_id": "cafebabe-cafe-babe-cafe-babecafebabe",
             "source_ref": "r2://casebible-sorted/source.pdf",
             "observed_source": {
                 "key": "source.pdf",
@@ -280,6 +334,7 @@ def test_source_context_route_uses_authenticated_actor_and_returns_only_receipt(
             },
             "assertions": {"source_class": "acquired_third_party", "other_party": "Other party"},
             "change_reason": "Operator supplied source context during intake",
+            "matter_mode": "TEST",
         },
     )
 
@@ -288,3 +343,4 @@ def test_source_context_route_uses_authenticated_actor_and_returns_only_receipt(
     assert captured["actor"].subject_uid == "authentik-user-1"
     assert captured["actor"].username == "operator"
     assert captured["body"].assertions.other_party == "Other party"
+    assert captured["mode"] == "TEST"

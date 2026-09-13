@@ -17,10 +17,13 @@ from typing import Iterator
 from urllib.parse import quote
 
 from app.repo.object_store_client import (
-    head_casebible_sorted_object,
-    open_casebible_sorted_object,
-    validate_casebible_sorted_key,
+    get_source_root,
+    head_source_object,
+    open_source_object,
+    validate_source_key,
 )
+from app.service.proffer import _require_mode_configuration
+from app.types.proffer import MatterMode
 from app.types.source_inspection import ParserPreflight, SourceInspectionRequest, SourceInspectionResponse
 
 
@@ -63,8 +66,11 @@ class SourceContent:
 
 def _metadata(request: SourceInspectionRequest) -> tuple[str, dict]:
     try:
-        key = validate_casebible_sorted_key(request.key)
-        head = head_casebible_sorted_object(key)
+        root = get_source_root(request.root_id)
+        key = validate_source_key(request.key)
+        if request.source_ref != f"r2://{root.bucket}/{key}":
+            raise ValueError("source reference does not belong to the selected source root")
+        head = head_source_object(root.root_id, key)
     except ValueError as error:
         raise SourceInspectionError(422, str(error)) from None
     except RuntimeError:
@@ -95,8 +101,9 @@ def _preflight(key: str) -> ParserPreflight:
     return ParserPreflight(declared_format=declared_format, route_label=label)
 
 
-def inspect_source(request: SourceInspectionRequest) -> SourceInspectionResponse:
+def inspect_source(request: SourceInspectionRequest, *, mode: MatterMode) -> SourceInspectionResponse:
     """Hash one small source immediately and return a truthful preview descriptor."""
+    _require_mode_configuration(mode)
     key, head = _metadata(request)
     size = int(head["ContentLength"])
     etag = str(head["ETag"])
@@ -106,7 +113,8 @@ def inspect_source(request: SourceInspectionRequest) -> SourceInspectionResponse
             "This source is too large for immediate inspection; start governed batch acquisition instead",
         )
     try:
-        response = open_casebible_sorted_object(key, if_match=etag)
+        root = get_source_root(request.root_id)
+        response = open_source_object(root.root_id, key, if_match=etag)
         body = response["Body"]
         digest = hashlib.sha256()
         captured = bytearray()
@@ -140,13 +148,18 @@ def inspect_source(request: SourceInspectionRequest) -> SourceInspectionResponse
     )
     preview_text = bytes(captured).decode("utf-8", errors="replace") if preview_kind == "text" else ""
     preview_url = (
-        f"/api/proffer/source-content?key={quote(key, safe='')}&etag={quote(etag, safe='')}"
+        f"/api/proffer/source-content?root_id={quote(request.root_id, safe='')}&key={quote(key, safe='')}&etag={quote(etag, safe='')}"
         if preview_kind in {"pdf", "text", "image"}
         else None
     )
     return SourceInspectionResponse(
+        source=root.bucket,
+        root_id=root.root_id,
+        active_root_id=root.root_id,
+        matter_mode=mode,
+        bucket=root.bucket,
         key=key,
-        source_ref=f"r2://casebible-sorted/{key}",
+        source_ref=request.source_ref,
         name=PurePosixPath(key).name,
         byte_length=size,
         etag=etag,
@@ -181,12 +194,12 @@ def _range_header(range_header: str | None, size: int) -> tuple[str | None, int,
     return f"bytes={start}-{end}", end - start + 1, f"bytes {start}-{end}/{size}"
 
 
-def open_source_content(key: str, etag: str, range_header: str | None) -> SourceContent:
+def open_source_content(root_id: str, key: str, etag: str, range_header: str | None) -> SourceContent:
     """Open same-origin preview content, pinned to the inspected object identity."""
-    request = SourceInspectionRequest(key=key, expected_byte_length=0, expected_etag=etag)
     try:
-        validated = validate_casebible_sorted_key(request.key)
-        head = head_casebible_sorted_object(validated)
+        root = get_source_root(root_id)
+        validated = validate_source_key(key)
+        head = head_source_object(root.root_id, validated)
     except (ValueError, RuntimeError):
         raise SourceInspectionError(404, "The selected source is unavailable") from None
     size = int(head.get("ContentLength", -1))
@@ -197,7 +210,7 @@ def open_source_content(key: str, etag: str, range_header: str | None) -> Source
         raise SourceInspectionError(409, "The selected source changed after inspection; inspect it again")
     byte_range, content_length, content_range = _range_header(range_header, size)
     try:
-        response = open_casebible_sorted_object(validated, if_match=current_etag, byte_range=byte_range)
+        response = open_source_object(root.root_id, validated, if_match=current_etag, byte_range=byte_range)
     except RuntimeError:
         raise SourceInspectionError(502, "The selected source preview could not be opened") from None
     content_type = str(head.get("ContentType") or mimetypes.guess_type(validated)[0] or "application/octet-stream")

@@ -43,6 +43,8 @@ var requiredProfferTables = []string{
 	"context.proffer_preview_participant", "context.proffer_preview_message", "context.proffer_preview_attachment",
 	"context.proffer_preview_event", "context.proffer_preview_decision", "context.repair_assessment",
 	"context.repair_decision", "context.repair_resolution", "context.proffer_source_context_revision",
+	"context.handler_content_signature", "context.handler_detected_format", "context.handler_compatibility",
+	"context.handler_recommendation", "context.handler_selection_decision", "context.handler_selection_validation",
 }
 
 var requiredProfferColumns = []string{

@@ -140,7 +140,7 @@ func TestPreviewStoreAgainstSnapshotSchemaRollbackOnly(t *testing.T) {
 		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_receipt
 			(preview_handle,snapshot_seq,receipt_type,receipt_ref,status,recorded_at)
 			SELECT $1,0,receipt_type,'receipt-'||receipt_type,'completed',now()
-			FROM unnest(ARRAY['custody','parser_selection','parser_execution','normalization','storage','completeness']) receipt_type`, binding.Handle); err != nil {
+			FROM unnest(ARRAY['raw_source_verification','parser_selection','parser_execution','normalization','storage','completeness']) receipt_type`, binding.Handle); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_participant

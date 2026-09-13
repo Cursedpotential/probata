@@ -24,6 +24,9 @@ func (uploadTestStarter) Decide(context.Context, string, proffer.PreviewDecision
 func (uploadTestStarter) DecideRepair(context.Context, string, proffer.RepairDecision) error {
 	return nil
 }
+func (uploadTestStarter) DecideHandler(context.Context, string, proffer.HandlerSelectionDecision) error {
+	return nil
+}
 func (uploadTestStarter) Preview(context.Context, string) (proffer.PreviewState, error) {
 	return proffer.PreviewState{Phase: proffer.PhaseAwaitingDecision}, nil
 }

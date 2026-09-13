@@ -157,11 +157,11 @@ export interface RunStageSummary {
   content?: string | null;
 }
 
-/** Typed `output` shapes per stage — keyed by convention on stage `name`
- * ("custody" | "parse" | "store" | "knowledge"). Field names verified
+/** Historical ingest output shapes; the old first-stage wire name remains
+ * readable but is displayed as raw-source verification. Field names verified
  * against the real implementation (server/evidence/workflows.py's
  * `_ledger_stage_output`), not just the build brief's prose description. */
-export interface CustodyOutput {
+export interface RawSourceVerificationOutput {
   sha256?: string | null;
   artifact_id?: string | null;
   duplicate?: boolean;
@@ -197,7 +197,7 @@ export interface KnowledgeOutput {
   [key: string]: unknown;
 }
 
-export type StageOutput = CustodyOutput | ParseOutput | StoreOutput | KnowledgeOutput | Record<string, unknown>;
+export type StageOutput = RawSourceVerificationOutput | ParseOutput | StoreOutput | KnowledgeOutput | Record<string, unknown>;
 
 /** A stage as returned by `GET /v1/runs/{run_id}` (the detail view) —
  * `SELECT *` off `analysis.workflow_run_stage`, so `stage_id`/`run_id` also
@@ -911,6 +911,7 @@ export type EvidenceReviewDecision =
 export type KnowledgeLane = "platform" | "legal" | "personal_history" | "context" | "evidence";
 export type RecordSourceKind = "first_party" | "third_party_acquired" | "unclassified";
 export type RecordProjectionKind = "authored_normalized" | "derived_third_party";
+export type MatterMode = "TEST" | "REAL";
 
 export interface Matter {
   id: string;
@@ -920,6 +921,7 @@ export interface Matter {
   partition_keys: string[];
   created_at: string;
   updated_at: string;
+  matter_mode: MatterMode;
 }
 
 export interface MatterListResponse {
@@ -951,6 +953,7 @@ export interface MatterDetail extends Matter {
 
 export interface ProfferUploadResponse {
   acquisition_ref: string;
+  matter_mode: MatterMode;
   sha256: string;
   byte_length: number;
 }
@@ -962,6 +965,15 @@ export interface ProfferSourceObject {
   byte_length: number;
   last_modified?: string | null;
   etag?: string | null;
+  source_ref: string;
+  source_location: "r2";
+  bucket: string;
+  relative_parent: string;
+  extension: string;
+  file_kind: string;
+  media_type?: string | null;
+  archive_format?: string | null;
+  intake_note?: string | null;
 }
 
 export interface ProfferSourcePrefix {
@@ -970,23 +982,52 @@ export interface ProfferSourcePrefix {
   name: string;
 }
 
+export interface ProfferSourceRoot {
+  root_id: string;
+  label: string;
+  source_location: "r2";
+  bucket: string;
+  root_ref: string;
+  temporary: boolean;
+}
+
 export interface ProfferSourceBrowserResponse {
-  source: "casebible-sorted";
+  source: "casebible-raw" | "casebible-sorted" | "casebible-quarantine";
   prefix: string;
   delimiter: "/";
   filter: string;
   filter_applied: boolean;
+  filter_scope: "root";
+  search_complete: boolean;
+  scanned_count: number;
+  scan_limit_reached: boolean;
+  active_root_id: string;
+  available_roots: ProfferSourceRoot[];
+  available_file_types: string[];
   page_size: number;
   is_truncated: boolean;
   continuation_token?: string | null;
   prefixes: ProfferSourcePrefix[];
   objects: ProfferSourceObject[];
+  matter_mode: MatterMode;
+}
+
+export interface ProfferParserCandidate {
+  handler_id: string;
+  handler_version: string;
+  execution_path: "decoder" | "duckdb";
+  compatibility_ref: string;
+  reason: string;
 }
 
 export interface ProfferSourceInspection {
-  source: "casebible-sorted";
+  source: "casebible-raw" | "casebible-sorted" | "casebible-quarantine";
+  root_id: string;
   key: string;
   source_ref: string;
+  active_root_id: string;
+  source_location: "r2";
+  bucket: string;
   name: string;
   byte_length: number;
   etag: string;
@@ -1003,6 +1044,7 @@ export interface ProfferSourceInspection {
     basis: "filename_extension";
     authoritative: false;
   };
+  matter_mode: MatterMode;
 }
 
 export interface ProfferHumanSourceAssertions {
@@ -1027,6 +1069,7 @@ export interface ProfferSourceContextReceipt {
   content_digest: string;
   revision: number;
   recorded_at: string;
+  matter_mode: MatterMode;
 }
 
 export interface ProfferStartRequest {
@@ -1037,18 +1080,42 @@ export interface ProfferStartRequest {
   matter_id: string;
   court_case_id: string;
   source_context_ref?: string | null;
+  matter_mode: MatterMode;
 }
 
 export interface ProfferStartResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
+}
+
+export interface ProfferHandlerSelectionDecisionRequest {
+  recommendation_ref: string;
+  handler_id: string;
+  handler_version: string;
+  execution_path: "decoder" | "duckdb";
+  compatibility_ref: string;
+}
+
+export interface ProfferHandlerSelectionDecisionResponse {
+  preview_handle: string;
+  matter_mode: MatterMode;
+  decision_ref: string;
+  status: string;
 }
 
 export interface ProfferPreviewReceipt {
-  receipt_type: "custody" | "parser_selection" | "parser_execution" | "normalization" | "storage" | "completeness";
+  receipt_type: "raw_source_verification" | "parser_selection" | "parser_execution" | "normalization" | "storage" | "completeness";
   receipt_ref: string;
   status: "pending" | "running" | "completed" | "failed" | "skipped";
   digest?: string | null;
   recorded_at: string;
+}
+
+export interface ProfferPreviewCheckpoint {
+  checkpoint: ProfferPreviewReceipt["receipt_type"];
+  status: "pending" | "running" | "completed" | "failed";
+  receipt_ref?: string | null;
+  reason?: string;
 }
 
 export interface ProfferRepairAssessmentView {
@@ -1066,14 +1133,16 @@ export interface ProfferRepairDecisionRequest {
 
 export interface ProfferRepairDecisionResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   decision_ref: string;
   status: string;
 }
 
 export interface ProfferPreviewResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   phase: "awaiting_decision" | "approved" | "rejected" | "timed_out" | string;
-  correlation: {
+  correlation?: {
     request_id: string;
     source_version_id: string;
     raw_generation_id: string;
@@ -1084,10 +1153,18 @@ export interface ProfferPreviewResponse {
     parser_version: string;
     config_digest: string;
   } | null;
-  preview_digest: string;
-  receipts: ProfferPreviewReceipt[];
+  preview_digest?: string | null;
+  receipts?: ProfferPreviewReceipt[] | null;
   reason?: string;
   repair_assessment?: ProfferRepairAssessmentView | null;
+  checkpoints?: ProfferPreviewCheckpoint[] | null;
+  handler_recommendation_ref?: string | null;
+  handler_decision_ref?: string | null;
+  detected_format?: string | null;
+  detected_format_ref?: string | null;
+  signature_ref?: string | null;
+  recommended_handler?: ProfferParserCandidate | null;
+  alternative_handlers?: ProfferParserCandidate[] | null;
 }
 
 export interface ProfferPreviewParticipant {
@@ -1118,6 +1195,7 @@ export interface ProfferPreviewMessage {
 
 export interface ProfferPreviewMessagesResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   participants: ProfferPreviewParticipant[];
   messages: ProfferPreviewMessage[];
   next_cursor?: string | null;
@@ -1128,6 +1206,7 @@ export interface ProfferPreviewEvent {
   event_type: "phase_changed" | "receipt_recorded" | "messages_available" | "decision_requested" | "decision_recorded" | "completed" | "failed";
   occurred_at: string;
   preview_handle: string;
+  matter_mode: MatterMode;
   phase: string;
   receipt_ref?: string | null;
   message_count?: number | null;
@@ -1136,6 +1215,7 @@ export interface ProfferPreviewEvent {
 
 export interface ProfferDecisionResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   status: string;
 }
 

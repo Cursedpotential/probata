@@ -3,21 +3,15 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/Cursedpotential/probata/engine/activities"
+	"github.com/Cursedpotential/probata/engine/proffer"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
-
-func validStructuredELTSpec() activities.StructuredELTSpec {
-	return activities.StructuredELTSpec{
-		RequestID:   "req-1",
-		SourceID:    "8c8c2c9e-1c1a-4a1a-9b1a-1c1a4a1a9b1a",
-		IngestRunID: "3d3d2c9e-1c1a-4a1a-9b1a-1c1a4a1a9b1a",
-		SourceURL:   "https://example.invalid/data.csv",
-		Format:      activities.StructuredELTFormatCSV,
-	}
-}
 
 func TestNewStructuredELTRepositoryRequiresDB(t *testing.T) {
 	if _, err := NewStructuredELTRepository(nil); err == nil {
@@ -25,168 +19,207 @@ func TestNewStructuredELTRepositoryRequiresDB(t *testing.T) {
 	}
 }
 
-// testDB (defined in source_lifecycle_repository_test.go) only exercises
-// constructor/validation paths and deliberately cannot start a transaction —
-// see that file's comment. Real execution is covered by the live proof
-// script (scripts/prove_elt_duckdb.py) and the integration gate, matching
-// this package's established convention of not adding a second fake pgx
-// implementation that could drift from PostgreSQL.
+func TestOpenStructuredELTRowsRejectsInvalidReferencesBeforeDatabaseAccess(t *testing.T) {
+	acquireCalls := 0
+	repo := newStructuredELTRepository(func(context.Context) (structuredELTSession, error) {
+		acquireCalls++
+		return nil, errors.New("database should not be reached")
+	})
+	valid := proffer.StageRequest{
+		RequestID:        "workflow-1",
+		SourceVersionRef: "11111111-1111-1111-1111-111111111111",
+		DeclaredFormat:   "smsbackuprestore_xml",
+		Refs:             map[string]proffer.Ref{"original": "22222222-2222-2222-2222-222222222222"},
+	}
+	for name, req := range map[string]proffer.StageRequest{
+		"missing request": func() proffer.StageRequest { copy := valid; copy.RequestID = ""; return copy }(),
+		"bad source":      func() proffer.StageRequest { copy := valid; copy.SourceVersionRef = "bad"; return copy }(),
+		"missing original": func() proffer.StageRequest {
+			copy := valid
+			copy.Refs = map[string]proffer.Ref{}
+			return copy
+		}(),
+		"bad original": func() proffer.StageRequest {
+			copy := valid
+			copy.Refs = map[string]proffer.Ref{"original": "bad"}
+			return copy
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := repo.OpenStructuredELTRows(context.Background(), req, activities.StructuredELTFormatSMSXML); err == nil {
+				t.Fatal("expected invalid reference to fail before database access")
+			}
+		})
+	}
+	if acquireCalls != 0 {
+		t.Fatalf("invalid references acquired %d PostgreSQL sessions", acquireCalls)
+	}
+}
 
-func TestStructuredELTRepositoryRejectsBadSourceIDBeforeOpeningTransaction(t *testing.T) {
-	repo, err := NewStructuredELTRepository(testDB{})
+type webbedStatusRow struct {
+	loaded bool
+	err    error
+}
+
+func (r webbedStatusRow) Scan(destinations ...any) error {
+	if r.err != nil {
+		return r.err
+	}
+	if len(destinations) != 1 {
+		return errors.New("unexpected Webbed status destination count")
+	}
+	loaded, ok := destinations[0].(*bool)
+	if !ok {
+		return errors.New("Webbed status destination is not *bool")
+	}
+	*loaded = r.loaded
+	return nil
+}
+
+type fakeStructuredELTSession struct {
+	execSQL     string
+	queryRowSQL string
+	execErr     error
+	status      webbedStatusRow
+}
+
+func (s *fakeStructuredELTSession) Exec(_ context.Context, sql string, _ ...any) (pgconn.CommandTag, error) {
+	s.execSQL = sql
+	return pgconn.CommandTag{}, s.execErr
+}
+
+func (*fakeStructuredELTSession) Query(context.Context, string, ...any) (pgx.Rows, error) {
+	return nil, errors.New("unexpected query")
+}
+
+func (s *fakeStructuredELTSession) QueryRow(_ context.Context, sql string, _ ...any) pgx.Row {
+	s.queryRowSQL = sql
+	return s.status
+}
+
+func (*fakeStructuredELTSession) Release() {}
+
+func TestEnsureWebbedLoadedUsesExplicitLoadAndDuckDBVerification(t *testing.T) {
+	session := &fakeStructuredELTSession{status: webbedStatusRow{loaded: true}}
+	if err := ensureWebbedLoaded(context.Background(), session); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(session.execSQL, "duckdb.load_extension('webbed')") {
+		t.Fatalf("Webbed load was not explicit: %s", session.execSQL)
+	}
+	if !strings.Contains(session.queryRowSQL, "duckdb_extensions()") || !strings.Contains(session.queryRowSQL, "extension_name = 'webbed'") {
+		t.Fatalf("Webbed readiness was not verified from DuckDB: %s", session.queryRowSQL)
+	}
+}
+
+func TestEnsureWebbedLoadedFailsClosed(t *testing.T) {
+	for name, session := range map[string]*fakeStructuredELTSession{
+		"load failure":   {execErr: errors.New("load denied")},
+		"verify failure": {status: webbedStatusRow{err: errors.New("status unavailable")}},
+		"not loaded":     {status: webbedStatusRow{loaded: false}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := ensureWebbedLoaded(context.Background(), session); err == nil {
+				t.Fatal("expected Webbed readiness failure")
+			}
+		})
+	}
+}
+
+func TestOnlyXMLTemplateRequiresWebbed(t *testing.T) {
+	if !structuredELTRequiresWebbed(activities.StructuredELTFormatSMSXML) {
+		t.Fatal("SMS XML must load Webbed")
+	}
+	for _, format := range []activities.StructuredELTFormat{
+		activities.StructuredELTFormatCSV,
+		activities.StructuredELTFormatNDJSON,
+		activities.StructuredELTFormatChatGPTJSON,
+		activities.StructuredELTFormatIMessageText,
+	} {
+		if structuredELTRequiresWebbed(format) {
+			t.Fatalf("format %q unexpectedly requires Webbed", format)
+		}
+	}
+}
+
+func TestDuckDBSourceURLTranslatesR2ToS3(t *testing.T) {
+	got, err := duckDBSourceURL("r2://nexus/proffer/test-fixtures/sample.xml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := validStructuredELTSpec()
-	spec.SourceID = "not-a-uuid"
-	_, err = repo.ExecuteStructuredELT(context.Background(), spec)
-	if err == nil || !strings.Contains(err.Error(), "source_id") {
-		t.Fatalf("expected a source_id validation error, got %v", err)
+	if got != "s3://nexus/proffer/test-fixtures/sample.xml" {
+		t.Fatalf("duckDBSourceURL() = %q", got)
 	}
 }
 
-func TestStructuredELTRepositoryRejectsBadIngestRunIDBeforeOpeningTransaction(t *testing.T) {
-	repo, err := NewStructuredELTRepository(testDB{})
+func TestDuckDBSourceURLRejectsWorkerLocalOrUnretainedLocators(t *testing.T) {
+	for _, locator := range []string{"upload://abc", "file:///sealed/source.xml", "b2://bucket/key"} {
+		if _, err := duckDBSourceURL(locator); err == nil {
+			t.Fatalf("expected %q to fail closed", locator)
+		}
+	}
+}
+
+func TestStructuredELTQueriesEmitCanonicalBundleColumns(t *testing.T) {
+	formats := []activities.StructuredELTFormat{
+		activities.StructuredELTFormatCSV,
+		activities.StructuredELTFormatNDJSON,
+		activities.StructuredELTFormatSMSXML,
+		activities.StructuredELTFormatChatGPTJSON,
+		activities.StructuredELTFormatIMessageText,
+	}
+	for _, format := range formats {
+		query, err := structuredELTQuery(format, "s3://nexus/test/source")
+		if err != nil {
+			t.Fatalf("structuredELTQuery(%q) error = %v", format, err)
+		}
+		templateID, err := activities.StructuredELTTemplateForFormat(format)
+		if err != nil {
+			t.Fatalf("StructuredELTTemplateForFormat(%q) error = %v", format, err)
+		}
+		for _, column := range []string{"stored_bytes", "native_fields", "native_metadata"} {
+			if !strings.Contains(query, column) {
+				t.Fatalf("structuredELTQuery(%q) lacks %q output: %s", format, column, query)
+			}
+		}
+		if !strings.Contains(query, "'duckdb_template', '"+templateID+"'") {
+			t.Fatalf("structuredELTQuery(%q) does not emit pinned template %q", format, templateID)
+		}
+		if strings.Contains(strings.ToUpper(query), "INSERT ") {
+			t.Fatalf("structuredELTQuery(%q) must not write raw tables", format)
+		}
+	}
+}
+
+func TestStructuredELTQueriesUseFormatSpecificDuckDBReaders(t *testing.T) {
+	tests := map[activities.StructuredELTFormat][]string{
+		activities.StructuredELTFormatSMSXML: {
+			"read_xml(", "record_element := 'sms'", "record_element := 'mms'",
+			"'$.address'", "'$.date'", "'$.type'", "'$.body'",
+			"'$.parts.part[0].text'", "epoch_ms(", "'occurred_at'",
+		},
+		activities.StructuredELTFormatChatGPTJSON:  {"read_text(", "json_each("},
+		activities.StructuredELTFormatIMessageText: {"read_text(", "regexp_split_to_array("},
+	}
+	for format, expected := range tests {
+		query, err := structuredELTQuery(format, "s3://nexus/test/source")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, fragment := range expected {
+			if !strings.Contains(query, fragment) {
+				t.Fatalf("structuredELTQuery(%q) lacks %q", format, fragment)
+			}
+		}
+	}
+}
+
+func TestStructuredELTQueryEscapesSourceURL(t *testing.T) {
+	query, err := structuredELTQuery(activities.StructuredELTFormatChatGPTJSON, "https://example.invalid/o'brien.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := validStructuredELTSpec()
-	spec.IngestRunID = "not-a-uuid"
-	_, err = repo.ExecuteStructuredELT(context.Background(), spec)
-	if err == nil || !strings.Contains(err.Error(), "ingest_run_id") {
-		t.Fatalf("expected an ingest_run_id validation error, got %v", err)
-	}
-}
-
-func TestStructuredELTRepositoryRejectsBadOptionalUUIDsBeforeOpeningTransaction(t *testing.T) {
-	repo, err := NewStructuredELTRepository(testDB{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	spec := validStructuredELTSpec()
-	spec.DeviceID = "not-a-uuid"
-	if _, err := repo.ExecuteStructuredELT(context.Background(), spec); err == nil || !strings.Contains(err.Error(), "device_id") {
-		t.Fatalf("expected a device_id validation error, got %v", err)
-	}
-
-	spec = validStructuredELTSpec()
-	spec.AcquisitionID = "not-a-uuid"
-	if _, err := repo.ExecuteStructuredELT(context.Background(), spec); err == nil || !strings.Contains(err.Error(), "acquisition_id") {
-		t.Fatalf("expected an acquisition_id validation error, got %v", err)
-	}
-}
-
-func TestStructuredELTRepositoryRejectsEmptySourceURLBeforeOpeningTransaction(t *testing.T) {
-	repo, err := NewStructuredELTRepository(testDB{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	spec := validStructuredELTSpec()
-	spec.SourceURL = ""
-	if _, err := repo.ExecuteStructuredELT(context.Background(), spec); err == nil {
-		t.Fatal("expected an error for an empty source url")
-	}
-}
-
-// TestStructuredELTRepositoryReachesTheDatabaseOnlyAfterValidation proves
-// control flow reaches BeginTx (and only then fails, on testDB's
-// "not implemented" stub) once every input is well-formed — i.e. validation
-// genuinely gates the transaction rather than being dead code.
-func TestStructuredELTRepositoryReachesTheDatabaseOnlyAfterValidation(t *testing.T) {
-	repo, err := NewStructuredELTRepository(testDB{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = repo.ExecuteStructuredELT(context.Background(), validStructuredELTSpec())
-	if err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Fatalf("expected the request to reach BeginTx and hit testDB's stub, got %v", err)
-	}
-}
-
-func TestDuckDBReaderExprBuildsCSVReader(t *testing.T) {
-	got, err := duckDBReaderExpr(activities.StructuredELTFormatCSV, "https://example.invalid/a.csv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "SELECT * FROM read_csv_auto('https://example.invalid/a.csv', all_varchar=true)"
-	if got != want {
-		t.Fatalf("csv reader expr = %q, want %q", got, want)
-	}
-}
-
-func TestDuckDBReaderExprBuildsNDJSONReader(t *testing.T) {
-	got, err := duckDBReaderExpr(activities.StructuredELTFormatNDJSON, "https://example.invalid/a.ndjson")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "SELECT * FROM read_json_auto('https://example.invalid/a.ndjson', format='newline_delimited')"
-	if got != want {
-		t.Fatalf("ndjson reader expr = %q, want %q", got, want)
-	}
-}
-
-func TestDuckDBReaderExprEscapesSingleQuotesInURL(t *testing.T) {
-	got, err := duckDBReaderExpr(activities.StructuredELTFormatCSV, "https://example.invalid/o'brien.csv")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(got, "o''brien.csv") {
-		t.Fatalf("expected doubled single quote escaping, got %q", got)
-	}
-}
-
-func TestDuckDBReaderExprRejectsEmptyURL(t *testing.T) {
-	if _, err := duckDBReaderExpr(activities.StructuredELTFormatCSV, "   "); err == nil {
-		t.Fatal("expected an error for a blank url")
-	}
-}
-
-func TestDuckDBReaderExprRejectsUnknownFormat(t *testing.T) {
-	if _, err := duckDBReaderExpr(activities.StructuredELTFormat("parquet"), "https://example.invalid/a"); err == nil {
-		t.Fatal("expected an error for an unsupported format")
-	}
-}
-
-func TestSQLStringLiteralEscapesSingleQuotes(t *testing.T) {
-	got := sqlStringLiteral("context-rawrecord-fingerprint-duckdb-json-v1")
-	if got != "'context-rawrecord-fingerprint-duckdb-json-v1'" {
-		t.Fatalf("literal = %q", got)
-	}
-	if got := sqlStringLiteral("it's"); got != "'it''s'" {
-		t.Fatalf("escaped literal = %q", got)
-	}
-}
-
-func TestValidateOptionalUUIDAllowsEmpty(t *testing.T) {
-	if err := validateOptionalUUID("", "device_id"); err != nil {
-		t.Fatalf("empty optional uuid should be allowed: %v", err)
-	}
-}
-
-func TestValidateOptionalUUIDRejectsMalformed(t *testing.T) {
-	if err := validateOptionalUUID("not-a-uuid", "device_id"); err == nil {
-		t.Fatal("expected an error for a malformed optional uuid")
-	}
-}
-
-func TestValidateOptionalUUIDAcceptsWellFormed(t *testing.T) {
-	if err := validateOptionalUUID("8c8c2c9e-1c1a-4a1a-9b1a-1c1a4a1a9b1a", "device_id"); err != nil {
-		t.Fatalf("unexpected error for a well-formed uuid: %v", err)
-	}
-}
-
-func TestEltCanonIsAContextFingerprintNotCustodyH2(t *testing.T) {
-	// Guards the ruling recorded at the top of elt_structured_repository.go
-	// (D-124, D-149): this lane writes a post-decode CONTEXT FINGERPRINT and must
-	// never carry a custody H-family tag - neither the byte-exact contract tag
-	// nor any other h2- prefixed name (the pre-2026-09-07 mistake).
-	if eltContextFingerprintCanon == "h2-rawelement-v1" || (len(eltContextFingerprintCanon) >= 3 && eltContextFingerprintCanon[:3] == "h2-") {
-		t.Fatal("structured ELT content_canon is a context fingerprint and must never carry the custody h2- prefix")
-	}
-	if len(eltContextFingerprintCanon) < 8 || eltContextFingerprintCanon[:8] != "context-" {
-		t.Fatal("structured ELT content_canon must belong to the sql/0048 context-fingerprint family")
-	}
-	if eltParserVersion == "" {
-		t.Fatal("structured ELT parser_version tag must not be empty")
+	if !strings.Contains(query, "o''brien.json") {
+		t.Fatalf("source URL was not escaped: %s", query)
 	}
 }

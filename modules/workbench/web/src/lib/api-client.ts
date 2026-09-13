@@ -92,6 +92,9 @@ import type {
   ProfferSourceObject,
   ProfferHumanSourceAssertions,
   ProfferSourceContextReceipt,
+  ProfferHandlerSelectionDecisionRequest,
+  ProfferHandlerSelectionDecisionResponse,
+  MatterMode,
 } from "./shared/types";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
@@ -553,8 +556,9 @@ export async function getKnowledgeContent(artifactId: string, caseId: string) {
 // Matter workspace (framework-neutral spine API, via Workbench proxy)
 // ---------------------------------------------------------------------------
 
-export async function listMatters(limit = 50, offset = 0) {
+export async function listMatters(limit = 50, offset = 0, mode?: MatterMode) {
   const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (mode) qs.set("mode", mode);
   return apiFetch<MatterListResponse>(`/api/matters?${qs.toString()}`);
 }
 
@@ -563,16 +567,20 @@ export async function createMatter(payload: {
   description?: string;
   partition_key?: string;
   created_by?: "owner";
-}) {
-  return apiFetch<Matter>("/api/matters", {
+}, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<Matter>(`/api/matters?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
 
-export async function getMatter(matterId: string) {
-  return apiFetch<MatterDetail>(`/api/matters/${encodeURIComponent(matterId)}`);
+export async function getMatter(matterId: string, mode?: MatterMode) {
+  const query = new URLSearchParams();
+  if (mode) query.set("mode", mode);
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return apiFetch<MatterDetail>(`/api/matters/${encodeURIComponent(matterId)}${suffix}`);
 }
 
 export interface CaseManagementCapabilities {
@@ -589,53 +597,66 @@ export async function getCaseManagementCapabilities() {
 // proffer workflow (formerly Universal Import Workflow) — production acquisition and decision boundary
 // ---------------------------------------------------------------------------
 
-export async function uploadProfferSource(file: File) {
-  const response = await fetch(`${API_BASE}/api/proffer/upload`, {
+export async function uploadProfferSource(file: File, mode: MatterMode) {
+  // Existing authenticated server ingress writes Nexus; only the server authors its acquisition reference.
+  const staged = await uploadFile(file);
+  return acquireStagedProfferSource(staged.id, mode);
+}
+
+export function acquireStagedProfferSource(stagedId: string, mode: MatterMode) {
+  return apiFetch<ProfferUploadResponse>(`/api/proffer/staged/${encodeURIComponent(stagedId)}/acquisition?mode=${mode}`, {
     method: "POST",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-      "X-Source-Filename": file.name,
-    },
-    body: file,
-    credentials: "same-origin",
+  }).then((result) => {
+    if (result.matter_mode !== mode) throw new ApiError("Staged acquisition did not confirm TEST/REAL mode", 502);
+    return result;
   });
-  if (!response.ok) {
-    let detail = `Upload failed (${response.status})`;
-    try {
-      const body = await response.json();
-      if (typeof body?.detail === "string") detail = body.detail;
-    } catch {
-      // Preserve the status-based message when the upstream body is not JSON.
-    }
-    throw new ApiError(detail, response.status);
-  }
-  return (await response.json()) as ProfferUploadResponse;
 }
 
 export function listProfferSources(params: {
+  mode: MatterMode;
+  rootId?: string;
+  fileTypes?: string[];
   prefix?: string;
   continuationToken?: string;
   filter?: string;
   pageSize?: number;
-} = {}) {
+}) {
   const query = new URLSearchParams();
+  query.set("mode", params.mode);
+  query.set("filter_scope", "root");
+  if (params.rootId) query.set("root_id", params.rootId);
+  for (const fileType of params.fileTypes ?? []) query.append("file_type", fileType);
   if (params.prefix) query.set("prefix", params.prefix);
   if (params.continuationToken) query.set("continuation_token", params.continuationToken);
   if (params.filter) query.set("filter", params.filter);
   if (params.pageSize) query.set("page_size", String(params.pageSize));
   const suffix = query.size ? `?${query.toString()}` : "";
-  return apiFetch<ProfferSourceBrowserResponse>(`/api/proffer/sources${suffix}`);
+  return apiFetch<ProfferSourceBrowserResponse>(`/api/proffer/sources${suffix}`).then((response) => {
+    if (response.matter_mode !== params.mode) throw new ApiError("The source browser did not confirm the active TEST/REAL mode", 502);
+    if (params.rootId && response.active_root_id !== params.rootId) throw new ApiError("The source browser returned a different source location", 502);
+    if ((params.filter?.trim() ?? "") && (response.filter !== params.filter?.trim() || !response.filter_applied || response.filter_scope !== "root")) {
+      throw new ApiError("The source browser did not confirm a complete backing-source search", 502);
+    }
+    return response;
+  });
 }
 
-export function inspectProfferSource(source: ProfferSourceObject) {
-  return apiFetch<ProfferSourceInspection>("/api/proffer/source-inspection", {
+export function inspectProfferSource(source: ProfferSourceObject, mode: MatterMode, rootId: string) {
+  const query = new URLSearchParams({ mode, root_id: rootId });
+  return apiFetch<ProfferSourceInspection>(`/api/proffer/source-inspection?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       key: source.key,
+      source_ref: source.source_ref,
+      root_id: rootId,
       expected_byte_length: source.byte_length,
       expected_etag: source.etag ?? null,
     }),
+  }).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The source inspection did not confirm the active TEST/REAL mode", 502);
+    if (response.active_root_id !== rootId || response.source_ref !== source.source_ref) throw new ApiError("The source inspection did not confirm the selected R2 source location", 502);
+    return response;
   });
 }
 
@@ -655,65 +676,113 @@ export function createProfferSourceContext(payload: {
   supersedes_ref?: string | null;
   assertions: ProfferHumanSourceAssertions;
   change_reason: string;
+  matter_mode: MatterMode;
 }) {
-  return apiFetch<ProfferSourceContextReceipt>("/api/proffer/source-contexts", {
+  const query = new URLSearchParams({ mode: payload.matter_mode });
+  return apiFetch<ProfferSourceContextReceipt>(`/api/proffer/source-contexts?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  }).then((response) => {
+    if (response.matter_mode !== payload.matter_mode) throw new ApiError("The source-context receipt did not confirm the active TEST/REAL mode", 502);
+    return response;
   });
 }
 
 export function startProffer(payload: ProfferStartRequest) {
-  return apiFetch<ProfferStartResponse>("/api/proffer/start", {
+  const query = new URLSearchParams({ mode: payload.matter_mode });
+  return apiFetch<ProfferStartResponse>(`/api/proffer/start?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  }).then((response) => {
+    if (response.matter_mode !== payload.matter_mode) throw new ApiError("The started preview did not confirm the active TEST/REAL mode", 502);
+    return response;
   });
 }
 
-export function getProfferPreview(previewHandle: string, signal?: AbortSignal) {
-  return apiFetch<ProfferPreviewResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}`, { signal });
-}
-
-export function decideProfferRepair(previewHandle: string, payload: ProfferRepairDecisionRequest) {
-  return apiFetch<ProfferRepairDecisionResponse>(
-    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/repair-decision`,
+export function decideProfferHandler(
+  previewHandle: string,
+  mode: MatterMode,
+  payload: ProfferHandlerSelectionDecisionRequest,
+) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferHandlerSelectionDecisionResponse>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/handler-selection?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     },
-  );
+  ).then((response) => {
+    if (response.matter_mode !== mode || response.preview_handle !== previewHandle) {
+      throw new ApiError("The handler-selection decision did not confirm this mode and preview", 502);
+    }
+    return response;
+  });
+}
+
+export function getProfferPreview(previewHandle: string, mode: MatterMode, signal?: AbortSignal) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferPreviewResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}?${query.toString()}`, { signal }).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The preview did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
+}
+
+export function decideProfferRepair(previewHandle: string, mode: MatterMode, payload: ProfferRepairDecisionRequest) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferRepairDecisionResponse>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/repair-decision?${query.toString()}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  ).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The repair decision did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
 }
 
 export function decideProffer(
   previewHandle: string,
+  mode: MatterMode,
   payload: { approved: boolean; reason: string },
 ) {
-  return apiFetch<ProfferDecisionResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}/decision`, {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferDecisionResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}/decision?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  }).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The decision response did not confirm the active TEST/REAL mode", 502);
+    return response;
   });
 }
 
 export function getProfferPreviewMessages(
   previewHandle: string,
+  mode: MatterMode,
   cursor?: string,
   limit = 100,
   signal?: AbortSignal,
 ) {
-  const query = new URLSearchParams({ limit: String(limit) });
+  const query = new URLSearchParams({ limit: String(limit), mode });
   if (cursor) query.set("cursor", cursor);
   return apiFetch<ProfferPreviewMessagesResponse>(
     `/api/proffer/previews/${encodeURIComponent(previewHandle)}/messages?${query.toString()}`,
     { signal },
-  );
+  ).then((response) => {
+    if (response.matter_mode !== mode) throw new ApiError("The preview messages did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
 }
 
-export function createProfferPreviewEventSource(previewHandle: string) {
+export function createProfferPreviewEventSource(previewHandle: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return new EventSource(
-    `${API_BASE}/api/proffer/previews/${encodeURIComponent(previewHandle)}/events`,
+    `${API_BASE}/api/proffer/previews/${encodeURIComponent(previewHandle)}/events?${query.toString()}`,
     { withCredentials: true },
   );
 }
@@ -732,17 +801,20 @@ export async function createCourtCase(
     is_primary?: boolean;
     created_by?: "owner";
   },
+  mode: MatterMode,
 ) {
-  return apiFetch<CourtCase>(`/api/matters/${encodeURIComponent(matterId)}/court-cases`, {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<CourtCase>(`/api/matters/${encodeURIComponent(matterId)}/court-cases?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
 
-export async function resolveKnowledgeSource(matterId: string, source: KnowledgeSourceRef) {
+export async function resolveKnowledgeSource(matterId: string, source: KnowledgeSourceRef, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<KnowledgeSourceResolution>(
-    `/api/matters/${encodeURIComponent(matterId)}/knowledge/resolve`,
+    `/api/matters/${encodeURIComponent(matterId)}/knowledge/resolve?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -762,9 +834,11 @@ export async function createEvidenceItem(
     evidence_type?: string;
     created_by?: "owner";
   },
+  mode: MatterMode,
 ) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidencePromotionResult>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -773,34 +847,38 @@ export async function createEvidenceItem(
   );
 }
 
-export async function listEvidenceItems(matterId: string, limit = 50, offset = 0) {
-  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+export async function listEvidenceItems(matterId: string, mode: MatterMode, limit = 50, offset = 0) {
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset), mode });
   return apiFetch<EvidenceItemListResponse>(
     `/api/matters/${encodeURIComponent(matterId)}/evidence-items?${qs.toString()}`,
   );
 }
 
-export async function getEvidenceDetail(matterId: string, evidenceItemId: string) {
+export async function getEvidenceDetail(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceDetail>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}?${query.toString()}`,
   );
 }
 
-export async function getEvidenceSourceContent(matterId: string, evidenceItemId: string) {
+export async function getEvidenceSourceContent(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceSourceContent>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/source-content`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/source-content?${query.toString()}`,
   );
 }
 
-export async function getEvidenceConversationContext(matterId: string, evidenceItemId: string) {
+export async function getEvidenceConversationContext(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ before: "25", after: "25", mode });
   return apiFetch<EvidenceConversationContext>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/conversation-context?before=25&after=25`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/conversation-context?${query.toString()}`,
   );
 }
 
-export async function getCourtReadiness(matterId: string, evidenceItemId: string) {
+export async function getCourtReadiness(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<CourtReadiness>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/court-readiness`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/court-readiness?${query.toString()}`,
   );
 }
 
@@ -812,9 +890,11 @@ export async function reviewEvidenceItem(
     rationale: string;
     reviewer?: "owner";
   },
+  mode: MatterMode,
 ) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceReviewResult>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -823,9 +903,10 @@ export async function reviewEvidenceItem(
   );
 }
 
-export async function listEvidenceReviews(matterId: string, evidenceItemId: string) {
+export async function listEvidenceReviews(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceReviewListResponse>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews?${query.toString()}`,
   );
 }
 

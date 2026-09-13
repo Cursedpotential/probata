@@ -26,7 +26,7 @@ interface DeskSnapshot {
 }
 
 const workflowSteps = [
-  { label: "Stage source", detail: "Upload or select custody-preserving source bytes." },
+  { label: "Stage source", detail: "Upload or select original source bytes for context intake." },
   { label: "Inspect preview", detail: "Read parser identity, structure, and message boundaries." },
   { label: "Confirm decision", detail: "Accept or reject the exact previewed material." },
   { label: "Follow receipt", detail: "Track the durable workflow without guessing completion." },

@@ -106,7 +106,10 @@ type Store interface {
 	RecordDecision(context.Context, string, bool, string, string, proffer.Ref, proffer.Ref) error
 }
 
-var ReceiptTypes = []string{"custody", "parser_selection", "parser_execution", "normalization", "storage", "completeness"}
+// ReceiptTypes are context-import completeness checkpoints. The first receipt
+// verifies raw records against their source; it is not evidence custody,
+// admission, sealing, or promotion.
+var ReceiptTypes = []string{"raw_source_verification", "parser_selection", "parser_execution", "normalization", "storage", "completeness"}
 
 func Validate(handle string, snapshot Snapshot, participants []Participant, messages []Message) error {
 	if snapshot.PreviewHandle != handle || !ValidDigest(snapshot.PreviewDigest) {

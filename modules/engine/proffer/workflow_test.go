@@ -42,6 +42,7 @@ func TestPreviewDecisionDecodesCrossLanguageRepairReferences(t *testing.T) {
 func approveHold(env *testsuite.TestWorkflowEnvironment) {
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
 		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: true, Decider: "test-operator"})
 	}, time.Millisecond)
 }
@@ -51,6 +52,7 @@ func approveHold(env *testsuite.TestWorkflowEnvironment) {
 func rejectHold(env *testsuite.TestWorkflowEnvironment, reason string) {
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
 		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: false, Reason: reason, Decider: "test-operator"})
 	}, time.Millisecond)
 }
@@ -83,12 +85,57 @@ func placeholderActivity(_ context.Context, _ StageRequest) (StageResult, error)
 	return StageResult{}, errors.New("proffer: placeholder activity ran unmocked")
 }
 
+func placeholderHandlerRecommendation(_ context.Context, _ StageRequest) (HandlerRecommendationResult, error) {
+	return HandlerRecommendationResult{}, errors.New("proffer: placeholder handler recommendation ran unmocked")
+}
+
+func placeholderHandlerValidation(_ context.Context, _ StageRequest) (HandlerSelectionValidationResult, error) {
+	return HandlerSelectionValidationResult{}, errors.New("proffer: placeholder handler validation ran unmocked")
+}
+
+func handlerCandidate(path HandlerExecutionPath) HandlerCandidate {
+	id := "sbv_whatsapp"
+	if path == HandlerPathDuckDB {
+		id = "duckdb_structured_elt"
+	}
+	return HandlerCandidate{
+		HandlerID: id, HandlerVersion: "1.0.0", ExecutionPath: path,
+		CompatibilityRef: Ref("compatibility-" + string(path)), Reason: "content signature is supported",
+	}
+}
+
+func handlerRecommendation(format string, path HandlerExecutionPath) HandlerRecommendationResult {
+	return HandlerRecommendationResult{
+		RecommendationRef: "handler-recommendation-ref", ReceiptRef: "handler-recommendation-receipt",
+		DetectedFormat: format, DetectedFormatRef: "detected-format-ref", SignatureRef: "content-signature-ref",
+		Recommended: handlerCandidate(path),
+	}
+}
+
+func handlerValidation(recommendation HandlerRecommendationResult) HandlerSelectionValidationResult {
+	return HandlerSelectionValidationResult{
+		DecisionRef: "handler-decision-ref", ActorRef: "actor-ref", ValidationReceipt: "handler-validation-receipt",
+		RecommendationRef: recommendation.RecommendationRef, DetectedFormat: recommendation.DetectedFormat,
+		DetectedFormatRef: recommendation.DetectedFormatRef, SignatureRef: recommendation.SignatureRef,
+		Chosen: recommendation.Recommended,
+	}
+}
+
 // registerAllStages registers placeholderActivity under every canon stage
 // name so OnActivity(name, ...) mocks below have somewhere to attach.
 func registerAllStages(env *testsuite.TestWorkflowEnvironment) {
 	for _, d := range stagegraph.Stages {
 		env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: string(d.ID)})
 	}
+	env.RegisterActivityWithOptions(placeholderHandlerRecommendation, activity.RegisterOptions{Name: RecommendHandlerActivityName})
+	env.RegisterActivityWithOptions(placeholderHandlerValidation, activity.RegisterOptions{Name: ValidateHandlerSelectionActivityName})
+}
+
+func mockHandlerActivities(env *testsuite.TestWorkflowEnvironment, format string, path HandlerExecutionPath) HandlerRecommendationResult {
+	recommendation := handlerRecommendation(format, path)
+	env.OnActivity(RecommendHandlerActivityName, mock.Anything, mock.Anything).Return(recommendation, nil).Once()
+	env.OnActivity(ValidateHandlerSelectionActivityName, mock.Anything, mock.Anything).Return(handlerValidation(recommendation), nil).Once()
+	return recommendation
 }
 
 // mockStages registers exactly one OnActivity expectation per stage: the
@@ -99,6 +146,7 @@ func registerAllStages(env *testsuite.TestWorkflowEnvironment) {
 // candidate for a given stage name to be ambiguous between.
 func mockStages(env *testsuite.TestWorkflowEnvironment, results map[stagegraph.StageID]StageResult, errs map[stagegraph.StageID]error) {
 	registerAllStages(env)
+	mockHandlerActivities(env, "whatsapp_export_json", HandlerPathDecoder)
 	for _, d := range stagegraph.Stages {
 		id := d.ID
 		if err, ok := errs[id]; ok {
@@ -233,6 +281,7 @@ func TestLegacyOpenWorkflowUsesVersionedActivityAliases(t *testing.T) {
 	for _, id := range legacyIDs {
 		env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: string(id)})
 	}
+	mockHandlerActivities(env, "whatsapp_export_json", HandlerPathDecoder)
 	env.OnGetVersion(fingerprintVocabularyChangeID, workflow.DefaultVersion, fingerprintVocabularyVersion).
 		Return(workflow.DefaultVersion).Once()
 	for _, id := range legacyIDs {
@@ -414,6 +463,7 @@ func TestCleanRepairAssessmentAutoResolvesWithoutHumanRepairSignal(t *testing.T)
 		}
 	})
 	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
 		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: true, Decider: "operator"})
 	}, time.Millisecond)
 	env.ExecuteWorkflow(ProfferWorkflow, testInput())
@@ -440,6 +490,7 @@ func TestLegacyPreviewHoldReplaysOriginalTimeout(t *testing.T) {
 	order := newOrderRecorder(env)
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
 	}, time.Millisecond)
 
 	env.ExecuteWorkflow(ProfferWorkflow, testInput())
@@ -475,6 +526,9 @@ func TestDurableReviewSignalsResumeAfterMultipleDays(t *testing.T) {
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "late-repair-decision-ref"})
 	}, 48*time.Hour)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
+	}, 72*time.Hour)
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: true, Decider: "late-review-operator"})
 	}, 96*time.Hour)
@@ -696,8 +750,10 @@ func TestNonContainerNotApplicableReceiptsReachParserSelectionAndPreview(t *test
 		"container_manifest":  "inventory-na-receipt",
 		"metadata_manifest":   "metadata-na-receipt",
 	}
-	if !reflect.DeepEqual(gotRequest.Refs, wantRefs) {
-		t.Errorf("select_parser_activity refs = %#v, want %#v", gotRequest.Refs, wantRefs)
+	for name, want := range wantRefs {
+		if got := gotRequest.Refs[name]; got != want {
+			t.Errorf("select_parser_activity ref %q = %q, want %q", name, got, want)
+		}
 	}
 	for name, ref := range gotRequest.Refs {
 		if ref == "" {
@@ -1031,5 +1087,281 @@ func TestSettleAcceptsValidStatusFailedReceipt(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "invalid result") {
 		t.Errorf("workflow error %q was rejected by validateStageResult, not by the ordinary failed-status check; a well-formed business failure must pass validation", err.Error())
+	}
+}
+
+func TestStructuredELTEligibleUsesExactDeclaredFormatAllowlist(t *testing.T) {
+	for _, declaredFormat := range []string{
+		"csv", "ndjson", "jsonl", "smsbackuprestore_xml", "chatgpt_official_json", "messages_transcript",
+	} {
+		if !structuredELTEligible(declaredFormat) {
+			t.Errorf("structuredELTEligible(%q) = false, want true", declaredFormat)
+		}
+	}
+	for _, declaredFormat := range []string{"", "whatsapp_export_json", "SMS_XML", "sms.xml", "sms_export_xml", "sms_xml", "imessage_txt", "chatgpt_json"} {
+		if structuredELTEligible(declaredFormat) {
+			t.Errorf("structuredELTEligible(%q) = true, want false", declaredFormat)
+		}
+	}
+}
+
+func TestEligibleStructuredSourceRunsOnlyDuckDBImplementation(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	registerAllStages(env)
+	env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: SelectStructuredELTActivityName})
+	env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: ExecuteStructuredELTActivityName})
+	recommendation := handlerRecommendation("smsbackuprestore_xml", HandlerPathDuckDB)
+	recommendation.EngineDecisionRef = "handler-decision-ref"
+	env.OnActivity(RecommendHandlerActivityName, mock.Anything, mock.Anything).Return(recommendation, nil).Once()
+	env.OnActivity(ValidateHandlerSelectionActivityName, mock.Anything, mock.Anything).Return(handlerValidation(recommendation), nil).Once()
+	for _, descriptor := range stagegraph.Stages {
+		if descriptor.ID == stagegraph.SelectParser || descriptor.ID == stagegraph.ExecuteParser {
+			// Keep the canonical implementation registered so an accidental
+			// dispatch fails visibly by running placeholderActivity unmocked.
+			continue
+		}
+		env.OnActivity(string(descriptor.ID), mock.Anything, mock.Anything).Return(stageStub(descriptor.ID), nil).Once()
+	}
+	selectionResult := StageResult{
+		Stage: stagegraph.SelectParser, Status: StatusSuccess,
+		Ref: "duckdb-selection-ref", ReceiptRef: "duckdb-selection-receipt",
+	}
+	eltResult := StageResult{
+		Stage: stagegraph.ExecuteParser, Status: StatusSuccess,
+		Ref: "duckdb-raw-bundle-ref", ReceiptRef: "duckdb-execution-receipt",
+	}
+	env.OnActivity(SelectStructuredELTActivityName, mock.Anything, mock.Anything).Return(selectionResult, nil).Once()
+	env.OnActivity(ExecuteStructuredELTActivityName, mock.Anything, mock.Anything).Return(eltResult, nil).Once()
+	order := newOrderRecorder(env)
+	var selectedRequest StageRequest
+	var validatedRequest StageRequest
+	var requestMu sync.Mutex
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, args converter.EncodedValues) {
+		order.mu.Lock()
+		order.order = append(order.order, info.ActivityType.Name)
+		order.mu.Unlock()
+		if info.ActivityType.Name != SelectStructuredELTActivityName && info.ActivityType.Name != ValidateHandlerSelectionActivityName {
+			return
+		}
+		var request StageRequest
+		if err := args.Get(&request); err != nil {
+			t.Errorf("decode DuckDB selection request: %v", err)
+			return
+		}
+		requestMu.Lock()
+		if info.ActivityType.Name == SelectStructuredELTActivityName {
+			selectedRequest = request
+		} else {
+			validatedRequest = request
+		}
+		requestMu.Unlock()
+	})
+	// No handler-selection signal is sent: selection belongs to the engine.
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: true, Decider: "test-operator"})
+	}, time.Millisecond)
+	in := testInput()
+	// This is intake metadata only. The content-backed recommendation above
+	// is authoritative and must route the detected SMS signature to DuckDB.
+	in.DeclaredFormat = "generic_xml_extension_hint"
+	env.ExecuteWorkflow(ProfferWorkflow, in)
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("eligible structured workflow failed: %v", err)
+	}
+	if !order.contains(SelectStructuredELTActivityName) || !order.contains(ExecuteStructuredELTActivityName) {
+		t.Fatal("eligible structured source did not dispatch both DuckDB selection and execution Activities")
+	}
+	if order.contains(string(stagegraph.SelectParser)) || order.contains(string(stagegraph.ExecuteParser)) {
+		t.Fatal("eligible structured source also dispatched an N8N parser Activity")
+	}
+	requestMu.Lock()
+	gotDeclaredFormat := selectedRequest.DeclaredFormat
+	gotValidationDeclaredFormat := validatedRequest.DeclaredFormat
+	requestMu.Unlock()
+	if gotDeclaredFormat != in.DeclaredFormat {
+		t.Fatalf("DuckDB select changed immutable declared format from %q to %q", in.DeclaredFormat, gotDeclaredFormat)
+	}
+	if gotValidationDeclaredFormat != in.DeclaredFormat {
+		t.Fatalf("handler validation changed immutable declared format from %q to %q", in.DeclaredFormat, gotValidationDeclaredFormat)
+	}
+	var result WorkflowResult
+	if err := env.GetWorkflowResult(&result); err != nil {
+		t.Fatal(err)
+	}
+	var executeResults []StageResult
+	for _, stage := range result.Stages {
+		if stage.Stage == stagegraph.ExecuteParser {
+			executeResults = append(executeResults, stage)
+		}
+	}
+	if len(executeResults) != 1 || executeResults[0].Ref != eltResult.Ref || executeResults[0].ReceiptRef != eltResult.ReceiptRef {
+		t.Fatalf("logical ExecuteParser results = %#v, want exactly the DuckDB bundle and receipt", executeResults)
+	}
+}
+
+func TestHandlerSelectionPreviewIsVisibleBeforeFullPreviewExists(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	var captured PreviewState
+	var capturedErr error
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+	}, time.Millisecond)
+	env.RegisterDelayedCallback(func() {
+		encoded, err := env.QueryWorkflow(PreviewQueryName)
+		if err != nil {
+			capturedErr = err
+		} else {
+			capturedErr = encoded.Get(&captured)
+		}
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
+		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: true, Decider: "operator"})
+	}, time.Second)
+	env.ExecuteWorkflow(ProfferWorkflow, testInput())
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("workflow failed: %v", err)
+	}
+	if capturedErr != nil {
+		t.Fatalf("query handler-selection preview: %v", capturedErr)
+	}
+	if captured.Phase != PhaseAwaitingHandlerSelection {
+		t.Fatalf("phase = %q, want %q", captured.Phase, PhaseAwaitingHandlerSelection)
+	}
+	if captured.PreviewHandle != "" {
+		t.Fatalf("full preview unexpectedly existed before normalization: %q", captured.PreviewHandle)
+	}
+	if captured.HandlerRecommendationRef == "" || captured.DetectedFormatRef == "" || captured.SignatureRef == "" || captured.RecommendedHandler == nil {
+		t.Fatalf("handler-selection preview lacks durable recommendation fields: %#v", captured)
+	}
+	if len(captured.Checkpoints) != 6 {
+		t.Fatalf("checkpoint count = %d, want 6", len(captured.Checkpoints))
+	}
+	for _, checkpoint := range captured.Checkpoints {
+		if checkpoint.Checkpoint == "custody" {
+			t.Fatal("context checkpoint is mislabeled custody")
+		}
+		if checkpoint.Checkpoint == "parser_selection" {
+			if checkpoint.Status != CheckpointRunning || checkpoint.ReceiptRef == "" {
+				t.Fatalf("parser-selection checkpoint = %#v, want running with recommendation receipt", checkpoint)
+			}
+		}
+	}
+}
+
+func TestHandlerSelectionValidationRejectsCandidateOutsideRecommendation(t *testing.T) {
+	recommendation := handlerRecommendation("smsbackuprestore_xml", HandlerPathDuckDB)
+	validation := handlerValidation(recommendation)
+	validation.Chosen = HandlerCandidate{
+		HandlerID: "unregistered", HandlerVersion: "9.9.9", ExecutionPath: HandlerPathDecoder,
+		CompatibilityRef: "fabricated", Reason: "not actually recommended",
+	}
+	if err := validateHandlerSelection(recommendation, "handler-decision-ref", validation); err == nil || !strings.Contains(err.Error(), "not in") {
+		t.Fatalf("outside candidate validation error = %v, want bounded-set rejection", err)
+	}
+}
+
+func TestLegacyStructuredHistoryReplaysDecoderActivity(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	env.OnGetVersion(structuredELTRouteChangeID, workflow.DefaultVersion, structuredELTRouteVersion).
+		Return(workflow.DefaultVersion).Once()
+	env.OnGetVersion(handlerSelectionChangeID, workflow.DefaultVersion, handlerSelectionVersion).
+		Return(workflow.DefaultVersion).Once()
+	order := newOrderRecorder(env)
+	approveHold(env)
+	in := testInput()
+	in.DeclaredFormat = "smsbackuprestore_xml"
+	env.ExecuteWorkflow(ProfferWorkflow, in)
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("legacy structured history failed: %v", err)
+	}
+	if !order.contains(string(stagegraph.ExecuteParser)) {
+		t.Fatal("legacy history did not replay the original decoder Activity")
+	}
+	if order.contains(ExecuteStructuredELTActivityName) {
+		t.Fatal("legacy history dispatched the new DuckDB Activity")
+	}
+	if order.contains(SelectStructuredELTActivityName) {
+		t.Fatal("legacy history dispatched the new DuckDB selection Activity")
+	}
+}
+
+func TestPreviewLabelsRawVerificationWithoutCallingItCustody(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	var mu sync.Mutex
+	var publication PreviewPublicationRequest
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, args converter.EncodedValues) {
+		if info.ActivityType.Name != string(stagegraph.PublishPreview) {
+			return
+		}
+		var request PreviewPublicationRequest
+		if err := args.Get(&request); err != nil {
+			t.Errorf("decode preview publication request: %v", err)
+			return
+		}
+		mu.Lock()
+		publication = request
+		mu.Unlock()
+	})
+	approveHold(env)
+	env.ExecuteWorkflow(ProfferWorkflow, testInput())
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("workflow failed: %v", err)
+	}
+	mu.Lock()
+	receipts := publication.ReceiptRefs
+	mu.Unlock()
+	if _, exists := receipts["custody"]; exists {
+		t.Fatalf("preview publication still labels context integrity as custody: %#v", receipts)
+	}
+	want := stageStub(stagegraph.VerifyRawCoverageAgainstSource).ReceiptRef
+	if got := receipts["raw_source_verification"]; got != want {
+		t.Fatalf("raw_source_verification receipt = %q, want %q", got, want)
+	}
+	if len(receipts) != 6 {
+		t.Fatalf("preview publication receipt count = %d, want the same six checkpoints", len(receipts))
+	}
+}
+
+func TestPreviewQueryCarriesSixCompletedContextCheckpoints(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	approveHold(env)
+	env.ExecuteWorkflow(ProfferWorkflow, testInput())
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("workflow failed: %v", err)
+	}
+	encoded, err := env.QueryWorkflow(PreviewQueryName)
+	if err != nil {
+		t.Fatalf("query preview state: %v", err)
+	}
+	var state PreviewState
+	if err := encoded.Get(&state); err != nil {
+		t.Fatalf("decode preview state: %v", err)
+	}
+	wantNames := []string{
+		"raw_source_verification", "parser_selection", "parser_execution",
+		"normalization", "storage", "completeness",
+	}
+	if len(state.Checkpoints) != len(wantNames) {
+		t.Fatalf("checkpoint count = %d, want %d: %#v", len(state.Checkpoints), len(wantNames), state.Checkpoints)
+	}
+	for index, wantName := range wantNames {
+		checkpoint := state.Checkpoints[index]
+		if checkpoint.Checkpoint != wantName || checkpoint.Status != CheckpointCompleted || checkpoint.ReceiptRef == "" || checkpoint.Reason != "" {
+			t.Errorf("checkpoint[%d] = %#v, want %q completed with a receipt and no failure reason", index, checkpoint, wantName)
+		}
 	}
 }

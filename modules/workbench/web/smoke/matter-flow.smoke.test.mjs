@@ -175,6 +175,7 @@ function courtReadiness() {
 function matterDetail() {
   return {
     id: MATTER_A,
+    matter_mode: "TEST",
     title: "Matter Alpha",
     description: "Fixture Matter",
     status: "active",
@@ -204,22 +205,84 @@ function matterDetail() {
   };
 }
 
-function createFixtureServer({ advancedEvidenceAvailable = true } = {}) {
+function createFixtureServer({ advancedEvidenceAvailable = true, newRunFixture = false } = {}) {
   const requests = [];
   const failures = [];
+  let handlerDecisions = 0;
   const server = createServer(async (request, response) => {
     try {
       const url = new URL(request.url, "http://fixture.local");
       let body = null;
-      if (["POST", "PUT", "PATCH"].includes(request.method)) body = await bodyJson(request);
+      if (newRunFixture && url.pathname === "/api/upload") {
+        for await (const chunk of request) { void chunk; }
+      } else if (["POST", "PUT", "PATCH"].includes(request.method)) body = await bodyJson(request);
       requests.push({ method: request.method, path: url.pathname, search: url.search, body });
+
+      if (newRunFixture && url.pathname === "/api/upload") return json(response, 200, { id: SHA_A, name: "sms.xml", size: 42 });
+
+      if (newRunFixture && url.pathname === "/api/files") {
+        return json(response, 200, [{ id: SHA_A, name: "sms-real-route-test.xml", size: 42,
+          mime: "application/xml", detected_type: "sms", status: "staged", r2_key: `workbench/staging/${SHA_A}/sms.xml` }]);
+      }
+      if (newRunFixture && url.pathname === "/api/proffer/sources") {
+        return json(response, 200, { matter_mode: "TEST", active_root_id: "r2-sorted", objects: [], prefixes: [],
+          available_roots: [], available_file_types: [], selected_file_types: [], page_size: 100, is_truncated: false });
+      }
+      if (newRunFixture && url.pathname === `/api/proffer/staged/${SHA_A}/acquisition`) {
+        assert.equal(url.searchParams.get("mode"), "TEST");
+        return json(response, 201, { acquisition_ref: `r2://nexus/workbench/staging/${SHA_A}/sms.xml`,
+          sha256: SHA_A, byte_length: 42, matter_mode: "TEST" });
+      }
+      if (newRunFixture && url.pathname === "/api/proffer/source-contexts") {
+        assert.equal(body.matter_id, MATTER_A);
+        assert.equal(body.court_case_id, CASE_PRIMARY);
+        assert.equal(body.assertions.source_class, "unknown");
+        return json(response, 201, { source_context_ref: SOURCE_A, matter_mode: "TEST" });
+      }
+      if (newRunFixture && url.pathname === "/api/proffer/start") {
+        assert.equal(body.source_ref, `r2://nexus/workbench/staging/${SHA_A}/sms.xml`);
+        assert.equal(body.parser_options_ref, "pending-handler-selection/v1");
+        assert.equal(body.source_context_ref, SOURCE_A);
+        assert.equal(body.engine, undefined);
+        assert.equal(body.custody_tier, undefined);
+        return json(response, 201, { preview_handle: "new_run_preview_abcdefghijklmnopqrstuvwxyz", matter_mode: "TEST" });
+      }
+      if (newRunFixture && url.pathname === "/api/proffer/previews/new_run_preview_abcdefghijklmnopqrstuvwxyz") {
+        if (handlerDecisions < 2) return json(response, 200, {
+          preview_handle: "new_run_preview_abcdefghijklmnopqrstuvwxyz", matter_mode: "TEST",
+          phase: "awaiting_handler_selection", detected_format: "smsbackuprestore_xml",
+          detected_format_ref: "detected-ref", signature_ref: "signature-ref",
+          handler_recommendation_ref: `recommendation-${handlerDecisions}`,
+          recommended_handler: { handler_id: "duckdb_structured_elt", handler_version: "1.0.0", execution_path: "duckdb",
+            compatibility_ref: `compatibility-${handlerDecisions}`, reason: handlerDecisions ? "Retry after second logged failure" : "Retry after logged automatic execution failure" },
+          alternative_handlers: [], receipts: [], checkpoints: [],
+        });
+        return json(response, 200, { preview_handle: "new_run_preview_abcdefghijklmnopqrstuvwxyz", matter_mode: "TEST",
+          phase: "failed", reason: "Fixture stop: execution is deliberately mocked", receipts: [], checkpoints: [] });
+      }
+      if (newRunFixture && url.pathname === "/api/proffer/previews/new_run_preview_abcdefghijklmnopqrstuvwxyz/handler-selection") {
+        assert.equal(body.recommendation_ref, `recommendation-${handlerDecisions}`);
+        assert.equal(body.compatibility_ref, `compatibility-${handlerDecisions}`);
+        handlerDecisions += 1;
+        return json(response, 200, { preview_handle: "new_run_preview_abcdefghijklmnopqrstuvwxyz", matter_mode: "TEST", decision_ref: `decision-${handlerDecisions}` });
+      }
+      if (newRunFixture && url.pathname.endsWith("/events")) {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        return response.end(": fixture\n\n");
+      }
+      if (newRunFixture && url.pathname === "/api/runs") {
+        assert.equal(request.method, "GET", "NewRun must never POST the legacy route");
+        return json(response, 200, []);
+      }
 
       if (request.method === "GET" && url.pathname === "/api/matters") {
         assert.equal(url.searchParams.get("limit"), "50");
         assert.equal(url.searchParams.get("offset"), "0");
+        assert.equal(url.searchParams.get("mode"), "TEST");
         return json(response, 200, { data: [matterDetail()], total: 1, limit: 50, offset: 0 });
       }
       if (request.method === "GET" && url.pathname === `/api/matters/${MATTER_A}`) {
+        assert.equal(url.searchParams.get("mode"), "TEST");
         return json(response, 200, matterDetail());
       }
       if (request.method === "GET" && url.pathname === "/api/case-management/capabilities") {
@@ -605,6 +668,47 @@ test("Matter-bound Knowledge promotes and reviews one exact custody record", { t
     await new Promise((accept) => fixture.server.close(accept));
     // Project safety contract: never hard-delete. The isolated browser profile
     // remains quarantined under to_be_deleted for owner-only cleanup.
+  }
+});
+
+for (const inputKind of ["staged", "fresh"]) test(`New Run submits ${inputKind} SMS through Proffer and renders guided recovery`, { timeout: 60_000 }, async () => {
+  const fixture = createFixtureServer({ newRunFixture: true });
+  await new Promise((accept) => fixture.server.listen(0, "127.0.0.1", accept));
+  const profile = await mkdtemp(join(resolve("../..", "to_be_deleted"), "new-run-browser-profile-"));
+  const browser = spawn(browserPath(), ["--headless=new", "--disable-gpu", "--no-first-run",
+    "--no-default-browser-check", "--remote-debugging-pipe", `--user-data-dir=${profile}`, "about:blank"],
+    { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
+  const cdp = new CdpPipe(browser);
+  try {
+    const target = await cdp.command("Target.createTarget", { url: `http://127.0.0.1:${fixture.server.address().port}/runs` });
+    const { sessionId: session } = await cdp.command("Target.attachToTarget", { targetId: target.targetId, flatten: true });
+    await cdp.command("Runtime.enable", {}, session);
+    await waitFor(cdp, session, `document.body?.innerText.includes('New run')`, "Runs page");
+    assert.equal(await evaluate(cdp, session, clickText("New run")), true);
+    await waitFor(cdp, session, `document.querySelector('select[aria-label="Staged source"] option[value="${SHA_A}"]') !== null`, "staged source list");
+    if (inputKind === "staged") {
+      await evaluate(cdp, session, `(() => { const select = document.querySelector('select[aria-label="Staged source"]'); select.value = '${SHA_A}'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    } else {
+      await waitFor(cdp, session, `document.querySelector('input[type="file"]') !== null`, "fresh file input");
+      await evaluate(cdp, session, `(() => { const input = document.querySelector('input[type="file"]'); const transfer = new DataTransfer(); transfer.items.add(new File(['<smses><sms body="fixture" /></smses>'], 'sms.xml', { type: 'application/xml' })); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+    }
+    await waitFor(cdp, session, `Array.from(document.querySelectorAll('button')).some((button) => button.textContent.includes('Start TEST context intake') && !button.disabled)`, "context start enabled");
+    assert.equal(await evaluate(cdp, session, clickText("Start TEST context intake")), true);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await waitFor(cdp, session, `document.body.innerText.includes('${attempt ? "Retry after second logged failure" : "Retry after logged automatic execution failure"}')`, "runtime handler guidance");
+      await evaluate(cdp, session, `document.querySelector('input[name="parser-handler"]').click()`);
+      await waitFor(cdp, session, `Array.from(document.querySelectorAll('button')).some((button) => button.textContent.includes('Record selection and continue') && !button.disabled)`, "handler decision enabled");
+      assert.equal(await evaluate(cdp, session, clickText("Record selection and continue")), true);
+    }
+    await waitFor(cdp, session, `document.body.innerText.includes('Fixture stop: execution is deliberately mocked')`, "Go preview result");
+    assert.equal(fixture.requests.some((request) => request.method === "POST" && request.path === "/api/proffer/start"), true);
+    assert.equal(fixture.requests.some((request) => request.method === "POST" && request.path === "/api/runs"), false);
+    assert.equal(fixture.requests.some((request) => request.method === "POST" && request.path === "/api/upload"), inputKind === "fresh");
+    assert.equal(await evaluate(cdp, session, `document.querySelector('#run-custody-tier-select') === null`), true);
+    assert.deepEqual(fixture.failures, []);
+  } finally {
+    browser.kill();
+    await new Promise((accept) => fixture.server.close(accept));
   }
 });
 

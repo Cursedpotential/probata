@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getCourtReadiness } from "@/lib/api-client";
+import { useFixedCase } from "@/lib/fixed-case-context";
 import type { CourtReadiness, CourtReadinessBlocker, EvidenceItem } from "@/lib/shared/types";
 
 const BLOCKER_LABELS: Record<CourtReadinessBlocker, string> = {
@@ -108,6 +109,7 @@ function ReadinessContent({ readiness }: { readiness: CourtReadiness }) {
 }
 
 export function CourtReadinessDialog({ item }: { item: EvidenceItem }) {
+  const { mode } = useFixedCase();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [readiness, setReadiness] = useState<CourtReadiness | null>(null);
@@ -120,7 +122,7 @@ export function CourtReadinessDialog({ item }: { item: EvidenceItem }) {
     setReadiness(null);
     setError(null);
     try {
-      const result = await getCourtReadiness(item.matter_id, item.id);
+      const result = await getCourtReadiness(item.matter_id, item.id, mode);
       if (request !== requestRef.current) return;
       if (result.matter_id !== item.matter_id || result.evidence_item_id !== item.id) {
         throw new Error("Readiness returned a different Matter evidence item");

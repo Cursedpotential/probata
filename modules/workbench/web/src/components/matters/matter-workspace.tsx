@@ -2,12 +2,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppLink as Link, useAppNavigate, useBrowserSearchParams } from "@/lib/router-compat";
+import { AppLink as Link, useBrowserSearchParams } from "@/lib/router-compat";
 import { AlertTriangle, BriefcaseBusiness, Loader2, Scale } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { KnowledgeBrowser } from "@/components/knowledge/knowledge-browser";
+import { useFixedCase } from "@/lib/fixed-case-context";
 import {
   ApiError,
   getCaseManagementCapabilities,
@@ -20,14 +21,18 @@ import type { EvidenceItem, Matter, MatterDetail } from "@/lib/shared/types";
 import { EvidenceDetailDialog } from "./evidence-detail-dialog";
 import { CourtReadinessDialog } from "./court-readiness-dialog";
 import { EvidenceReviewDialog, EvidenceReviewHistoryDialog } from "./evidence-review-dialog";
-import { CreateCourtCaseDialog, CreateMatterDialog } from "./matter-creation-dialogs";
+import { CreateCourtCaseDialog } from "./matter-creation-dialogs";
 
 function errorText(error: unknown) {
   return error instanceof ApiError ? error.message : "Unable to load the Matter workspace";
 }
 
 export function MatterWorkspace() {
-  const router = useAppNavigate();
+  const { mode } = useFixedCase();
+  return <ModeScopedMatterWorkspace key={mode} mode={mode} />;
+}
+
+function ModeScopedMatterWorkspace({ mode }: { mode: "TEST" | "REAL" }) {
   const searchParams = useBrowserSearchParams();
   const matterId = searchParams.get("matter_id")?.trim() || null;
   const [matters, setMatters] = useState<Matter[]>([]);
@@ -41,15 +46,15 @@ export function MatterWorkspace() {
   useEffect(() => {
     let cancelled = false;
     const request = matterId
-      ? Promise.all([getMatter(matterId), getCaseManagementCapabilities()]).then(async ([detail, capability]) => ({
+      ? Promise.all([getMatter(matterId, mode), getCaseManagementCapabilities()]).then(async ([detail, capability]) => ({
           detail,
           capability,
           items: capability.advanced_evidence_available
-            ? (await listEvidenceItems(matterId)).data
+            ? (await listEvidenceItems(matterId, mode)).data
             : [],
           matters: [] as Matter[],
         }))
-      : listMatters().then((response) => ({
+      : listMatters(50, 0, mode).then((response) => ({
           detail: null,
           capability: null,
           items: [] as EvidenceItem[],
@@ -80,7 +85,7 @@ export function MatterWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [matterId]);
+  }, [matterId, mode]);
 
   if (loading) {
     return (
@@ -109,7 +114,6 @@ export function MatterWorkspace() {
               Choose an enduring Matter workspace. Court proceedings remain separate within it.
             </p>
           </div>
-          <CreateMatterDialog onCreated={(created) => router.push(`/matter?matter_id=${encodeURIComponent(created.id)}`)} />
         </div>
         {matters.length === 0 ? (
           <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No Matter workspace is available.</CardContent></Card>
