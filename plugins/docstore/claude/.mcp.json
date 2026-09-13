@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "control": {
+      "command": "C:/Users/matts/.local/bin/uv.exe",
+      "args": ["run", "--frozen", "--no-sync", "--project", "E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/control", "python", "E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/control/cli.py", "serve"],
+      "env": {
+        "DOCSTORE_CONTROL_ENV_FILE": "${DOCSTORE_CONTROL_ENV_FILE:-C:/Users/matts/.secrets/probata-docstore.env}",
+        "DOCSTORE_PROJECT_REGISTRY": "E:/AI_Workspace/Projects/Propria/docs/docstore-source-registry.json",
+        "UV_CACHE_DIR": "E:/AI_Workspace/.intake-dev/uv-cache",
+        "TEMP": "E:/AI_Workspace/.intake-dev/temp",
+        "TMP": "E:/AI_Workspace/.intake-dev/temp",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "FASTMCP_CHECK_FOR_UPDATES": "off"
+      }
+    },
+    "docs": {
+      "type": "http",
+      "url": "${DOCSTORE_MCP_URL:-https://surreal-docs.tilapia-skilift.ts.net/mcp}",
+      "headers": {
+        "Authorization": "Basic ${DOCSTORE_BASIC_AUTH}",
+        "surreal-ns": "probata",
+        "surreal-db": "docs"
+      }
+    },
+    "memory": {
+      "type": "http",
+      "url": "${MEMORY_MCP_URL:-http://100.91.190.107:8471/mcp}",
+      "headers": {
+        "Authorization": "Basic ${MEMORY_BASIC_AUTH}"
+      }
+    }
+  }
+}

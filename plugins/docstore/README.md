@@ -1,50 +1,54 @@
-# docstore — two SurrealDB MCPs, one plugin, progressive disclosure
+# Probata universal Docstore plugin
 
-> _Byline: Claude Code · Fable 5.1 · 2026-09-09 (skeleton built by Claude Code · Sonnet 5 the same day; validated with `claude plugin validate --strict`)_
+Byline: Codex / GPT-6, 2026-09-12 — canonical Codex registration repair.
 
-Design: `docs/design/2026-09-09-docstore-memory-plugin-design.md`. Rulings: D-155 (docs local, embedded), D-156 (taxonomy), D-157/D-158 (memory = self-hosted SurrealDB Agent Memory on the VPS; NIM/Gemini via Portkey).
+This directory is the source package for Propria's universal documentation
+plane. It is separate from project-local CCC code indexes and from Intake's
+filesystem/evidence index.
 
-## Install
+## Canonical surfaces
 
+- `control/`: the governed FastMCP control server and its tests. It exposes 22
+  tools, seven resources, four resource templates and one prompt. API resources
+  `docstore://api/openapi` and `docstore://api/surreal` retrieve live schemas.
+- `claude/`: the slim Claude marketplace package. It contains the user-facing
+  skills, commands and agents and launches `control/` from the E-drive source.
+- root `.claude-plugin/plugin.json`: the skills bundle used by Codex as
+  `probata-docstore@probata`. Root `.mcp.json` is deliberately empty: Codex uses
+  one explicitly configured `probata-docstore` server with absolute source paths
+  and the canonical configuration loader. It must not also inject unresolved
+  `control`, `surreal`, or `memory` aliases. Claude uses the separate `claude/`
+  package and its own MCP manifest. Codex marketplace registration lives at
+  `../.agents/plugins/marketplace.json`.
+
+The marketplace entry is `probata-docstore@probata`, version 0.5.4. The older
+`docstore@probata` 0.4.0 identity is superseded and must remain disabled; it is
+not deleted automatically.
+
+## Transport and federation
+
+Local agent hosts use stdio by default. For ContextForge, set:
+
+```text
+DOCSTORE_MCP_TRANSPORT=http
+DOCSTORE_MCP_HOST=0.0.0.0
+DOCSTORE_MCP_PORT=8084
 ```
-claude --plugin-dir E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore
-```
 
-Environment (never commit values):
+The Streamable HTTP endpoint is `/mcp`. The server is stateless and accepts only
+`127.0.0.1` or `0.0.0.0` as bind values. ContextForge must register it with
+transport `STREAMABLEHTTP`; its default SSE selection is not equivalent.
 
-| Variable | Meaning |
-|---|---|
-| `DOCSTORE_BASIC_AUTH` | base64 of `SURREAL_USER:SURREAL_PASS` from `probata/.docstore/.env`; the local docs store listens on `http://127.0.0.1:8462/mcp` |
-| `MEMORY_MCP_URL` | the memory server's `/mcp` URL; provisional default points at the plain SurrealDB on the VPS and will move to the Agent Memory server's port once D-157 is deployed |
-| `MEMORY_BASIC_AUTH` | credentials for that server (a Bearer context key once Agent Memory is live; the `.mcp.json` header changes with it) |
+Do not expose the backend port publicly. Keep it on the shared private network
+behind ContextForge, and provide Docstore API/Surreal credentials only through
+deployment environment variables.
 
-## What loads when (progressive disclosure)
+## Deployment truth
 
-| Layer | Loads | When |
-|---|---|---|
-| 0 | three lines from `SessionStart`: both stores' health, the eight skill names, "search before you read" | every session |
-| 1 | the eight skill descriptions | every turn, by the harness |
-| 2 | one `SKILL.md` (≤ 60 lines): the `run` calls it wraps, exact SurrealQL, definition of done | when the skill matches |
-| 3 | `references/functions.md` under that skill: full signatures, schema, worked example, gotchas | on demand |
-| 4 | the MCP servers' generic tool schemas | deferred by the harness; never eagerly loaded |
+The local stdio and HTTP protocols are verified. Production federation and
+multi-root ingestion are not complete until the mandatory gate in the Propria
+root `docs/MONOREPO-MIGRATION-PLAN-2026-09-12.md` passes. In particular, the
+current Probata-only Docker build context cannot prove access to every Propria
+documentation root.
 
-Skills: `query` (ad-hoc SurrealQL through `scripts/docstore/sq.py`, rendered as a DuckDB table — the one inspection format for every agent), `docs` (search, get, provenance), `docs-write` (register, new version in place, supersede), `decisions` (ADR banners, D-rows), `todo` (open, close), `handoff` (write and mirror), `memory` (remember, recall, supersede, forget, reflect), `reconcile` (stale candidates, ingest mapping).
-
-_2026-09-10 (Claude Code · Opus 5): `query` skill added (owner order: everybody runs the same query format); seven skills → eight._
-
-Agents: `docstore-librarian` (Sonnet, the only writer), `docstore-reconciler` (Opus, interactive, never batch-writes), `memory-curator` (Sonnet). None run on the frontier model.
-
-## Hooks (each prints at most three lines)
-
-- `SessionStart` → `bin/preflight.sh`: pings both `/health`; loud failure, no filesystem fallback.
-- `UserPromptSubmit` → `bin/read-gate.sh`: the read-gate reminder, suppressed when the last tool call was already a store search (state under `.state/`).
-- `PostToolUse` on `Write|Edit` under `docs/**` → `bin/flag-doc-write.sh`: "unregistered until `docs_register` or `docs_new_version` runs".
-- `PreCompact` → `bin/precompact-marker.sh`: writes a marker the next `SessionStart` reads (PreCompact cannot inject context).
-
-## The one rule
-
-No custom MCP server, ever. A new operation is a new `DEFINE FUNCTION` in the store plus one line in an existing skill, or it does not exist. Raw `query` is denied to the main thread; everything goes through `run` on named functions so scope filters stay inside the KNN predicate.
-
-## Codex
-
-~~`.codex/docstore/` mirrors the two servers in `config.toml` and the seven skills as prompts.~~ **CORRECTED 2026-09-09 (Claude Code · Opus 5):** `config.toml` and `AGENTS.md` exist and are current, but `.codex/docstore/prompts/` is **EMPTY** — the seven prompts were never written. The Codex side is a stub, not a mirror. A stale partial duplicate `.codex/codex-docstore/` (older `AGENTS.md`, no `prompts/`) was quarantined to `to_be_deleted/2026-09-09-restructure/`. Codex has no hooks, so the read and write gates are instructions only.
+Byline amendment: Codex · GPT-5 · 2026-09-12 (Codex marketplace installation repair)

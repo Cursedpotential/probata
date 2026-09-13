@@ -1,0 +1,19 @@
+Do not import anything under this tree as a standalone skill.
+
+These SKILL.md files belong to the `docstore` PLUGIN. Claude Code loads them
+through the plugin (namespaced `docstore:<skill>`). Copying or symlinking them
+into .claude/skills/, ~/.claude/skills/ or ~/.agents/skills/ produces a DOUBLE
+LISTING: the same skill offered twice, once namespaced and once bare, with
+competing trigger descriptions.
+
+Layout:  plugins/docstore/claude/   <- shared namespaced skills, commands and agents
+         plugins/docstore/control/  <- shared governed MCP control server
+         plugins/docstore/          <- explicit Claude/Codex plugin root
+
+Claude consumes the slim package through its registered local marketplace.
+Codex consumes the root package explicitly as `probata-docstore@probata` via
+`plugins/.agents/plugins/marketplace.json`. The marker blocks only accidental
+bare-skill scanning; it does not disable explicit plugin loading.
+
+Byline: Claude Code · Opus 5 (1M) · 2026-09-11
+Byline amendment: Codex · GPT-5 · 2026-09-12 (document explicit Codex plugin loading)

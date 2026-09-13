@@ -1,0 +1,13 @@
+{
+  "subject": "note:ccc_intake_docstore_boundaries",
+  "title": "CCC, Intake and Docstore are three isolated systems",
+  "summary": "CCC is project-local CocoIndex Code only. Intake is the multifaceted CocoIndex filesystem workstation using Weaviate for advanced search, SurrealDB for relationships, and multiple OCR/STT/video/SLM tools and libraries. Docstore is CocoIndex plus SurrealDB for project documentation. Keep app identity, tracking state, worker locks, credentials and target ownership separate. Intake's human-agent workflow is find, group, compare, decide and move; index unique readable content before evidence selection, retain every duplicate occurrence and provenance, and distinguish corroborating copies. Docstore helper limits do not define Intake eligibility.",
+  "priority": "critical",
+  "authority": "owner_decision",
+  "status": "active",
+  "domains": ["docs", "intake", "consignatio", "probata", "infra"],
+  "source_ref": "E:/AI_Workspace/Projects/Propria/SYSTEM-BOUNDARIES.md",
+  "rationale": "Owner explicitly confirmed the three-system scope and requested durable critical decision marking on 2026-09-12.",
+  "actor": "codex-recording-owner-decision",
+  "expected_revision": 0
+}

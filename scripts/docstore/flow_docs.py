@@ -75,7 +75,8 @@ runaway ingest must die rather than swap the desktop to a standstill.
 
 Usage:
     "C:/Users/matts/.local/bin/python3.exe" flow_docs.py
-    DOCSTORE_ONLY_FILES="docs/a.md,docs/b.md" ... flow_docs.py   # scoped
+    Full declared source only. DOCSTORE_ONLY_FILES is rejected: source filtering
+    can retire omitted components. It is not selective component execution.
 """
 
 from __future__ import annotations
@@ -93,6 +94,9 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Annotated, AsyncIterator, Optional
 
+if os.environ.get("DOCSTORE_ONLY_FILES", "").strip():
+    raise RuntimeError("DOCSTORE_ONLY_FILES is unsafe for this app; no indexing started")
+
 import cocoindex as coco
 import ftfy
 import psutil
@@ -103,9 +107,23 @@ from cocoindex.ops.text import RecursiveSplitter
 from cocoindex.resources.chunk import Chunk
 from cocoindex.resources.file import FileLike, PatternFilePathMatcher
 from numpy.typing import NDArray
+from source_registry import SourceSpec, load_sources
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-DOCS_DIR = REPO_ROOT / "docs"
+PROJECT_REGISTRY_PATH = (
+    pathlib.Path(os.environ["DOCSTORE_PROJECT_REGISTRY"])
+    if os.environ.get("DOCSTORE_PROJECT_REGISTRY") else None
+)
+MULTI_ROOT_ENABLED = os.environ.get("DOCSTORE_MULTI_ROOT_ENABLED", "").strip() == "1"
+SOURCE_SPECS, SOURCE_REGISTRY_FINGERPRINT = load_sources(
+    PROJECT_REGISTRY_PATH,
+    REPO_ROOT / "docs",
+    multi_root_enabled=MULTI_ROOT_ENABLED,
+)
+PRIMARY_SOURCE = next(
+    source for source in SOURCE_SPECS if source.ingestion_status == "current-full-source"
+)
+DOCS_DIR = PRIMARY_SOURCE.root
 
 # --- state isolation -------------------------------------------------------
 # ccc (the cocoindex-code uv tool) runs its own CocoIndex app on this machine.
@@ -152,24 +170,10 @@ MAPPING_CSV = pathlib.Path(
     )
 )
 
-# Scoping goes into the SOURCE, via the connector's own PatternFilePathMatcher.
-#
-# GOTCHA (CDC): scoping by returning early inside the per-file component is NOT
-# a filter. Under CocoIndex's change-data-capture, a component that declares no
-# target state is declaring that the row should NOT EXIST -- an early return is a
-# DELETE instruction, not a skip. Restricting `included_patterns` keeps
-# out-of-scope files out of the source set instead. Patterns are relative to
-# DOCS_DIR, so DOCSTORE_ONLY_FILES entries have their "docs/" prefix stripped.
-_only = os.environ.get("DOCSTORE_ONLY_FILES", "").strip()
-ONLY_PATTERNS: list[str] | None = (
-    [
-        pat.strip().replace("\\", "/").removeprefix("docs/")
-        for pat in _only.split(",")
-        if pat.strip()
-    ]
-    if _only
-    else None
-)
+# This static app must declare the complete source membership every run.
+# Excluding siblings from the source also removes their mounted components and
+# can retire their targets. A future selective API needs a verified live-component
+# design; no alternate app/state or manual writer is substituted here.
 
 # The ruled value sets bound by the live schema.
 VALID_DOC_TYPES = {"blueprint", "infrastructure", "decision", "todo", "handoff",
@@ -193,6 +197,11 @@ _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.M)
 # ContextKey[Path] instead gives FilePath(base_dir=KEY), which makes `.path`
 # relative to the docs tree and keeps memo keys stable if the checkout moves.
 DOCS_BASE: coco.ContextKey[pathlib.Path] = coco.ContextKey("docstore_docs_dir")
+PROJECT_BASES: dict[str, coco.ContextKey[pathlib.Path]] = {
+    source.project_id: coco.ContextKey(f"docstore_project_{source.project_id}_dir")
+    for source in SOURCE_SPECS
+    if source.project_id != PRIMARY_SOURCE.project_id
+}
 
 SURREAL_DB: coco.ContextKey[surrealdb.ConnectionFactory] = coco.ContextKey("docstore")
 EMBEDDER: coco.ContextKey[LiteLLMEmbedder] = coco.ContextKey(
@@ -350,7 +359,9 @@ _AUTO_RULES = (
 )
 
 
-def _auto_meta(source_path: str, body: str) -> DocMeta:
+def _auto_meta(
+    source_path: str, body: str, default_domains: tuple[str, ...] = ("docs",)
+) -> DocMeta:
     name = source_path.rsplit("/", 1)[-1].upper()
     doc_type = next((t for prefix, t in _AUTO_RULES if source_path.startswith(prefix)), None)
     if doc_type is None:
@@ -362,7 +373,7 @@ def _auto_meta(source_path: str, body: str) -> DocMeta:
         else:
             doc_type = "blueprint" if source_path.startswith("docs/planning/") else "reference"
     title = next((line[2:].strip() for line in body.splitlines() if line.startswith("# ")), "") or source_path
-    return DocMeta(source_path, title[:300], doc_type, ("docs",), "unverified")
+    return DocMeta(source_path, title[:300], doc_type, default_domains, "unverified")
 
 
 # ---------------------------------------------------------------------------
@@ -571,6 +582,9 @@ def configure_environment() -> coco.Environment:
 
     provider = DOCSTORE_ENV.context_provider
     provider.provide(DOCS_BASE, DOCS_DIR)
+    for source in SOURCE_SPECS:
+        if source.project_id != PRIMARY_SOURCE.project_id:
+            provider.provide(PROJECT_BASES[source.project_id], source.root)
     provider.provide(
         SURREAL_DB,
         SharedEmbeddedConnectionFactory(url, namespace=ns, database=db)
@@ -715,6 +729,57 @@ async def process_file(
     )
 
 
+@coco.fn(memo=True, version=1)
+async def process_project_file(
+    file: FileLike,
+    project_id: str,
+    canonical_prefix: str,
+    default_domains: tuple[str, ...],
+    registry_fingerprint: str,
+    doc_table: surrealdb.TableTarget[DocumentRow],
+    chunk_table: surrealdb.TableTarget[ChunkRow],
+    chunk_edge: surrealdb.RelationTarget[None],
+) -> None:
+    """Process one non-Probata project document under a stable canonical ID.
+
+    The registry fingerprint invalidates metadata/source-membership changes.
+    File content change detection remains owned by FileLike's fingerprint.
+    """
+    del registry_fingerprint
+    source_path = canonical_prefix + file.file_path.path.as_posix()
+    body = fold_non_bmp(await file.read_text(encoding="utf-8"))
+    meta = _METAS.get(source_path) or _auto_meta(source_path, body, default_domains)
+    doc_id = slug(source_path)
+    doc_table.declare_record(
+        row=DocumentRow(
+            id=doc_id,
+            source_path=source_path,
+            content_hash=hashlib.sha256(body.encode("utf-8")).hexdigest(),
+            title=meta.title,
+            body=body,
+            doc_type=meta.doc_type,
+            project=project_id,
+            tags=[],
+            domains=list(meta.domains),
+            status=meta.status,
+            confidence=DEFAULT_CONFIDENCE,
+        )
+    )
+    clean = normalize_for_search(strip_data_uris(body))
+    chunks = _splitter.split(
+        clean,
+        CHUNK_SIZE,
+        min_chunk_size=CHUNK_MIN_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+        language="markdown",
+    )
+    headings = build_heading_index(clean)
+    ordinals = {chunk.start.char_offset: index for index, chunk in enumerate(chunks)}
+    await coco.map(
+        process_chunk, chunks, doc_id, meta, headings, ordinals, chunk_table, chunk_edge
+    )
+
+
 # ---------------------------------------------------------------------------
 # App main (Pattern 1)
 # ---------------------------------------------------------------------------
@@ -722,6 +787,8 @@ async def process_file(
 
 @coco.fn
 async def app_main() -> None:
+    if os.environ.get("DOCSTORE_ONLY_FILES", "").strip():
+        raise RuntimeError("Partial source filtering is not a safe scoped update")
     doc_table = await surrealdb.mount_table_target(
         SURREAL_DB,
         "document",
@@ -750,18 +817,47 @@ async def app_main() -> None:
         DOCS_BASE,
         recursive=True,
         path_matcher=PatternFilePathMatcher(
-            included_patterns=ONLY_PATTERNS or ["**/*.md"],
+            included_patterns=["**/*.md"],
             excluded_patterns=["private/**", "**/to_be_deleted/**"],
         ),
     )
-    await coco.mount_each(
-        process_file,
-        files.items(),
-        _MAPPING_FINGERPRINT,
-        doc_table,
-        chunk_table,
-        chunk_edge,
-    )
+    # Documented exception propagation: background mount errors otherwise log
+    # without failing the parent. Await readiness under a raising handler.
+    async with coco.exception_handler(_raise_component_error):
+        handle = await coco.mount_each(
+            process_file, files.items(), _MAPPING_FINGERPRINT,
+            doc_table, chunk_table, chunk_edge,
+        )
+        await handle.ready()
+        for source in SOURCE_SPECS:
+            if source.project_id == PRIMARY_SOURCE.project_id:
+                continue
+            project_files = localfs.walk_dir(
+                PROJECT_BASES[source.project_id],
+                recursive=True,
+                path_matcher=PatternFilePathMatcher(
+                    included_patterns=list(source.included_patterns),
+                    excluded_patterns=list(source.excluded_patterns),
+                ),
+            )
+            project_handle = await coco.mount_each(
+                coco.component_subpath("project", source.project_id),
+                process_project_file,
+                project_files.items(),
+                source.project_id,
+                source.canonical_prefix,
+                source.domains,
+                SOURCE_REGISTRY_FINGERPRINT,
+                doc_table,
+                chunk_table,
+                chunk_edge,
+            )
+            await project_handle.ready()
+
+
+async def _raise_component_error(exc: BaseException, ctx: coco.ExceptionContext) -> None:
+    print(f"docstore: component failed; error_type={type(exc).__name__}", file=sys.stderr, flush=True)
+    raise exc
 
 
 app = coco.App(
@@ -774,11 +870,24 @@ app = coco.App(
 )
 
 
+async def _run_checked() -> None:
+    # app.update starts this app's explicit environment. coco.runtime() would
+    # start the DEFAULT environment and consume unrelated ambient state.
+    handle = app.update()
+    await handle.result()
+    stats = handle.stats()
+    if stats is None or stats.total.num_errors or stats.total.num_in_progress:
+        raise RuntimeError("CocoIndex execution did not finish without errors")
+
+
 if __name__ == "__main__":
-    scope = f" (scoped to {len(ONLY_PATTERNS)} file(s))" if ONLY_PATTERNS else ""
     print(
-        f"Running ProbataDocStore{scope} — max_inflight={MAX_INFLIGHT}, "
+        f"Running ProbataDocStore (full source) — max_inflight={MAX_INFLIGHT}, "
         f"RSS ceiling {MAX_RSS_MB} MB",
         flush=True,
     )
-    app.update_blocking(report_to_stdout=True)
+    try:
+        asyncio.run(_run_checked())
+    except Exception as exc:
+        print(f"docstore: execution failed; error_type={type(exc).__name__}; inspect retained worker log", file=sys.stderr)
+        sys.exit(1)

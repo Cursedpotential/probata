@@ -1,24 +1,28 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
-  "name": "docstore",
-  "displayName": "Probata DocStore + Memory",
-  "description": "Bundles two SurrealDB MCP servers (docs, memory) plus skills and hooks that force agents to retrieve from and write to the probata document store, ADR/decision log, MASTER-TODO register, session handoffs, and agent memory instead of guessing from the filesystem. 0.2.0 (2026-09-10): cloud store surreal-docs, commands /recall-doc /recall-adr /memory /update-adr, query skill.",
-  "version": "0.2.0",
+  "name": "propria-docstore",
+  "displayName": "Propria Docstore",
+  "description": "Universal Propria documentation retrieval, notes, decisions, revisions, CDC verification, project registry, graph resources, and memory access. Isolated from codebase CCC indexes.",
+  "version": "0.6.2",
   "author": {
-    "name": "Matthew Salem",
-    "email": "matt.salem85@gmail.com"
+    "name": "Matthew Salem"
   },
   "license": "MIT",
   "keywords": [
+    "cocoindex",
     "surrealdb",
-    "docs",
+    "duckdb",
+    "documentation",
     "memory",
-    "adr",
-    "decision-log",
-    "todo",
-    "handoff",
-    "hybrid-search",
+    "graph",
     "mcp"
   ],
-  "defaultEnabled": true
+  "defaultEnabled": true,
+  "skills": ["./control/skills/", "./claude/skills/"],
+  "commands": "./claude/commands/",
+  "agents": [
+    "./claude/agents/docstore-librarian.md",
+    "./claude/agents/docstore-reconciler.md",
+    "./claude/agents/memory-curator.md"
+  ]
 }
