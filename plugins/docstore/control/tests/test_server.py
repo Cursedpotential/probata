@@ -45,11 +45,14 @@ async def test_discovery_and_capabilities_have_no_network_or_state_writes(config
         tools = {tool.name: tool for tool in await client.list_tools()}
         assert {"docstore_capabilities", "docstore_health", "docstore_stats", "docstore_search",
                 "coco_docstore_search",
-                "docstore_get", "docstore_graph", "docstore_index_plan"} <= tools.keys()
+                "docstore_get", "docstore_graph", "docstore_index_plan", "docstore_graph_schema",
+                "docstore_graph_query_preview", "docstore_graph_query", "docstore_run_current",
+                "docstore_run_get", "docstore_run_list", "docstore_attribution_verify"} <= tools.keys()
         assert 'docstore_selected_update_plan' in tools
         assert 'docstore_cdc_runs' in tools
         writes = {"docstore_set_flags", "docstore_capture_revision", "docstore_approve_revision",
-                  "docstore_index_execute", "docstore_cancel_run"}
+                  "docstore_index_execute", "docstore_cancel_run", "docstore_index_full",
+                  "docstore_index_selected", "docstore_run_cancel"}
         writes.add("docstore_handoff_write")
         assert writes <= tools.keys()
         assert all(not tools[name].annotations.readOnlyHint for name in writes)
@@ -61,12 +64,14 @@ async def test_discovery_and_capabilities_have_no_network_or_state_writes(config
         assert "docstore://document/{record_id}" in {r.uriTemplate for r in templates}
         prompts = await client.list_prompts()
         assert "reconcile_documentation" in {p.name for p in prompts}
+        assert "plan_docstore_graph_query" in {p.name for p in prompts}
         capabilities = (await client.call_tool("docstore_capabilities", {})).data
         assert capabilities["ambient_COCOINDEX_DB_consumed"] is False
         assert capabilities["pipeline_identity_verification_available"] is True
         assert capabilities["index_execution_available"] is True
         assert capabilities["write_registration_available"] is True
         assert capabilities["worker_run_status_available"] is True
+        assert capabilities["worker_run_history_available"] is True
         assert capabilities["cdc_attribution_available"] is True
         resource = await client.read_resource("docstore://capabilities")
         assert json.loads(resource[0].text)["instance"] == config.instance
@@ -320,11 +325,45 @@ async def test_governed_run_tools_use_live_job_api(config):
         await client.call_tool("docstore_run_status", {"run_id": "a" * 32})
         await client.call_tool("docstore_cancel_run", {"run_id": "a" * 32})
         await client.call_tool("docstore_pipeline_identity", {})
+        await client.call_tool("docstore_index_full", {})
+        await client.call_tool("docstore_index_selected", {"paths": ["note.md"]})
+        await client.call_tool("docstore_run_current", {})
+        await client.call_tool("docstore_run_get", {"run_id": "b" * 32})
+        await client.call_tool("docstore_run_list", {"limit": 7})
+        await client.call_tool("docstore_run_cancel", {"run_id": "b" * 32})
+        await client.call_tool("docstore_attribution_verify", {})
     assert requests[0].method == "POST" and requests[0].url.path == "/runs"
-    assert json.loads(requests[0].content) == {"scope": "selected", "paths": ["docs/note.md"]}
+    assert json.loads(requests[0].content) == {"scope": "selected", "paths": ["docs/note.md"],
+                                               "full_reprocess": False}
     assert requests[1].method == "GET" and requests[1].url.path == "/runs/" + "a" * 32
     assert requests[2].method == "DELETE" and requests[2].url.path == "/runs/" + "a" * 32
     assert requests[3].url.path == "/pipeline"
+    assert requests[4].method == "POST" and json.loads(requests[4].content) == {
+        "scope": "full", "paths": [], "full_reprocess": False}
+    assert requests[5].method == "POST" and json.loads(requests[5].content) == {
+        "scope": "selected", "paths": ["docs/note.md"], "full_reprocess": False}
+    assert requests[6].url.path == "/runs/current"
+    assert requests[7].url.path == "/runs/" + "b" * 32
+    assert requests[8].url.path == "/runs" and requests[8].url.params["limit"] == "7"
+    assert requests[9].method == "DELETE" and requests[9].url.path == "/runs/" + "b" * 32
+    assert requests[10].url.path == "/attribution"
+
+
+async def test_bounded_graph_management_tools_are_first_class(config):
+    server, requests = harness(config)
+    arguments = {"subject": "document:abc", "relation_types": ["cites"], "direction": "out",
+                 "limit": 9, "source_prefix": "docs/adr/", "observed_from": "2026-01-01",
+                 "observed_to": "2026-12-31", "export_format": "csv"}
+    async with Client(server) as client:
+        await client.call_tool("docstore_graph_schema", {})
+        await client.call_tool("docstore_graph_query_preview", arguments)
+        await client.call_tool("docstore_graph_query", arguments)
+        contract = json.loads((await client.read_resource("docstore://graph-query-contract"))[0].text)
+        assert contract["mutation_allowed"] is False
+    assert requests[0].url.path == "/graph-schema"
+    assert requests[1].url.path == "/graph-query" and requests[1].url.params["preview"] == "true"
+    assert requests[2].url.path == "/graph-query" and requests[2].url.params["preview"] == "false"
+    assert requests[2].url.params["relations"] == "cites"
 
 
 @pytest.mark.parametrize("paths", [["../outside.md"], ["missing.md"], ["wrong.txt"], [], ["a.md"] * 21])

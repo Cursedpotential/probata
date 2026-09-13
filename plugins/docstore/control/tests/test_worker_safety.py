@@ -191,7 +191,7 @@ async def test_final_flow_stats_must_show_finished_without_errors(errors,progres
     async def result(): return None
     stats=None if missing else SimpleNamespace(total=SimpleNamespace(num_errors=errors,num_in_progress=progress))
     handle=SimpleNamespace(result=result,stats=lambda:stats)
-    fn=flow_function('_run_checked',{'coco':SimpleNamespace(runtime=runtime),'app':SimpleNamespace(update=lambda:handle)})
+    fn=flow_function('_run_checked',{'os':os, 'coco':SimpleNamespace(runtime=runtime),'app':SimpleNamespace(update=lambda **_kwargs:handle)})
     if missing or errors or progress:
         with pytest.raises(RuntimeError): await fn()
     else:

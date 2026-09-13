@@ -19,6 +19,9 @@ The read-only Docstore API was extended with a governed run interface:
   execution, rejects source changes during execution, and compares the complete
   managed projection with SurrealDB after indexing. Only an exact match can set
   `cdc_verified=true`.
+- an explicit `full_reprocess=true` repair request invokes CocoIndex's supported
+  full-reprocess mode when target drift exists despite unchanged tracking state. It
+  is opt-in because it recomputes every document and may incur provider cost.
 - run receipts and current status validate the CDC proof fields before accepting a
   true verification value.
 

@@ -57,12 +57,12 @@ async def test_catalog_via_cli_is_real_protocol(monkeypatch):
     # No credentials or API calls required to discover operations.
     config = cli.configuration()
     result = await cli.run(SimpleNamespace(command="catalog"), config)
-    assert len(result["tools"]) == 26
+    assert len(result["tools"]) == 36
     assert "coco_docstore_search" in {tool["name"] for tool in result["tools"]}
-    assert len(result["resources"]) == 7
+    assert len(result["resources"]) == 8
     assert {"docstore://api/openapi", "docstore://api/surreal"} <= {r["uri"] for r in result["resources"]}
     assert len(result["resource_templates"]) == 4
-    assert len(result["prompts"]) == 1
+    assert len(result["prompts"]) == 2
 
 
 async def test_project_registry_cli_uses_mcp_tools():

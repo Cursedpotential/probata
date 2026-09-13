@@ -130,6 +130,7 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 "index_verification_available": True,
                 "selected_update_plan_available": True,
                 "worker_run_status_available": True,
+                "worker_run_history_available": True,
                 "cdc_attribution_available": True,
                 "cdc_attribution_contract": "exact source path and normalized content-hash reconciliation",
                 "scope": "all Propria project documentation",
@@ -257,6 +258,54 @@ def build_server(config: Config, transport=None) -> FastMCP:
             raise ToolError("Exact document record ID required")
         return await get("/graph/" + quote(record_id, safe=""), {"limit": 25, "format": "json"})
 
+    @mcp.tool(annotations={**READ, "title": "Inspect Docstore graph schema"})
+    async def docstore_graph_schema() -> dict:
+        """Read fixed graph node/relation types, bounds, export formats, and live counts."""
+        return await get("/graph-schema")
+
+    async def graph_query_call(subject: str, relation_types: list[str], direction: str, limit: int,
+                               source_prefix: str, observed_from: str, observed_to: str,
+                               export_format: str, preview: bool) -> dict:
+        if not subject.strip():
+            raise ToolError("Graph subject must contain text")
+        if len(set(relation_types)) != len(relation_types):
+            raise ToolError("Graph relation types must be unique")
+        return await get("/graph-query", {
+            "ref": subject, "relations": ",".join(relation_types), "direction": direction,
+            "limit": limit, "source_prefix": source_prefix, "observed_from": observed_from,
+            "observed_to": observed_to, "depth": 1, "format": export_format,
+            "preview": str(preview).lower()})
+
+    @mcp.tool(annotations={**READ, "title": "Preview bounded Docstore graph query"})
+    async def docstore_graph_query_preview(
+        subject: Annotated[str, Field(min_length=1, max_length=256)],
+        relation_types: list[Literal["links_to", "cites", "supersedes"]] = ["links_to", "cites", "supersedes"],
+        direction: Literal["in", "out", "both"] = "both",
+        limit: Annotated[int, Field(ge=1, le=200)] = 25,
+        source_prefix: Annotated[str, Field(max_length=256)] = "",
+        observed_from: Annotated[str, Field(max_length=48)] = "",
+        observed_to: Annotated[str, Field(max_length=48)] = "",
+        export_format: Literal["json", "csv", "graphml", "mermaid"] = "json",
+    ) -> dict:
+        """Validate and preview a depth-one graph query, including its maximum result count."""
+        return await graph_query_call(subject, relation_types, direction, limit, source_prefix,
+                                      observed_from, observed_to, export_format, True)
+
+    @mcp.tool(annotations={**READ, "title": "Query and export bounded Docstore graph"})
+    async def docstore_graph_query(
+        subject: Annotated[str, Field(min_length=1, max_length=256)],
+        relation_types: list[Literal["links_to", "cites", "supersedes"]] = ["links_to", "cites", "supersedes"],
+        direction: Literal["in", "out", "both"] = "both",
+        limit: Annotated[int, Field(ge=1, le=200)] = 25,
+        source_prefix: Annotated[str, Field(max_length=256)] = "",
+        observed_from: Annotated[str, Field(max_length=48)] = "",
+        observed_to: Annotated[str, Field(max_length=48)] = "",
+        export_format: Literal["json", "csv", "graphml", "mermaid"] = "json",
+    ) -> dict:
+        """Run a depth-one, allowlisted, parameter-bound graph query and return JSON or an inline export."""
+        return await graph_query_call(subject, relation_types, direction, limit, source_prefix,
+                                      observed_from, observed_to, export_format, False)
+
     @mcp.tool(annotations={**READ, "title": "Plan documentation indexing", "openWorldHint": False})
     def docstore_index_plan(paths: Annotated[list[str], Field(min_length=1, max_length=20)]) -> dict:
         """Hash explicitly selected local Markdown docs without embeddings, indexing or store writes."""
@@ -302,6 +351,7 @@ def build_server(config: Config, transport=None) -> FastMCP:
     @mcp.tool(annotations={**WRITE_RUN, "title": "Start governed Docstore indexing"})
     async def docstore_index_execute(
         paths: Annotated[list[str] | None, Field(min_length=1, max_length=20)] = None,
+        full_reprocess: bool = False,
     ) -> dict:
         """Start full-source CocoIndex reconciliation; selected docs are exact verification targets."""
         selected = paths or []
@@ -316,7 +366,22 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 raise ToolError("Selected indexing path is unavailable")
             api_paths.append("docs/" + relative.as_posix())
         return await request("POST", "/runs", payload={
-            "scope": "selected" if api_paths else "full", "paths": api_paths})
+            "scope": "selected" if api_paths else "full", "paths": api_paths,
+            "full_reprocess": full_reprocess})
+
+    @mcp.tool(annotations={**WRITE_RUN, "title": "Start full-source Docstore indexing"})
+    async def docstore_index_full(full_reprocess: bool = False) -> dict:
+        """Start one governed full-source CocoIndex reconciliation."""
+        return await request("POST", "/runs", payload={
+            "scope": "full", "paths": [], "full_reprocess": full_reprocess})
+
+    @mcp.tool(annotations={**WRITE_RUN, "title": "Start admitted selected-source Docstore indexing"})
+    async def docstore_index_selected(
+        paths: Annotated[list[str], Field(min_length=1, max_length=20)],
+        full_reprocess: bool = False,
+    ) -> dict:
+        """Admit selected Markdown paths as verification targets while reconciling the complete source."""
+        return await docstore_index_execute(paths=paths, full_reprocess=full_reprocess)
 
     @mcp.tool(annotations={**READ, "title": "Read live Docstore worker run"})
     async def docstore_run_status(
@@ -325,12 +390,41 @@ def build_server(config: Config, transport=None) -> FastMCP:
         """Read the current run or one exact run ID from the deployed worker API."""
         return await get("/runs/" + (run_id or "current"))
 
+    @mcp.tool(annotations={**READ, "title": "Read current Docstore run"})
+    async def docstore_run_current() -> dict:
+        """Read the durable current worker run status."""
+        return await get("/runs/current")
+
+    @mcp.tool(annotations={**READ, "title": "Get exact Docstore run"})
+    async def docstore_run_get(
+        run_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")],
+    ) -> dict:
+        """Read one durable run by exact ID."""
+        return await get("/runs/" + run_id)
+
+    @mcp.tool(annotations={**READ, "title": "List Docstore run history"})
+    async def docstore_run_list(limit: Annotated[int, Field(ge=1, le=100)] = 20) -> dict:
+        """List the newest durable Docstore runs, with one terminal/current record per run."""
+        return await get("/runs", {"limit": limit})
+
     @mcp.tool(annotations={**WRITE_RUN, "title": "Cancel active Docstore indexing"})
     async def docstore_cancel_run(
         run_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")],
     ) -> dict:
         """Request cancellation of the exact run launched by this API process."""
         return await request("DELETE", "/runs/" + run_id)
+
+    @mcp.tool(annotations={**WRITE_RUN, "title": "Cancel exact Docstore run"})
+    async def docstore_run_cancel(
+        run_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")],
+    ) -> dict:
+        """Request cancellation of the exact active run launched by this worker API."""
+        return await docstore_cancel_run(run_id=run_id)
+
+    @mcp.tool(annotations={**READ, "title": "Verify source-to-store attribution"})
+    async def docstore_attribution_verify() -> dict:
+        """Run a fresh read-only exact path and normalized-content-hash comparison."""
+        return await get("/attribution")
 
     @mcp.resource("docstore://capabilities")
     def capability_resource() -> dict:
@@ -366,6 +460,16 @@ def build_server(config: Config, transport=None) -> FastMCP:
         """Bounded document relationship graph, up to 25 per edge type/direction."""
         return await docstore_graph(record_id)
 
+    @mcp.resource("docstore://graph-query-contract", mime_type="application/json")
+    def graph_query_contract_resource() -> dict:
+        """Typed input contract for saved or interactive Docstore graph query specifications."""
+        return {"required": ["subject"], "optional": ["relation_types", "direction", "time_range",
+                "source_or_project_scope", "depth", "limit", "export_format"],
+                "relation_types": ["links_to", "cites", "supersedes"], "depth": {"fixed": 1},
+                "limit": {"minimum": 1, "maximum_per_relation_direction": 200},
+                "export_formats": ["json", "csv", "graphml", "mermaid"],
+                "mutation_allowed": False, "arbitrary_surrealql_allowed": False}
+
     @mcp.resource("docstore://health")
     async def health_resource() -> dict:
         """Actual documentation API health, no automatic startup."""
@@ -382,6 +486,18 @@ def build_server(config: Config, transport=None) -> FastMCP:
         return (f"Reconcile {subject!r} for domain {domain!r}. Retrieve scoped documents, "
                 "cite IDs/status and compare implementation receipts. Report contradictions. "
                 "Do not start indexing, delete records, or claim local mirrors are registered.")
+
+    @mcp.prompt
+    def plan_docstore_graph_query(subject: str, relation_types: str = "links_to,cites,supersedes",
+                                  time_range: str = "", source_or_project_scope: str = "",
+                                  depth: int = 1, limit: int = 25, export_format: str = "json") -> str:
+        """Build a reviewable bounded graph-query specification before execution."""
+        return (f"Prepare a Docstore graph query for subject {subject!r}. Relation types: {relation_types!r}; "
+                f"time range: {time_range!r}; source/project scope: {source_or_project_scope!r}; "
+                f"depth: {depth}; per-relation/direction limit: {limit}; export: {export_format!r}. "
+                "Call docstore_graph_query_preview first. Depth must be 1, limit at most 200, and relations "
+                "must be links_to, cites, or supersedes. Then call docstore_graph_query only after reviewing "
+                "the preview. Arbitrary SurrealQL and mutations are unavailable.")
 
     from governance import register as register_governance
     from verification import register as register_verification

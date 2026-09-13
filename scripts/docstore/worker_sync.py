@@ -93,6 +93,7 @@ def _sync() -> int:
         raise ValueError('DOCSTORE_RUN_ID must be 32 lowercase hexadecimal characters')
     run_id = requested_run_id or uuid.uuid4().hex
     requested_paths = tuple(filter(None, os.environ.get('DOCSTORE_REQUESTED_PATHS', '').split('\n')))
+    full_reprocess = os.environ.get('DOCSTORE_FULL_REPROCESS', '').strip() == '1'
     source_snapshot, source_digest = snapshot_sources()
     source_paths = {row.source_path for row in source_snapshot}
     if requested_paths and (len(requested_paths) > 20 or len(set(requested_paths)) != len(requested_paths)
@@ -102,6 +103,7 @@ def _sync() -> int:
                      'environment':'probata-docstore', 'source_scope':'full',
                      'requested_scope':'selected' if requested_paths else 'full',
                      'requested_paths':list(requested_paths),
+                     'full_reprocess':full_reprocess,
                      'source_count':len(source_snapshot), 'source_digest_before':source_digest,
                      'cdc_verified':False}
     sequence = 0
