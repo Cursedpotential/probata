@@ -68,6 +68,17 @@ func testInput() WorkflowInput {
 	}
 }
 
+func nonMessagingTestInput() WorkflowInput {
+	in := testInput()
+	in.PackageRef = "package-ref"
+	in.AttemptRef = "attempt-ref"
+	in.ContextKind = "non_messaging"
+	in.ContextChunkSignature = "research_report"
+	in.ContextChunkPolicyID = "context.default"
+	in.ContextChunkPolicyVersion = "1.0.0"
+	return in
+}
+
 // stageStub is the golden-path StageResult for id: success, with
 // deterministic, id-derived Ref and ReceiptRef so assertions can trace which
 // stage produced which registry.
@@ -127,8 +138,16 @@ func registerAllStages(env *testsuite.TestWorkflowEnvironment) {
 	for _, d := range stagegraph.Stages {
 		env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: string(d.ID)})
 	}
+	for _, d := range stagegraph.OptionalStages {
+		env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: string(d.ID)})
+	}
 	env.RegisterActivityWithOptions(placeholderHandlerRecommendation, activity.RegisterOptions{Name: RecommendHandlerActivityName})
 	env.RegisterActivityWithOptions(placeholderHandlerValidation, activity.RegisterOptions{Name: ValidateHandlerSelectionActivityName})
+}
+
+func mockContextChunkSucceeds(env *testsuite.TestWorkflowEnvironment) {
+	env.OnActivity(string(stagegraph.ChunkDocument), mock.Anything, mock.Anything).
+		Return(stageStub(stagegraph.ChunkDocument), nil).Once()
 }
 
 func mockHandlerActivities(env *testsuite.TestWorkflowEnvironment, format string, path HandlerExecutionPath) HandlerRecommendationResult {
@@ -1430,5 +1449,184 @@ func TestPreviewQueryCarriesSixCompletedContextCheckpoints(t *testing.T) {
 		if checkpoint.Checkpoint != wantName || checkpoint.Status != CheckpointCompleted || checkpoint.ReceiptRef == "" || checkpoint.Reason != "" {
 			t.Errorf("checkpoint[%d] = %#v, want %q completed with a receipt and no failure reason", index, checkpoint, wantName)
 		}
+	}
+}
+
+func TestNonMessagingContextChunksAfterVerificationBeforePreview(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	mockContextChunkSucceeds(env)
+	order := newOrderRecorder(env)
+
+	var mu sync.Mutex
+	var chunkRequest StageRequest
+	var publication PreviewPublicationRequest
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, args converter.EncodedValues) {
+		order.mu.Lock()
+		order.order = append(order.order, info.ActivityType.Name)
+		order.mu.Unlock()
+		switch info.ActivityType.Name {
+		case string(stagegraph.ChunkDocument):
+			var request StageRequest
+			if err := args.Get(&request); err != nil {
+				t.Errorf("decode chunk request: %v", err)
+				return
+			}
+			mu.Lock()
+			chunkRequest = request
+			mu.Unlock()
+		case string(stagegraph.PublishPreview):
+			var request PreviewPublicationRequest
+			if err := args.Get(&request); err != nil {
+				t.Errorf("decode preview publication request: %v", err)
+				return
+			}
+			mu.Lock()
+			publication = request
+			mu.Unlock()
+		}
+	})
+	approveHold(env)
+	env.ExecuteWorkflow(ProfferWorkflow, nonMessagingTestInput())
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("non-messaging workflow failed: %v", err)
+	}
+
+	verifyIndex := order.indexOf(string(stagegraph.VerifyNormalizedGeneration))
+	chunkIndex := order.indexOf(string(stagegraph.ChunkDocument))
+	previewIndex := order.indexOf(string(stagegraph.PublishPreview))
+	if verifyIndex < 0 || chunkIndex <= verifyIndex || previewIndex <= chunkIndex {
+		t.Fatalf("activity order = %v; want normalized verification < chunk generation < preview", order.snapshot())
+	}
+
+	mu.Lock()
+	gotChunk := chunkRequest
+	gotPublication := publication
+	mu.Unlock()
+	wantRepresentation := stageStub(stagegraph.ResolveSourceRepair).Ref
+	wantNormalized := stageStub(stagegraph.PersistNormalizedGeneration).Ref
+	wantVerification := stageStub(stagegraph.VerifyNormalizedGeneration).Ref
+	for key, want := range map[string]Ref{
+		"package": "package-ref", "extraction_attempt": "attempt-ref",
+		"source_representation": wantRepresentation, "normalized_generation": wantNormalized,
+		"normalized_verification": wantVerification, "chunk_signature": "research_report",
+		"chunk_derivation_mode": "verbatim_span", "chunk_policy_id": "context.default",
+		"chunk_policy_version": "1.0.0",
+	} {
+		if got := gotChunk.Refs[key]; got != want {
+			t.Errorf("chunk request ref %q = %q, want %q", key, got, want)
+		}
+	}
+	if gotPublication.PackageRef != "package-ref" || gotPublication.AttemptRef != "attempt-ref" ||
+		gotPublication.SourceRepresentationRef != wantRepresentation ||
+		gotPublication.ChunkGenerationRef != stageStub(stagegraph.ChunkDocument).Ref ||
+		gotPublication.ChunkReceiptRef != stageStub(stagegraph.ChunkDocument).ReceiptRef {
+		t.Fatalf("preview publication lacks exact package/attempt/source/chunk provenance: %+v", gotPublication)
+	}
+	state := queryOperation(t, env)
+	if state.PackageRef != "package-ref" || state.AttemptRef != "attempt-ref" ||
+		state.SourceRepresentationRef != wantRepresentation || state.ChunkGenerationRef == "" || state.ChunkReceiptRef == "" {
+		t.Fatalf("operation state lacks chunk provenance: %+v", state)
+	}
+}
+
+func TestMessagingPathDoesNotScheduleDocumentChunking(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	order := newOrderRecorder(env)
+	approveHold(env)
+	env.ExecuteWorkflow(ProfferWorkflow, testInput())
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("messaging workflow failed: %v", err)
+	}
+	if order.contains(string(stagegraph.ChunkDocument)) {
+		t.Fatalf("messaging path scheduled document chunking: %v", order.snapshot())
+	}
+}
+
+func TestLegacyHistoryDoesNotInsertContextChunkActivity(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	env.OnGetVersion(contextChunkGenerationChangeID, workflow.DefaultVersion, contextChunkGenerationVersion).
+		Return(workflow.DefaultVersion).Once()
+	order := newOrderRecorder(env)
+	approveHold(env)
+	env.ExecuteWorkflow(ProfferWorkflow, nonMessagingTestInput())
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("legacy-version workflow failed: %v", err)
+	}
+	if order.contains(string(stagegraph.ChunkDocument)) {
+		t.Fatalf("legacy history inserted a new chunk command: %v", order.snapshot())
+	}
+}
+
+func TestChangedParserOptionsAtIntegratedPreviewRequiresNewAttempt(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	mockContextChunkSucceeds(env)
+	order := newOrderRecorder(env)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
+		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{
+			Approved: true, Decider: "operator", RepairedParserOptionsRef: "parser-options-v2",
+		})
+	}, time.Millisecond)
+
+	env.ExecuteWorkflow(ProfferWorkflow, nonMessagingTestInput())
+	err := env.GetWorkflowError()
+	if err == nil || !strings.Contains(err.Error(), ErrPreviewRerunRequired.Error()) {
+		t.Fatalf("changed options error = %v, want explicit rerun-required failure", err)
+	}
+	if order.contains(string(stagegraph.SealGeneration)) || order.contains(string(stagegraph.PublishGeneration)) {
+		t.Fatalf("changed options silently reached seal/publish: %v", order.snapshot())
+	}
+	encoded, queryErr := env.QueryWorkflow(PreviewQueryName)
+	if queryErr != nil {
+		t.Fatalf("query preview after rerun-required decision: %v", queryErr)
+	}
+	var preview PreviewState
+	if err := encoded.Get(&preview); err != nil {
+		t.Fatalf("decode preview state: %v", err)
+	}
+	if preview.Phase != PhaseRerunRequired || preview.Reason != ErrPreviewRerunRequired.Error() {
+		t.Fatalf("preview state = %+v, want rerun-required", preview)
+	}
+	state := queryOperation(t, env)
+	if state.Lifecycle != OperationRerunRequired || !state.Terminal {
+		t.Fatalf("operation state = %+v, want terminal rerun-required", state)
+	}
+}
+
+func TestCancelAtChunkPreviewHoldPreventsSealAndPublish(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+	mockContextChunkSucceeds(env)
+	order := newOrderRecorder(env)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
+	}, time.Millisecond)
+	env.RegisterDelayedCallback(func() { env.CancelWorkflow() }, time.Hour)
+
+	env.ExecuteWorkflow(ProfferWorkflow, nonMessagingTestInput())
+	if err := env.GetWorkflowError(); err == nil {
+		t.Fatal("cancelled workflow returned no error")
+	}
+	if !order.contains(string(stagegraph.ChunkDocument)) || !order.contains(string(stagegraph.PublishPreview)) {
+		t.Fatalf("workflow did not reach chunk-backed preview hold before cancel: %v", order.snapshot())
+	}
+	if order.contains(string(stagegraph.SealGeneration)) || order.contains(string(stagegraph.PublishGeneration)) {
+		t.Fatalf("cancelled workflow reached seal/publish: %v", order.snapshot())
 	}
 }

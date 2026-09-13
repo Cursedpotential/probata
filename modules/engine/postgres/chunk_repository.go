@@ -13,8 +13,8 @@
 // and context.normalized_record_range_locator rows — it does not know about
 // working.content_chunk_source_span at all. Every locator this repository
 // creates therefore also gets one context.source_object_range_locator row
-// (source_object_id = the retained original object), which is the correct
-// typed-subject basis for a range measured against a whole source object
+// (source_object_id = the exact retained source representation), which is the
+// correct typed-subject basis for a range measured against a whole source object
 // rather than a specific raw or normalized record; content_chunk_source_span
 // is then a second, uncounted consumer of that same locator. This is not a
 // workaround — context.source_object_range_locator exists precisely to
@@ -88,13 +88,14 @@ func (r *ChunkRepository) now() time.Time {
 	return r.clock().UTC()
 }
 
-// ResolveOriginal reads and independently verifies the exact bytes named by
-// spec.OriginalRef: the retained original object must belong to
+// ResolveSourceRepresentation reads and independently verifies the exact
+// bytes named by spec.SourceRepresentationRef. The retained object must be
+// the source original or a registered member/derived representation of
 // spec.SourceVersionRef (a retained source version owned by spec.RequestID),
 // and the bytes actually read must match the retained object's own declared
 // byte_length and content_sha256 — the same "recompute rather than trust"
 // discipline every other repository in this package applies.
-func (r *ChunkRepository) ResolveOriginal(ctx context.Context, spec activities.ChunkDocumentSpec) ([]byte, error) {
+func (r *ChunkRepository) ResolveSourceRepresentation(ctx context.Context, spec activities.ChunkDocumentSpec) ([]byte, error) {
 	if err := validateChunkDocumentSpec(spec); err != nil {
 		return nil, err
 	}
@@ -102,7 +103,7 @@ func (r *ChunkRepository) ResolveOriginal(ctx context.Context, spec activities.C
 	if err != nil {
 		return nil, err
 	}
-	originalObjectID, err := parseUUIDRef(spec.OriginalRef, "chunk original")
+	representationObjectID, err := parseUUIDRef(spec.SourceRepresentationRef, "chunk source representation")
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +119,16 @@ func (r *ChunkRepository) ResolveOriginal(ctx context.Context, spec activities.C
 	if workflowID != spec.RequestID || status != "retained" {
 		return nil, errors.New("chunk document requires a retained source version owned by this request")
 	}
-	if boundOriginalObjectID != originalObjectID {
-		return nil, errors.New("chunk original reference does not match the source version's retained original object")
+	if boundOriginalObjectID != representationObjectID {
+		var role string
+		if err := r.db.QueryRow(ctx, `
+			SELECT object_role FROM context.source_version_object
+			WHERE source_version_id = $1::uuid AND object_id = $2::uuid`, sourceVersionID, representationObjectID).Scan(&role); err != nil {
+			return nil, fmt.Errorf("chunk source representation is not registered to the source version: %w", err)
+		}
+		if role == "original" {
+			return nil, errors.New("chunk source representation has inconsistent original-object membership")
+		}
 	}
 
 	var storageClass, objectURI string
@@ -127,9 +136,9 @@ func (r *ChunkRepository) ResolveOriginal(ctx context.Context, spec activities.C
 	var declaredLength int64
 	if err := r.db.QueryRow(ctx, `
 		SELECT storage_class, object_uri, inline_bytes, content_sha256, byte_length
-		FROM context.retained_object WHERE id = $1::uuid`, originalObjectID).Scan(
+		FROM context.retained_object WHERE id = $1::uuid`, representationObjectID).Scan(
 		&storageClass, &objectURI, &inline, &declaredHash, &declaredLength); err != nil {
-		return nil, fmt.Errorf("resolve chunk original object %q: %w", spec.OriginalRef, err)
+		return nil, fmt.Errorf("resolve chunk source representation %q: %w", spec.SourceRepresentationRef, err)
 	}
 
 	var source []byte
@@ -137,7 +146,7 @@ func (r *ChunkRepository) ResolveOriginal(ctx context.Context, spec activities.C
 		source = inline
 	} else {
 		if r.open == nil {
-			return nil, fmt.Errorf("non-inline chunk original object %q requires an ObjectOpener", objectURI)
+			return nil, fmt.Errorf("non-inline chunk source representation %q requires an ObjectOpener", objectURI)
 		}
 		reader, err := r.open(ctx, objectURI)
 		if err != nil {
@@ -151,11 +160,11 @@ func (r *ChunkRepository) ResolveOriginal(ctx context.Context, spec activities.C
 	}
 
 	if int64(len(source)) != declaredLength {
-		return nil, fmt.Errorf("chunk original object byte length %d does not match retained object's declared length %d", len(source), declaredLength)
+		return nil, fmt.Errorf("chunk source representation byte length %d does not match retained object's declared length %d", len(source), declaredLength)
 	}
 	sum := sha256.Sum256(source)
 	if !bytes.Equal(sum[:], declaredHash) {
-		return nil, errors.New("chunk original object content does not match its retained sha256")
+		return nil, errors.New("chunk source representation content does not match its retained sha256")
 	}
 	return source, nil
 }
@@ -177,7 +186,15 @@ func (r *ChunkRepository) PersistChunkGeneration(ctx context.Context, spec activ
 	if err != nil {
 		return activities.ChunkGenerationOutcome{}, err
 	}
-	originalObjectID, err := parseUUIDRef(spec.OriginalRef, "chunk original")
+	representationObjectID, err := parseUUIDRef(spec.SourceRepresentationRef, "chunk source representation")
+	if err != nil {
+		return activities.ChunkGenerationOutcome{}, err
+	}
+	normalizedGenerationID, err := parseUUIDRef(spec.NormalizedGenerationRef, "chunk normalized generation")
+	if err != nil {
+		return activities.ChunkGenerationOutcome{}, err
+	}
+	normalizedVerificationReceiptID, err := parseUUIDRef(spec.NormalizedVerificationRef, "chunk normalized verification receipt")
 	if err != nil {
 		return activities.ChunkGenerationOutcome{}, err
 	}
@@ -207,11 +224,16 @@ func (r *ChunkRepository) PersistChunkGeneration(ctx context.Context, spec activ
 		WHERE activity_execution_id = $1::uuid AND status = 'success'
 		ORDER BY attempt DESC LIMIT 1`, executionID).Scan(&priorReceiptID, &priorResult)
 	if err == nil {
-		generationIDStr, decodeErr := decodeChunkGenerationResult(priorResult)
+		prior, decodeErr := decodeChunkGenerationResult(priorResult)
 		if decodeErr != nil {
 			return activities.ChunkGenerationOutcome{}, decodeErr
 		}
-		generationID, parseErr := uuid.Parse(generationIDStr)
+		if prior.PackageRef != string(spec.PackageRef) || prior.AttemptRef != string(spec.ExtractionAttemptRef) ||
+			prior.SourceRepresentationRef != string(spec.SourceRepresentationRef) || prior.NormalizedGenerationRef != string(spec.NormalizedGenerationRef) ||
+			prior.NormalizedVerificationRef != string(spec.NormalizedVerificationRef) {
+			return activities.ChunkGenerationOutcome{}, errors.New("prior chunk generation receipt does not match the requested package, attempt, or source representation")
+		}
+		generationID, parseErr := uuid.Parse(prior.RefID)
 		if parseErr != nil {
 			return activities.ChunkGenerationOutcome{}, fmt.Errorf("prior chunk generation result has an invalid id: %w", parseErr)
 		}
@@ -232,8 +254,37 @@ func (r *ChunkRepository) PersistChunkGeneration(ctx context.Context, spec activ
 	if workflowID != spec.RequestID || status != "retained" {
 		return activities.ChunkGenerationOutcome{}, errors.New("chunk document requires a retained source version owned by this request")
 	}
-	if boundOriginalObjectID != originalObjectID {
-		return activities.ChunkGenerationOutcome{}, errors.New("chunk original reference does not match the source version's retained original object")
+	sourceView := "original"
+	if boundOriginalObjectID != representationObjectID {
+		if err := tx.QueryRow(ctx, `
+			SELECT object_role FROM context.source_version_object
+			WHERE source_version_id = $1::uuid AND object_id = $2::uuid`, sourceVersionID, representationObjectID).Scan(&sourceView); err != nil {
+			return activities.ChunkGenerationOutcome{}, fmt.Errorf("chunk source representation is not registered to the source version: %w", err)
+		}
+		if sourceView == "original" {
+			return activities.ChunkGenerationOutcome{}, errors.New("chunk source representation has inconsistent original-object membership")
+		}
+	}
+	var normalizedStatus string
+	if err := tx.QueryRow(ctx, `
+		SELECT status FROM context.normalized_generation
+		WHERE id = $1::uuid AND source_version_id = $2::uuid`, normalizedGenerationID, sourceVersionID).Scan(&normalizedStatus); err != nil {
+		return activities.ChunkGenerationOutcome{}, fmt.Errorf("read chunk normalized generation: %w", err)
+	}
+	if normalizedStatus != "open" && normalizedStatus != "sealed" && normalizedStatus != "published" {
+		return activities.ChunkGenerationOutcome{}, fmt.Errorf("chunk normalized generation has invalid status %q", normalizedStatus)
+	}
+	var verificationActivity, verificationStatus string
+	if err := tx.QueryRow(ctx, `
+		SELECT execution.activity_name, receipt.status
+		FROM context.activity_receipt receipt
+		JOIN context.activity_execution execution ON execution.id = receipt.activity_execution_id
+		WHERE receipt.id = $1::uuid AND execution.source_version_id = $2::uuid`,
+		normalizedVerificationReceiptID, sourceVersionID).Scan(&verificationActivity, &verificationStatus); err != nil {
+		return activities.ChunkGenerationOutcome{}, fmt.Errorf("read normalized verification receipt for chunk generation: %w", err)
+	}
+	if verificationActivity != string(stagegraph.VerifyNormalizedGeneration) || verificationStatus != "success" {
+		return activities.ChunkGenerationOutcome{}, errors.New("chunk generation requires a successful normalized-generation verification receipt for the same source")
 	}
 
 	sourceSHA256, err := decodeHexDigest(result.SourceHash, "chunk source")
@@ -254,7 +305,7 @@ func (r *ChunkRepository) PersistChunkGeneration(ctx context.Context, spec activ
 	receiptID := uuid.New()
 	now := r.now()
 
-	resultRef := chunkGenerationResultJSON(generationID.String())
+	resultRef := chunkGenerationResultJSON(generationID.String(), spec)
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO context.activity_receipt
 		    (id, activity_execution_id, attempt, status, started_at, completed_at, result_ref)
@@ -277,15 +328,15 @@ func (r *ChunkRepository) PersistChunkGeneration(ctx context.Context, spec activ
 		     schema_version, implementation_digest, source_view, source_canonicalization, source_sha256,
 		     source_byte_length, source_codepoint_length, chunk_count, member_count, manifest_sha256,
 		     activity_execution_id, activity_receipt_id, created_at, sealed_at, sealed_by)
-		SELECT $1::uuid, $2::uuid, NULL, COALESCE(MAX(generation_ordinal), 0) + 1, 'sealed', 'complete',
-		       true, $3, $4, $5, $6, $7::bytea,
-		       $8, $9::bytea, 'original', 'utf8_bytes_verbatim', $10::bytea,
-		       $11, $12, $13, $13, $14::bytea,
-		       $15::uuid, $16::uuid, $17, $17, $18
+		SELECT $1::uuid, $2::uuid, $3::uuid, COALESCE(MAX(generation_ordinal), 0) + 1, 'sealed', 'complete',
+		       true, $4, $5, $6, $7, $8::bytea,
+		       $9, $10::bytea, $11, 'utf8_bytes_verbatim', $12::bytea,
+		       $13, $14, $15, $15, $16::bytea,
+		       $17::uuid, $18::uuid, $19, $19, $20
 		FROM working.content_chunk_generation WHERE source_version_id = $2::uuid
 		RETURNING id`,
-		generationID, sourceVersionID, spec.PolicyID, spec.PolicyVersion, chunk.ChunkerID, chunk.ChunkerVersion, configDigest,
-		chunk.SchemaVersion, implementationDigest, sourceSHA256,
+		generationID, sourceVersionID, normalizedGenerationID, spec.PolicyID, spec.PolicyVersion, chunk.ChunkerID, chunk.ChunkerVersion, configDigest,
+		chunk.SchemaVersion, implementationDigest, sourceView, sourceSHA256,
 		int64(result.SourceByteCount), int64(result.SourceCharCount), chunkCount, manifestDigest,
 		executionID, receiptID, now, string(stagegraph.ChunkDocument),
 	).Scan(&insertedID); err != nil {
@@ -318,7 +369,7 @@ func (r *ChunkRepository) PersistChunkGeneration(ctx context.Context, spec activ
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO context.source_object_range_locator (source_range_locator_id, source_version_id, source_object_id)
 			VALUES ($1::uuid, $2::uuid, $3::uuid)`,
-			locatorID, sourceVersionID, originalObjectID); err != nil {
+			locatorID, sourceVersionID, representationObjectID); err != nil {
 			return activities.ChunkGenerationOutcome{}, fmt.Errorf("persist chunk %d source object range locator: %w", member.Index, err)
 		}
 		if _, err := tx.Exec(ctx, `
@@ -372,24 +423,37 @@ func loadChunkOutcome(ctx context.Context, tx pgx.Tx, generationID, receiptID uu
 }
 
 type chunkRefResult struct {
-	RefKind string `json:"ref_kind"`
-	RefID   string `json:"ref_id"`
+	RefKind                   string `json:"ref_kind"`
+	RefID                     string `json:"ref_id"`
+	PackageRef                string `json:"package_ref"`
+	AttemptRef                string `json:"attempt_ref"`
+	SourceRepresentationRef   string `json:"source_representation_ref"`
+	NormalizedGenerationRef   string `json:"normalized_generation_ref"`
+	NormalizedVerificationRef string `json:"normalized_verification_ref"`
 }
 
-func chunkGenerationResultJSON(id string) []byte {
-	encoded, _ := json.Marshal(chunkRefResult{RefKind: "chunk_generation", RefID: id})
+func chunkGenerationResultJSON(id string, spec activities.ChunkDocumentSpec) []byte {
+	encoded, _ := json.Marshal(chunkRefResult{
+		RefKind: "chunk_generation", RefID: id,
+		PackageRef: string(spec.PackageRef), AttemptRef: string(spec.ExtractionAttemptRef),
+		SourceRepresentationRef:   string(spec.SourceRepresentationRef),
+		NormalizedGenerationRef:   string(spec.NormalizedGenerationRef),
+		NormalizedVerificationRef: string(spec.NormalizedVerificationRef),
+	})
 	return encoded
 }
 
-func decodeChunkGenerationResult(raw []byte) (string, error) {
+func decodeChunkGenerationResult(raw []byte) (chunkRefResult, error) {
 	var ref chunkRefResult
 	if err := json.Unmarshal(raw, &ref); err != nil {
-		return "", fmt.Errorf("decode chunk generation result: %w", err)
+		return chunkRefResult{}, fmt.Errorf("decode chunk generation result: %w", err)
 	}
-	if ref.RefKind != "chunk_generation" || strings.TrimSpace(ref.RefID) == "" {
-		return "", errors.New("chunk generation result is incomplete or mutable")
+	if ref.RefKind != "chunk_generation" || strings.TrimSpace(ref.RefID) == "" || strings.TrimSpace(ref.PackageRef) == "" ||
+		strings.TrimSpace(ref.AttemptRef) == "" || strings.TrimSpace(ref.SourceRepresentationRef) == "" ||
+		strings.TrimSpace(ref.NormalizedGenerationRef) == "" || strings.TrimSpace(ref.NormalizedVerificationRef) == "" {
+		return chunkRefResult{}, errors.New("chunk generation result is incomplete or mutable")
 	}
-	return ref.RefID, nil
+	return ref, nil
 }
 
 func decodeHexDigest(value, label string) ([]byte, error) {
@@ -450,12 +514,24 @@ func chunkConfigDigest(spec activities.ChunkDocumentSpec) []byte {
 }
 
 func chunkDocumentKey(spec activities.ChunkDocumentSpec) string {
-	return fmt.Sprintf("chunk-document:%s:%s:%s:%s:%s:%s", spec.RequestID, spec.SourceVersionRef, spec.OriginalRef, spec.Signature, spec.PolicyID, spec.PolicyVersion)
+	h := sha256.New()
+	for _, part := range []string{
+		spec.RequestID, string(spec.PackageRef), string(spec.ExtractionAttemptRef), string(spec.SourceVersionRef),
+		string(spec.SourceRepresentationRef), string(spec.NormalizedGenerationRef), string(spec.NormalizedVerificationRef),
+		string(spec.Signature), spec.PolicyID, spec.PolicyVersion,
+	} {
+		var frame [8]byte
+		binary.BigEndian.PutUint64(frame[:], uint64(len(part)))
+		_, _ = h.Write(frame[:])
+		_, _ = io.WriteString(h, part)
+	}
+	return "chunk-document-v2:" + hex.EncodeToString(h.Sum(nil))
 }
 
 func validateChunkDocumentSpec(spec activities.ChunkDocumentSpec) error {
-	if strings.TrimSpace(spec.RequestID) == "" || spec.SourceVersionRef == "" || spec.OriginalRef == "" {
-		return errors.New("chunk document requires request, source version, and original references")
+	if strings.TrimSpace(spec.RequestID) == "" || spec.PackageRef == "" || spec.ExtractionAttemptRef == "" || spec.SourceVersionRef == "" ||
+		spec.SourceRepresentationRef == "" || spec.NormalizedGenerationRef == "" || spec.NormalizedVerificationRef == "" {
+		return errors.New("chunk document requires request, package, extraction-attempt, source, representation, normalized-generation, and verification references")
 	}
 	if spec.Attempt < 1 {
 		return errors.New("chunk document attempt must be positive")

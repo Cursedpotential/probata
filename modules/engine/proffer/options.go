@@ -163,6 +163,14 @@ var stageOptions = map[stagegraph.StageID]workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
 		RetryPolicy:         retryPolicy(2*time.Second, 5),
 	},
+	stagegraph.ChunkDocument: {
+		// The non-messaging chunker reads one retained representation and
+		// persists one sealed generation. Its writes are idempotent by package,
+		// extraction attempt, source representation, and policy. Content errors
+		// are generally deterministic, so retries remain deliberately low.
+		StartToCloseTimeout: 30 * time.Minute,
+		RetryPolicy:         retryPolicy(5*time.Second, 3),
+	},
 	stagegraph.PublishPreview: {
 		StartToCloseTimeout: 5 * time.Minute,
 		RetryPolicy:         retryPolicy(2*time.Second, 5),
@@ -184,8 +192,8 @@ var stageOptions = map[stagegraph.StageID]workflow.ActivityOptions{
 }
 
 // optionsFor returns the explicit ActivityOptions for id. It panics on an
-// unknown stage id: every stage in stagegraph.Stages must have an entry in
-// stageOptions, and TestEveryStageHasExplicitOptions proves that statically
+// unknown stage id: every base or optional stage must have an entry in
+// stageOptions, and TestEveryStageHasExplicitBoundedOptions proves that statically
 // so this path is unreachable in a correctly built binary.
 func optionsFor(id stagegraph.StageID) workflow.ActivityOptions {
 	switch string(id) {

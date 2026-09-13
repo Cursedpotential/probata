@@ -11,20 +11,22 @@ import (
 )
 
 const (
-	fingerprintVocabularyChangeID = "proffer-context-fingerprint-vocabulary-v1"
-	fingerprintVocabularyVersion  = workflow.Version(1)
-	previewRepairChangeID         = "proffer-preview-explicit-repair-refs-v1"
-	previewRepairVersion          = workflow.Version(1)
-	integratedPreviewChangeID     = "proffer-integrated-repair-preview-v1"
-	integratedPreviewVersion      = workflow.Version(1)
-	durableReviewWaitChangeID     = "proffer-durable-extended-review-wait-v1"
-	durableReviewWaitVersion      = workflow.Version(1)
-	structuredELTRouteChangeID    = "proffer-duckdb-structured-elt-route-v1"
-	structuredELTRouteVersion     = workflow.Version(1)
-	previewCheckpointsChangeID    = "proffer-live-preview-checkpoints-v1"
-	previewCheckpointsVersion     = workflow.Version(1)
-	handlerSelectionChangeID      = "proffer-content-handler-selection-v1"
-	handlerSelectionVersion       = workflow.Version(1)
+	fingerprintVocabularyChangeID  = "proffer-context-fingerprint-vocabulary-v1"
+	fingerprintVocabularyVersion   = workflow.Version(1)
+	previewRepairChangeID          = "proffer-preview-explicit-repair-refs-v1"
+	previewRepairVersion           = workflow.Version(1)
+	integratedPreviewChangeID      = "proffer-integrated-repair-preview-v1"
+	integratedPreviewVersion       = workflow.Version(1)
+	durableReviewWaitChangeID      = "proffer-durable-extended-review-wait-v1"
+	durableReviewWaitVersion       = workflow.Version(1)
+	structuredELTRouteChangeID     = "proffer-duckdb-structured-elt-route-v1"
+	structuredELTRouteVersion      = workflow.Version(1)
+	previewCheckpointsChangeID     = "proffer-live-preview-checkpoints-v1"
+	previewCheckpointsVersion      = workflow.Version(1)
+	handlerSelectionChangeID       = "proffer-content-handler-selection-v1"
+	handlerSelectionVersion        = workflow.Version(1)
+	contextChunkGenerationChangeID = "proffer-non-messaging-context-chunk-generation-v1"
+	contextChunkGenerationVersion  = workflow.Version(1)
 	// SelectStructuredELTActivityName and ExecuteStructuredELTActivityName are
 	// the implementation-specific Temporal names for DuckDB execution of the
 	// logical SelectParser and ExecuteParser stages. The Activity package
@@ -68,6 +70,7 @@ func fingerprintVocabularyFor(ctx workflow.Context) fingerprintVocabulary {
 // canon name (ActivityName, identical to stagegraph.StageID) so a worker in
 // a later lane can register real Activities without this file changing.
 func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, error) {
+	contextChunkingInput := in.contextChunkingInput()
 	r := &run{
 		requestID:   in.RequestID,
 		matterID:    in.MatterID,
@@ -77,6 +80,10 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 			ActiveStages: []ActivityName{},
 			Stages:       []OperationStage{},
 		},
+	}
+	if contextChunkingInput != nil {
+		r.operation.PackageRef = contextChunkingInput.PackageRef
+		r.operation.AttemptRef = contextChunkingInput.AttemptRef
 	}
 	if err := workflow.SetQueryHandler(ctx, OperationQueryName, func() (OperationState, error) {
 		return r.operationSnapshot(), nil
@@ -88,6 +95,13 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 	durableReviewWait := workflow.GetVersion(ctx, durableReviewWaitChangeID, workflow.DefaultVersion, durableReviewWaitVersion)
 	previewCheckpoints := workflow.GetVersion(ctx, previewCheckpointsChangeID, workflow.DefaultVersion, previewCheckpointsVersion) != workflow.DefaultVersion
 	handlerSelection := workflow.GetVersion(ctx, handlerSelectionChangeID, workflow.DefaultVersion, handlerSelectionVersion)
+	contextChunkGeneration := workflow.GetVersion(ctx, contextChunkGenerationChangeID, workflow.DefaultVersion, contextChunkGenerationVersion)
+	if contextChunkGeneration != workflow.DefaultVersion && contextChunkingInput != nil {
+		if err := contextChunkingInput.validate(); err != nil {
+			r.operation.Reason = err.Error()
+			return r.result(""), fmt.Errorf("proffer: invalid context chunking input: %w", err)
+		}
+	}
 
 	// Stage 1: register_source_activity — the root. It creates the
 	// identity/idempotency coordinate every later stage keys off.
@@ -533,15 +547,52 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 	}
 	preview.setCheckpoint("completeness", CheckpointCompleted, r.receiptRef(stagegraph.VerifyNormalizedGeneration), "")
 
-	// The browser-facing preview can only be projected after normalized
-	// messages and their validation receipts exist. Publishing it before the
-	// human hold removes the former circular wait: the operator now reviews
-	// actual persisted messages, while workflow_id/run_id remain internal to
-	// the opaque binding created by the starter.
+	// D-158 non-messaging context route: chunk the exact retained source
+	// representation only after extraction, normalization, lineage, digest,
+	// and normalized-generation verification have all succeeded. The Activity
+	// persists a sealed versioned generation and exact reassembly receipt;
+	// only their references enter workflow history and the preview request.
+	// Messaging runs leave the context-chunk fields empty and preserve the established
+	// normalized-message preview path.
+	var chunkGenerationRef, chunkReceiptRef Ref
+	if contextChunkGeneration != workflow.DefaultVersion && contextChunkingInput != nil {
+		chunkGenerationRef, err = r.exec(ctx, stagegraph.ChunkDocument, in.DeclaredFormat, map[string]Ref{
+			"package":                 contextChunkingInput.PackageRef,
+			"extraction_attempt":      contextChunkingInput.AttemptRef,
+			"source_representation":   activeOriginalRef,
+			"normalized_generation":   normalizedGenerationRef,
+			"normalized_verification": normalizedVerificationRef,
+			"chunk_signature":         Ref(contextChunkingInput.Signature),
+			"chunk_derivation_mode":   "verbatim_span",
+			"chunk_policy_id":         Ref(contextChunkingInput.PolicyID),
+			"chunk_policy_version":    Ref(contextChunkingInput.PolicyVersion),
+		})
+		if err != nil {
+			return r.result(""), err
+		}
+		chunkReceiptRef = r.receiptRef(stagegraph.ChunkDocument)
+		preview.PackageRef = contextChunkingInput.PackageRef
+		preview.AttemptRef = contextChunkingInput.AttemptRef
+		preview.SourceRepresentationRef = activeOriginalRef
+		preview.ChunkGenerationRef = chunkGenerationRef
+		preview.ChunkReceiptRef = chunkReceiptRef
+		r.operation.SourceRepresentationRef = activeOriginalRef
+		r.operation.ChunkGenerationRef = chunkGenerationRef
+		r.operation.ChunkReceiptRef = chunkReceiptRef
+	}
+
+	// The browser-facing preview is projected only after normalized validation
+	// and, when selected, the sealed non-messaging chunk generation exist.
+	// Publishing it before the human hold removes the former circular wait:
+	// the operator reviews durable content references while workflow_id/run_id
+	// remain internal to the opaque binding created by the starter.
 	if integratedPreview != workflow.DefaultVersion {
 		previewHandle, err := r.execPreview(ctx, PreviewPublicationRequest{
 			RequestID: in.RequestID, SourceVersionRef: r.sourceVersionRef,
-			RawGenerationRef: rawGenerationRef, NormalizedGenerationRef: normalizedGenerationRef,
+			PackageRef: preview.PackageRef, AttemptRef: preview.AttemptRef,
+			SourceRepresentationRef: preview.SourceRepresentationRef,
+			RawGenerationRef:        rawGenerationRef, NormalizedGenerationRef: normalizedGenerationRef,
+			ChunkGenerationRef: chunkGenerationRef, ChunkReceiptRef: chunkReceiptRef,
 			ParserSelectionRef: activeSelectionRef, ParserOptionsRef: activeParserOptionsRef,
 			ReceiptRefs: map[string]Ref{
 				"raw_source_verification": r.receiptRef(stagegraph.VerifyRawCoverageAgainstSource),
@@ -561,6 +612,10 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		r.awaiting(OperationAwaitingPreviewDecision, OperationWaitPreviewDecision)
 		if err := awaitPreviewDecision(ctx, &preview, durableReviewWait); err != nil {
 			r.operation.Reason = err.Error()
+			if errors.Is(err, ErrPreviewRerunRequired) {
+				r.operation.Lifecycle = OperationRerunRequired
+				r.operation.Wait = ""
+			}
 			return r.result(""), err
 		}
 		r.running()
@@ -632,6 +687,13 @@ func awaitPreviewDecision(ctx workflow.Context, state *PreviewState, waitVersion
 		if !decided {
 			state.Phase, state.Reason = PhaseTimedOut, "preview decision timed out"
 			return errors.New("proffer: preview decision timed out")
+		}
+		selectionChanged := decision.RepairedSelectionRef != "" && decision.RepairedSelectionRef != state.SelectRef
+		optionsChanged := decision.RepairedParserOptionsRef != "" && decision.RepairedParserOptionsRef != state.ParserOptionsRef
+		if selectionChanged || optionsChanged {
+			state.Phase = PhaseRerunRequired
+			state.Reason = ErrPreviewRerunRequired.Error()
+			return ErrPreviewRerunRequired
 		}
 		if !decision.Approved {
 			state.Phase, state.Reason = PhaseRejected, decision.Reason
@@ -962,7 +1024,9 @@ func (r *run) result(publicationRef Ref) WorkflowResult {
 	r.operation.Terminal = true
 	if publicationRef == "" {
 		status = StatusFailed
-		r.operation.Lifecycle = OperationFailed
+		if r.operation.Lifecycle != OperationRerunRequired {
+			r.operation.Lifecycle = OperationFailed
+		}
 		if r.operation.Reason == "" && len(r.results) > 0 {
 			r.operation.Reason = r.results[len(r.results)-1].Reason
 		}

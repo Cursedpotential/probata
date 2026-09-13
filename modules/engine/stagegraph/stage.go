@@ -64,6 +64,7 @@ const (
 	RespAssessRepair
 	RespResolveRepair
 	RespProjectPreview
+	RespChunk
 )
 
 // Descriptor is the static, dependency-free description of one stage: its
@@ -76,31 +77,23 @@ type Descriptor struct {
 	DependsOn      []StageID
 }
 
-// ChunkDocument is the canon Activity name for the skip-to-chunk capability
-// (D-116 / owner ruling 2026-08-29: "if it doesn't need to be parsed and
-// really needs to be chunked and ingested, so be it"). It runs when a route
-// decision says chunk-not-parse rather than execute_parser_activity.
-//
-// ChunkDocument is deliberately NOT a member of Stages. Stages is the
-// exhaustive, fully-convergent DAG behind ProfferWorkflow's 26 canon
-// stages: graph_test.go's requiredStages map fails closed on any stage not
-// in that exact set (TestEveryRequiredStageAppearsExactlyOnce), and
-// TestPublishRequiresAllGates/TestNoStageReachesPublishWithoutItsOwnGate
-// together prove every single entry in Stages is a transitive ancestor of
-// PublishGeneration — the graph has no vocabulary for an alternate,
-// mutually-exclusive path (chunk-not-parse is an OR-branch against
-// ExecuteParser, not a converging AND-dependency). Splicing ChunkDocument
-// into Stages today would either violate that invariant or force every
-// existing stage's DependsOn to route around it, which is a real workflow
-// restructuring, not a stage addition — see the wiring-plan note in
-// engine/activities/chunking.go and the BUILD LANE C1 handoff for the exact
-// steps that restructuring needs (a workflow.GetVersion-gated branch, plus a
-// graph invariant that can express alternation).
-//
-// The Activity is fully real and Temporal-callable today: it is registered
-// on the Proffer worker (profferworker.RegisterAll) exactly like every Stages
-// member, using the same proffer.StageRequest/proffer.StageResult wire contract, so
-// a future gated branch in ProfferWorkflow can call it via the
-// existing r.exec helper with no signature change. It is simply not yet
-// invoked by the workflow.
+// ChunkDocument is the canon Activity name for a versioned non-messaging
+// context chunk generation. It is optional because messaging imports retain
+// their ordered normalized-message path. On the D-158 route the Temporal
+// workflow schedules it after VerifyNormalizedGeneration and before
+// PublishPreview, and its output is a sealed immutable chunk-generation Ref.
 const ChunkDocument StageID = "chunk_document_activity"
+
+// OptionalStages describes version-gated stages that are real members of a
+// specific route but not universal ancestors of PublishGeneration. Keeping
+// these separate preserves the base graph's strong "every listed stage runs"
+// invariant while giving conditional Temporal branches a reviewable
+// dependency contract.
+var OptionalStages = []Descriptor{
+	{
+		ID:             ChunkDocument,
+		Responsibility: RespChunk,
+		Result:         "sealed context chunk generation reference",
+		DependsOn:      []StageID{VerifyNormalizedGeneration},
+	},
+}
