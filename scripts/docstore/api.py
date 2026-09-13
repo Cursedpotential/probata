@@ -84,8 +84,10 @@ def _sync_status() -> dict:
         value = read_current_status(RUN_STATUS)
         return {key: value.get(key) for key in
                 ("sync", "run_id", "at", "seconds", "error_type", "app", "environment",
+                 "worker_pid",
                  "source_scope", "requested_scope", "source_count", "source_digest_before",
-                 "source_digest_after", "full_reprocess", "cdc_verified", "cdc_attribution")}
+                 "source_digest_after", "full_reprocess", "tracking_rebuild",
+                 "tracking_state_quarantined", "projection_retirement", "cdc_verified", "cdc_attribution")}
     except FileNotFoundError:
         return {"sync": "unavailable", "cdc_verified": False}
     except (OSError, ValueError, TypeError):
@@ -96,8 +98,27 @@ def _public_status(value: dict) -> dict:
     allowed = ("sync", "run_id", "at", "seconds", "error_type", "app", "environment",
                "source_scope", "requested_scope", "requested_paths", "source_count",
                "full_reprocess",
+               "tracking_rebuild", "tracking_state_quarantined", "projection_retirement",
                "source_digest_before", "source_digest_after", "cdc_verified", "cdc_attribution")
     return {key: value.get(key) for key in allowed if key in value}
+
+
+def _worker_alive(pid: object) -> bool:
+    if type(pid) is not int or pid <= 1 or os.name == "nt":
+        return False
+    try:
+        command = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes()
+        os.kill(pid, 0)
+        return b"worker_sync.py" in command
+    except (OSError, ValueError):
+        return False
+
+
+def _status_with_liveness(value: dict) -> dict:
+    if value.get("sync") == "running" and not _worker_alive(value.get("worker_pid")):
+        return {**value, "sync": "interrupted", "cdc_verified": False,
+                "error_type": "WorkerOwnershipLost"}
+    return value
 
 
 def _read_run(run_id: str) -> dict:
@@ -119,7 +140,7 @@ def _read_run(run_id: str) -> dict:
     value = json.loads(path.read_bytes())
     if value.get("run_id") != run_id or value.get("receipt_kind") != "worker-execution-v1":
         raise HTTPException(status_code=503, detail="run receipt invalid")
-    return _public_status(value)
+    return _public_status(_status_with_liveness(value))
 
 
 def _run_history(limit: int) -> list[dict]:
@@ -155,7 +176,7 @@ def _run_history(limit: int) -> list[dict]:
 def pipeline(index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
     _docs_index(index_kind)
-    status = _sync_status()
+    status = _status_with_liveness(_sync_status())
     verified = (status.get("app") == "ProbataDocStore"
                 and status.get("environment") == "probata-docstore"
                 and status.get("sync") in {"running", "failed", "degraded", "cancelled", "execution_finished"})
@@ -166,7 +187,7 @@ def pipeline(index_kind: str = "docs", authorization: str | None = Header(defaul
 def current_run(index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
     _docs_index(index_kind)
-    return _identified(_public_status(read_current_status(RUN_STATUS)))
+    return _identified(_public_status(_status_with_liveness(read_current_status(RUN_STATUS))))
 
 
 @app.get("/runs")
@@ -194,11 +215,15 @@ def start_run(payload: dict, authorization: str | None = Header(default=None)) -
     scope = payload.get("scope", "full")
     paths = payload.get("paths", [])
     full_reprocess = payload.get("full_reprocess", False)
+    tracking_rebuild = payload.get("tracking_rebuild", False)
     _docs_index(payload.get("index_kind", "docs"))
-    if scope not in {"full", "selected"} or not isinstance(paths, list) or type(full_reprocess) is not bool:
+    if (scope not in {"full", "selected"} or not isinstance(paths, list)
+            or type(full_reprocess) is not bool or type(tracking_rebuild) is not bool):
         raise HTTPException(status_code=400, detail="scope must be full or selected")
     if scope == "full" and paths:
         raise HTTPException(status_code=400, detail="full scope does not accept paths")
+    if tracking_rebuild and (scope != "full" or not full_reprocess):
+        raise HTTPException(status_code=400, detail="tracking rebuild requires full scope and full reprocess")
     if scope == "selected" and (not 1 <= len(paths) <= 20 or len(set(paths)) != len(paths)
                                 or any(not isinstance(path, str) or not path.startswith("docs/")
                                        or ".." in pathlib.PurePosixPath(path).parts for path in paths)):
@@ -210,6 +235,8 @@ def start_run(payload: dict, authorization: str | None = Header(default=None)) -
         env["DOCSTORE_REQUESTED_PATHS"] = "\n".join(paths)
     if full_reprocess:
         env["DOCSTORE_FULL_REPROCESS"] = "1"
+    if tracking_rebuild:
+        env["DOCSTORE_REBUILD_TRACKING"] = "1"
     with _jobs_lock:
         if any(process.poll() is None for process in _jobs.values()):
             raise HTTPException(status_code=409, detail="a run is already active")
@@ -218,6 +245,7 @@ def start_run(payload: dict, authorization: str | None = Header(default=None)) -
     return _identified({"run_id": run_id, "sync": "queued", "requested_scope": scope,
             "requested_paths": paths, "full_source_reconciliation": True,
             "full_reprocess": full_reprocess,
+            "tracking_rebuild": tracking_rebuild,
             "selected_paths_are_verification_targets": bool(paths)})
 
 

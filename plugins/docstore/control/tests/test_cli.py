@@ -57,7 +57,7 @@ async def test_catalog_via_cli_is_real_protocol(monkeypatch):
     # No credentials or API calls required to discover operations.
     config = cli.configuration()
     result = await cli.run(SimpleNamespace(command="catalog"), config)
-    assert len(result["tools"]) == 36
+    assert len(result["tools"]) == 39
     assert "coco_docstore_search" in {tool["name"] for tool in result["tools"]}
     assert len(result["resources"]) == 8
     assert {"docstore://api/openapi", "docstore://api/surreal"} <= {r["uri"] for r in result["resources"]}

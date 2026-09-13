@@ -108,3 +108,34 @@ async def verify_projection(expected: tuple[SourceDocument, ...]) -> dict:
         "unexpected_sample": unexpected[:20],
         "hash_mismatch_sample": mismatched[:20],
     }
+
+
+async def retire_unexpected_projection(expected: tuple[SourceDocument, ...]) -> dict:
+    """Retire only stored document/chunk identities absent from the complete source."""
+    import sq
+    expected_paths = {row.source_path for row in expected}
+    prefixes = tuple(sorted({row.source_path.split("/", 1)[0] + "/" for row in expected}))
+    db = await sq.connect("docs", "probata", "docs")
+    try:
+        result = await db.query("SELECT VALUE source_path FROM document;")
+        while isinstance(result, list) and len(result) == 1 and isinstance(result[0], list):
+            result = result[0]
+        observed = {str(path) for path in (result if isinstance(result, list) else [])
+                    if isinstance(path, str) and path.startswith(prefixes)}
+        unexpected = sorted(observed - expected_paths)
+        if len(unexpected) > 1000:
+            raise RuntimeError("Unexpected projection retirement exceeds safety bound")
+        if unexpected:
+            await db.query("""
+BEGIN TRANSACTION;
+DELETE chunk_of WHERE in.source_path IN $paths OR out.source_path IN $paths;
+DELETE links_to WHERE in.source_path IN $paths OR out.source_path IN $paths;
+DELETE cites WHERE in.source_path IN $paths OR out.source_path IN $paths;
+DELETE supersedes WHERE in.source_path IN $paths OR out.source_path IN $paths;
+DELETE chunk WHERE source_path IN $paths;
+DELETE document WHERE source_path IN $paths;
+COMMIT TRANSACTION;
+""", {"paths": unexpected})
+        return {"retired_count": len(unexpected), "retired_paths": unexpected}
+    finally:
+        await db.close()

@@ -95,6 +95,7 @@ def setup_worker(tmp_path,monkeypatch):
     monkeypatch.delenv('DOCSTORE_ONLY_FILES',raising=False)
     monkeypatch.delenv('DOCSTORE_RUN_ID',raising=False)
     monkeypatch.delenv('DOCSTORE_REQUESTED_PATHS',raising=False)
+    monkeypatch.delenv('DOCSTORE_REBUILD_TRACKING',raising=False)
     monkeypatch.setattr(worker,'LOCK',tmp_path/'sync.lock')
     monkeypatch.setattr(worker,'RECEIPTS',tmp_path/'runs')
     monkeypatch.setattr(worker,'STATUS',tmp_path/'latest-run.json')
