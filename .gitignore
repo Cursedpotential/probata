@@ -201,3 +201,9 @@ modules/workbench/api/tests/_reports/
 # Private data (real names, case facts) — stays on disk, never committed (owner 2026-09-06)
 docs/private/
 **/*.private.md
+
+# Local embedded SurrealDB document store (D-155): lives beside docs/, never committed
+.docstore/
+
+# docstore plugin runtime state (per-session search flags)
+plugins/docstore/claude/.state/last_search_*.flag
