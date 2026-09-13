@@ -35,7 +35,7 @@ DEFINE INDEX OVERWRITE entity_name_ft ON entity FIELDS name
 DEFINE TABLE OVERWRITE retrieval TYPE NORMAL SCHEMAFULL;
 DEFINE FIELD OVERWRITE query    ON retrieval TYPE string;
 DEFINE FIELD OVERWRITE agent    ON retrieval TYPE string;
-DEFINE FIELD OVERWRITE scope    ON retrieval TYPE object DEFAULT {};
+DEFINE FIELD OVERWRITE scope    ON retrieval TYPE object FLEXIBLE DEFAULT {};  -- FLEXIBLE must follow the kind on SurrealDB 3.x (1.x/2.x used "FLEXIBLE TYPE object")
 DEFINE FIELD OVERWRITE hits     ON retrieval TYPE array<record<chunk>> DEFAULT [];
 DEFINE FIELD OVERWRITE path     ON retrieval TYPE string
   ASSERT $value IN ["index","fallback","fulltext","hybrid","graph"];

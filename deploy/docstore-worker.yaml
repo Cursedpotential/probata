@@ -12,8 +12,9 @@
 # Coolify scheduled task: python scripts/docstore/worker_sync.py (periodic resync, graph, health).
 # Coolify env: BIND_IP=100.91.190.107, SURREAL_DOCS_USER, SURREAL_DOCS_PASS, NVIDIA_API_KEY,
 #   VOYAGE_API_KEY, optional DOCSTORE_API_TOKEN. Never in this file.
-# API: http://100.91.190.107:8474 and https://docstore-api.tilapia-skilift.ts.net (svc:docstore-api).
-# Port 8473 belongs to the independent surreal-intake service and must not be reused.
+# Client API: https://docstore-api.tilapia-skilift.ts.net (svc:docstore-api).
+# Canonical backend: 8072 (80=machine HTTP, 72=Docstore). Temporary 8474 remains
+# during the no-downtime service repoint. Port 8473 belongs to surreal-intake.
 # HOST-PREP (once): install -d -m 0750 /data/probata/volumes/docstore-worker
 #                   install -d -m 0775 /data/probata/exchange/docstore-worker
 # =============================================================================
@@ -26,11 +27,11 @@ services:
     container_name: docstore-worker
     restart: unless-stopped
     environment:
-      SURREAL_DOCS_URL: ${SURREAL_DOCS_URL:-ws://100.91.190.107:8472}
+      SURREAL_DOCS_URL: ${SURREAL_DOCS_URL:-wss://surreal-docs.tilapia-skilift.ts.net}
       SURREAL_DOCS_USER: ${SURREAL_DOCS_USER:?set SURREAL_DOCS_USER in Coolify env}
       SURREAL_DOCS_PASS: ${SURREAL_DOCS_PASS:?set SURREAL_DOCS_PASS in Coolify env}
       # flow_docs.py reads the SURREAL_* names
-      SURREAL_URL: ${SURREAL_DOCS_URL:-ws://100.91.190.107:8472}
+      SURREAL_URL: ${SURREAL_DOCS_URL:-wss://surreal-docs.tilapia-skilift.ts.net}
       SURREAL_USER: ${SURREAL_DOCS_USER:?set SURREAL_DOCS_USER in Coolify env}
       SURREAL_PASS: ${SURREAL_DOCS_PASS:?set SURREAL_DOCS_PASS in Coolify env}
       SURREAL_NS: probata
@@ -40,14 +41,17 @@ services:
       DOCSTORE_API_TOKEN: ${DOCSTORE_API_TOKEN:-}
       DOCSTORE_COCOINDEX_DB: /data/state/cocoindex_state.db
       DOCSTORE_SYNC_LOCK: /data/state/sync.lock
+      DOCSTORE_RUN_STATUS: /data/state/latest-run.json
+      DOCSTORE_RUN_RECEIPTS: /data/state/runs
       DOCSTORE_MAX_RSS_MB: "3000"
     ports:
-      - "${BIND_IP:-127.0.0.1}:8474:8000"   # http://100.91.190.107:8474 - tailnet-only
+      - "${BIND_IP:-127.0.0.1}:8072:8000"   # canonical backend; clients use svc:docstore-api
+      - "${BIND_IP:-127.0.0.1}:8474:8000"   # transitional only; remove after service repoint proof
     volumes:
       - /data/probata/volumes/docstore-worker:/data/state
       - /data/probata/exchange/docstore-worker:/exchange
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import json,urllib.request,sys; value=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)); sys.exit(0 if value.get('ok') is True else 1)"]
       interval: 30s
       timeout: 10s
       retries: 5

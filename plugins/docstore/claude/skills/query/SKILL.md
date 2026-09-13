@@ -1,7 +1,7 @@
 ---
 name: query
-description: Inspect probata's SurrealDB stores with ad-hoc SurrealQL and read the result as a clean DuckDB table. Use whenever you need raw rows, counts, schema (INFO FOR DB/TABLE/INDEX), index build status, or to verify what a fn:: call actually wrote. Use it instead of writing a one-off Python script or pasting SDK output. Never print RecordID(...)/PreciseDatetime(...) reprs, embeddings, or document bodies into context.
-allowed-tools: Bash Read
+description: "Inspect Probata SurrealDB stores with bounded SurrealQL and clean DuckDB output. Use for raw rows, counts, schema, index status, or verification without printing vectors or document bodies."
+allowed-tools: "Bash Read"
 ---
 
 # Query — one inspection format for every agent

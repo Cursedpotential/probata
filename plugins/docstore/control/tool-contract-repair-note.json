@@ -1,0 +1,13 @@
+{
+  "subject": "note:docstore_tool_contract_20260912",
+  "title": "Docstore and CCC full tool contract repair remains incomplete",
+  "summary": "Verified: installed Docstore health, semantic hybrid search, DuckDB compact output, full retrieval and graph access. Found: installed flags and existence lookup missing native auth; CCC daemon missing inherited NVIDIA credentials; duplicate plugin launch entries contain unresolved substitutions. Canonical loader repaired and standard CLI related-update lookup now succeeds live. Added live OpenAPI and native Surreal schema resources and verified both through canonical CLI MCP resource calls. 90 focused tests passed. Installed refresh, callable CCC tools/resources, safe indexing execution, full CDC validation and handoff write/readback remain open. Source tests are not full completion.",
+  "priority": "high",
+  "authority": "verified_finding",
+  "status": "active",
+  "domains": ["docs", "infra"],
+  "source_ref": "plugins/docstore/control/TOOL-CONTRACT-REPAIR-20260912.md",
+  "rationale": "Owner requires all previously agreed capabilities and real validation. Exact-key pre-write lookup completed across four tables without matches; preserve explicit incomplete status.",
+  "actor": "Codex GPT-6 / 2026-09-12",
+  "expected_revision": 0
+}

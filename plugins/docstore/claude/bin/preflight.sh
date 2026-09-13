@@ -47,6 +47,6 @@ if [ -f "$MARKER" ]; then
   echo "resumed after compaction — run the handoff skill now to recover the pre-compact handoff record"
 else
   echo "docstore: docs=up memory=up | skills: query docs docs-write decisions todo handoff memory reconcile | commands: /recall-doc /recall-adr /memory /update-adr"
-  echo "search before you read: fn::docs_search / fn::recall via mcp__plugin_docstore_<server>__run; inspect rows with scripts/docstore/sq.py (DuckDB table)"
+  echo "search before you read: propria-docstore:propria-search routes docs to coco_docstore_search and code to separate CCC"
 fi
 exit 0

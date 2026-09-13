@@ -16,16 +16,24 @@ import asyncio
 import json
 import os
 import pathlib
-import re
-import subprocess
+import signal
 import sys
 import time
+import uuid
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import sq  # noqa: E402
+from run_support import WorkerBusy, worker_lock, write_current_status, write_receipt, run_child
+from cdc_verify import snapshot_sources, verify_projection
 
-LOCK = pathlib.Path(os.environ.get("DOCSTORE_SYNC_LOCK", "/data/state/sync.lock"))
+
+class WorkerCancelled(RuntimeError):
+    pass
+
+LOCK = pathlib.Path(os.environ.get("DOCSTORE_SYNC_LOCK",
+    str(HERE.parents[1] / '.docstore/sync.lock') if os.name == 'nt' else "/data/state/sync.lock"))
+RECEIPTS = pathlib.Path(os.environ.get('DOCSTORE_RUN_RECEIPTS', str(LOCK.parent / 'runs')))
+STATUS = pathlib.Path(os.environ.get('DOCSTORE_RUN_STATUS', str(LOCK.parent / 'latest-run.json')))
 
 
 def _rows(r):
@@ -34,13 +42,12 @@ def _rows(r):
     return r if isinstance(r, list) else ([r] if r else [])
 
 
-def _run(script: str, timeout: int) -> tuple[int, str]:
-    env = {k: v for k, v in os.environ.items() if k != "DOCSTORE_ONLY_FILES"}
-    p = subprocess.run([sys.executable, str(HERE / script)], capture_output=True, text=True, env=env, timeout=timeout)
-    return p.returncode, (p.stdout + p.stderr)
+def _run(script: str, timeout: int, log_path: pathlib.Path) -> dict:
+    return run_child([sys.executable, str(HERE / script)], dict(os.environ), timeout, log_path)
 
 
 async def _health() -> dict:
+    import sq
     db = await sq.connect("docs", "probata", "docs")
     try:
         out = {}
@@ -57,40 +64,92 @@ async def _health() -> dict:
 
 
 def main() -> int:
-    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    if os.environ.get('DOCSTORE_ONLY_FILES', '').strip():
+        print(json.dumps({'sync':'rejected','reason':'Partial source filters can retire unselected documents; no worker started'}))
+        return 2
     try:
-        fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError:
-        if time.time() - LOCK.stat().st_mtime < 3600:
-            print(json.dumps({"sync": "skipped", "reason": "another sync holds the lock"}))
-            return 0
-        LOCK.unlink(missing_ok=True)
-        fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    os.close(fd)
+        def cancel(_signum, _frame):
+            raise WorkerCancelled("Cancellation requested")
+        signal.signal(signal.SIGTERM, cancel)
+        signal.signal(signal.SIGINT, cancel)
+        with worker_lock(LOCK):
+            return _sync()
+    except WorkerBusy as exc:
+        print(json.dumps({'sync':'skipped','reason':str(exc)}))
+        return 2
+    except WorkerCancelled:
+        print(json.dumps({'sync':'cancelled','reason':'Cancellation requested'}))
+        return 3
+    except Exception as exc:
+        print(json.dumps({'sync':'failed','error_type':type(exc).__name__,
+                          'reason':'Worker/receipt failure; inspect retained run events'}))
+        return 1
+
+
+def _sync() -> int:
     t0 = time.time()
-    summary: dict = {"sync": "ok"}
+    requested_run_id = os.environ.get('DOCSTORE_RUN_ID', '').strip()
+    if requested_run_id and (len(requested_run_id) != 32 or any(c not in '0123456789abcdef' for c in requested_run_id)):
+        raise ValueError('DOCSTORE_RUN_ID must be 32 lowercase hexadecimal characters')
+    run_id = requested_run_id or uuid.uuid4().hex
+    requested_paths = tuple(filter(None, os.environ.get('DOCSTORE_REQUESTED_PATHS', '').split('\n')))
+    source_snapshot, source_digest = snapshot_sources()
+    source_paths = {row.source_path for row in source_snapshot}
+    if requested_paths and (len(requested_paths) > 20 or len(set(requested_paths)) != len(requested_paths)
+                            or any(path not in source_paths for path in requested_paths)):
+        raise ValueError('Selected paths are not a bounded subset of the complete source snapshot')
+    summary: dict = {'sync':'running', 'app':'ProbataDocStore',
+                     'environment':'probata-docstore', 'source_scope':'full',
+                     'requested_scope':'selected' if requested_paths else 'full',
+                     'requested_paths':list(requested_paths),
+                     'source_count':len(source_snapshot), 'source_digest_before':source_digest,
+                     'cdc_verified':False}
+    sequence = 0
+    def record():
+        nonlocal sequence
+        path = write_receipt(RECEIPTS, run_id, sequence, summary)
+        sequence += 1
+        return path
+    record()  # A durable start is required before any child is launched.
     try:
-        code, log = _run("flow_docs.py", 3600)
-        stats = re.findall(r"process_file: (\d+) total \| ([^\n]*)", log)
-        summary["ingest"] = f"exit {code}; " + (stats[-1][1].strip() if stats else "no stats")
-        summary["auto_mapped"] = log.count("AUTO-MAPPED")
-        if code != 0:
-            summary["sync"] = "failed"
-            summary["ingest_tail"] = log.strip().splitlines()[-5:]
+        # The current status must also be durable before expensive work begins.
+        write_current_status(STATUS, {**summary, 'run_id': run_id})
+        for stage, script, timeout in [('ingest','flow_docs.py',3600),('graph','graph_build.py',900)]:
+            result = _run(script, timeout, RECEIPTS / f'{run_id}-{stage}.log')
+            summary[stage] = result
+            if result['exit_code'] != 0 or result['timed_out'] or result['diagnostic_errors']:
+                summary['sync'] = 'failed'
+                return 1
+            record()
+        after_snapshot, after_digest = snapshot_sources()
+        summary['source_digest_after'] = after_digest
+        if after_digest != source_digest:
+            summary['sync'] = 'degraded'
+            summary['error_type'] = 'SourceChangedDuringRun'
             return 1
-        code, log = _run("graph_build.py", 900)
-        summary["graph"] = log.strip().splitlines()[-1] if log.strip() else f"exit {code}"
-        if code != 0:
-            summary["sync"] = "failed"
-            return 1
-        summary["health"] = asyncio.run(_health())
+        summary["health"] = asyncio.run(_bounded_health())
         if summary["health"].get("hnsw") != "ready" or summary["health"].get("orphan_chunks"):
             summary["sync"] = "degraded"
+            return 1
+        summary['cdc_attribution'] = asyncio.run(verify_projection(after_snapshot))
+        if summary['cdc_attribution'].get('status') != 'verified':
+            summary['sync'] = 'degraded'
+            return 1
+        summary['sync'] = 'execution_finished'
         return 0
+    except BaseException as exc:
+        summary['sync'] = 'cancelled' if isinstance(exc, WorkerCancelled) else 'failed'
+        summary['error_type'] = type(exc).__name__
+        raise
     finally:
         summary["seconds"] = round(time.time() - t0)
+        summary['receipt_path'] = str(record())
+        write_current_status(STATUS, {**summary, 'run_id': run_id})
         print(json.dumps(summary, default=str))
-        LOCK.unlink(missing_ok=True)
+
+
+async def _bounded_health() -> dict:
+    return await asyncio.wait_for(_health(), timeout=60)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,21 @@
+# Reviewed source example only. Not installed into user-level Codex configuration.
+[mcp_servers.docstore-control]
+command = "C:/Users/matts/.local/bin/uv.exe"
+args = ["run", "--frozen", "--no-sync", "--project", "E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/control", "python", "E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/control/cli.py", "serve"]
+startup_timeout_sec = 30
+tool_timeout_sec = 45
+env_vars = ["DOCSTORE_BASIC_AUTH", "DOCSTORE_API_TOKEN", "DOCSTORE_CONTROL_ENV_FILE", "DOCSTORE_WORKER_RECEIPTS_DIR", "DOCSTORE_PROJECT_REGISTRY"]
+
+[mcp_servers.docstore-control.env]
+UV_CACHE_DIR = "E:/AI_Workspace/.intake-dev/uv-cache"
+TEMP = "E:/AI_Workspace/.intake-dev/temp"
+TMP = "E:/AI_Workspace/.intake-dev/temp"
+PYTHONDONTWRITEBYTECODE = "1"
+FASTMCP_CHECK_FOR_UPDATES = "off"
+DOCSTORE_PROJECT_REGISTRY = "E:/AI_Workspace/Projects/Propria/docs/docstore-source-registry.json"
+
+[mcp_servers.docstore-surreal]
+url = "https://surreal-docs.tilapia-skilift.ts.net/mcp"
+http_headers = { "surreal-ns" = "probata", "surreal-db" = "docs" }
+# This environment variable contains the COMPLETE Authorization header: Basic <base64>.
+env_http_headers = { "Authorization" = "DOCSTORE_AUTHORIZATION" }
