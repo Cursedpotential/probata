@@ -6,12 +6,19 @@ Scope: Probata intake/context, Search/Smart Explore, Docstore, repair, and opera
 
 ## Why this receipt exists
 
-The files below are the original material supplied to Claude on 2026-09-09 and
-2026-09-11. They establish what the owner asked for before later summaries and
-decisions changed the wording. This receipt distinguishes owner statements,
-research proposals, open questions, and executable requirements. A proposal or
+The files below are original material supplied to Claude on 2026-09-09 and
+2026-09-11. They help recover requirements that later summaries omitted or
+changed. They do not outrank newer owner direction merely because they preserve
+an earlier conversation. This receipt distinguishes owner statements, research
+proposals, open questions, and executable requirements. A proposal or
 recommendation in these sources is not an accepted architecture decision unless
-the owner later accepted it or current code proves that it shipped.
+the owner later accepted it.
+
+Context precedence for this fast-moving system is: current explicit owner
+direction first; current accepted contracts next; newer discussions before
+older discussions; executable code as proof of present behavior; and older
+build kits as historical input. Code does not override newer owner intent. A
+disagreement between code and the newer contract is an implementation gap.
 
 ## Source inventory
 
@@ -25,6 +32,11 @@ the owner later accepted it or current code proves that it shipped.
 | `xplorer-copilot-buildkit.zip` | `B10358E6EA3684E9D5B24D0C0BD3D33D4FB2CC108E4DF89FA09C74B1B6A34EBE` | Xplorer agent/copilot surface build kit |
 | `surreal-docstore.zip` | `9B71FF53115FDD5D1ED8B721929DC14511DECC63A7EEC4F06EE3CEAE22014892` | Original Docstore plugin/agent/schema build kit |
 | `repair_tool_kit_buildkit_v2.zip` | `F2A32904D98697ECA6B6A5DEB31D1B1BD388C5D84CC33F2871B759F3D7BD4D9A` | Original extraction and repair build kit |
+| `Merged_Output-20260908T233006Z-1-001.zip` | `9006009A45AACB5F06CE6C3E871B18806D64A5BD3E763269643688E9287F88FC` | Three small entity/timeline/narrative spreadsheets supplied as product test material, not an architecture contract |
+| `md.md` | `8EF6CD0CECB3C0837A321FEB0BDF2D8C0C13982BD86EE7F659EECC859B1917D4` | Forensic-software-editor research input |
+| `drive-download-20260907T133916Z-1-001.zip` | `0C143FCBFE1CED8AFB66F98749F04219D2EFC8443E363CDAA6F3024723E8BB5B` | Large legal/corpus/export bundle; historical source and test material |
+| `drive-download-20260907T133641Z-1-001.zip` | `E1DA91A49C246BF017FB370345AFA90E51CF39F272E79261B49B2775642650C2` | Legal document parsing guidance plus prompt corpus |
+| `drive-download-20260907T133605Z-1-001.zip` | `43675BA7F5458540538FFA86C27588C42FE146202A085111F0FD51D7289A0BB7` | Legal parsing, prompt, vocabulary, and merged-source bundle |
 
 The sources remain in `F:\Users\matts\Downloads`. They were read in place.
 The ZIPs were inventoried through `System.IO.Compression`; they were not
@@ -121,15 +133,31 @@ surface must expose:
 - a deliberate approve/reject decision referencing the exact attempt and
   preview digest.
 
-The Xplorer copilot/agent HITL surface is a separate application and workflow;
-it is not a Proffer module and must not be collapsed into the Probata
-intake/context surface. Its interaction requirements provide relevant design
-evidence for visibility and control: stream plans and tool calls, show per-call
-approvals and diffs, keep terminal output visible, support follow-along
-locations, expose Discuss and Draft modes according to negotiated
+The owner has repeatedly established an exact two-application boundary:
+
+1. **Probata/Proffer** is the intake, extraction, repair, context-preview,
+   override, Temporal, and n8n application.
+2. **Xplorer + Case Bible + Consignatio** is one combined application/tool. It
+   contains the ACP copilot, permissioned file operations, agent HITL, vault
+   organization/deduplication, and the Case Bible/Consignatio review and
+   legal-data workflows.
+
+Xplorer and Case Bible/Consignatio must not be described as separate products.
+The combined application is also not a Proffer module and must not be collapsed
+into the Probata intake/context surface. Its interaction requirements provide
+relevant design evidence for visibility and control: stream plans and tool
+calls, show per-call approvals and diffs, keep terminal output visible, support
+follow-along locations, expose Discuss and Draft modes according to negotiated
 capabilities, provide stop/cancel, and provide a kill switch. Probata may reuse
-those interaction principles without importing Xplorer's ACP file-manager
-architecture or confusing the two products.
+those interaction principles without importing the combined application's ACP
+file-manager architecture or confusing the two applications.
+
+The same separation applies to indexing. The documentation index is the
+Docstore/CocoIndex/SurrealDB lane. The code index is the Search/Smart Explore/
+CCC/tree-sitter/DuckDB lane. The code index excludes documentation content and
+the documentation index excludes source code. A reconciliation operation may
+query both through their separate tools and return labeled evidence from both;
+it does not combine them into one physical index.
 
 ### Extract broadly; repair only by explicit choice
 
