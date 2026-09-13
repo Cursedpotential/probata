@@ -27,6 +27,15 @@ BoundedActorIdentity = Annotated[
     StringConstraints(strip_whitespace=True, min_length=1, max_length=512, pattern=r"^[^\x00\r\n]+$"),
 ]
 BoundedToolID = Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)]
+ProfferOperationLifecycle = Literal[
+    "running",
+    "awaiting_repair_decision",
+    "awaiting_preview_decision",
+    "completed",
+    "failed",
+    "unavailable",
+]
+ProfferOperationWait = Literal["repair_decision", "preview_decision"]
 
 
 def validate_authorized_source_ref(value: str) -> str:
@@ -222,6 +231,12 @@ class ProfferPreviewResponse(BaseModel):
     receipts: Annotated[list[ProfferPreviewReceipt], Field(max_length=64)] | None = None
     reason: BoundedReason = ""
     repair_assessment: ProfferRepairAssessmentView | None = None
+    lifecycle: ProfferOperationLifecycle | None = None
+    current_stage: NonBlank | None = None
+    active_stages: Annotated[list[NonBlank], Field(max_length=64)] = Field(default_factory=list)
+    wait: ProfferOperationWait | None = None
+    terminal: bool | None = None
+    completed_stage_count: Annotated[int, Field(ge=0)] | None = None
 
     @model_validator(mode="after")
     def validate_snapshot_shape(self) -> ProfferPreviewResponse:
@@ -276,24 +291,3 @@ class ProfferPreviewMessagesResponse(BaseModel):
     participants: Annotated[list[ProfferPreviewParticipant], Field(max_length=256)]
     messages: Annotated[list[ProfferPreviewMessage], Field(max_length=250)]
     next_cursor: OpaqueCursor | None = None
-
-
-class ProfferPreviewEvent(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    event_id: Annotated[int, Field(ge=0)]
-    event_type: Literal[
-        "phase_changed",
-        "receipt_recorded",
-        "messages_available",
-        "decision_requested",
-        "decision_recorded",
-        "completed",
-        "failed",
-    ]
-    occurred_at: datetime
-    preview_handle: OpaquePreviewHandle
-    phase: NonBlank
-    receipt_ref: str | None = None
-    message_count: Annotated[int, Field(ge=0)] | None = None
-    detail: BoundedReason = ""

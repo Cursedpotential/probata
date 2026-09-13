@@ -12,7 +12,7 @@ import httpx
 
 from app.config import settings
 from app.service.proffer import ProfferError, _service_authorization_headers, _validated
-from app.types.proffer import ProfferPreviewEvent
+from app.types.proffer_events import ProfferPreviewEvent
 
 
 async def _detail_async(response: httpx.Response) -> str:

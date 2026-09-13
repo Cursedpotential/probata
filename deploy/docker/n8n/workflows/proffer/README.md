@@ -72,6 +72,41 @@ could invoke a real parser Activity. All five Webhook nodes now require the
 real header/value pair on it before activating any of these workflows in a
 live instance.
 
+## Generic flow Activity registry
+
+The Proffer worker also registers one generic Temporal Activity named
+`run_n8n_flow_activity`. Its body resolves a named n8n flow from the optional
+JSON file named by `N8N_FLOW_BINDINGS_FILE`, validates the flow's declared
+reference and scalar-input requirements, and then calls the bound webhook.
+Temporal still owns retries and durability; the request carries locators and
+bounded inputs, never source bytes.
+
+`N8N_FLOW_BINDINGS_FILE` is optional. With no file configured, the worker
+starts with zero extra flow bindings and the two dedicated parser Activities
+continue to work. When the variable is set, it must point to an absolute,
+read-only mounted regular file. A missing, unreadable, malformed, duplicate,
+or unsafe binding stops worker startup instead of silently producing an empty
+registry. Startup logs include `n8n_flow_binding_count` only; they do not log
+URLs or credentials.
+
+The deployed compose file does **not** currently mount or select a production
+binding document, and none of the checked-in inactive `.example.invalid`
+workflow exports is activated by this registration. A deployable binding must
+name a real active webhook that implements the `FlowRequest` / `FlowResult`
+contract in `engine/temporal/flowactivity.go`. A Temporal workflow or operator
+plan must also explicitly schedule `run_n8n_flow_activity`; merely declaring a
+binding does not insert it into `ProfferWorkflow`.
+
+For Coolify 4.1.2, do not add a repository-relative bind such as
+`./deploy/.../bindings.json:/run/config/...`: Coolify renders the compose in an
+application directory that does not contain the repository checkout, and
+Docker creates an empty directory at the missing source path. Provision the
+reviewed JSON as an absolute host file (for example under
+`/data/probata/config/proffer-worker/`), mount that absolute file read-only,
+and set `N8N_FLOW_BINDINGS_FILE` to its absolute container path. An environment
+change requires a Coolify deploy, not only a container restart, followed by an
+actual webhook/worker health check before calling the binding active.
+
 **Corrected 2026-08-27:** `wf-start-import.json` and `engine/temporal`
 previously started a smaller, package-local substitute workflow instead of
 the real `ProfferWorkflow`, and implemented the preview hold as
@@ -220,6 +255,7 @@ Shared starter/worker environment:
 | `TEMPORAL_TASK_QUEUE` | dedicated UIW task queue shared by the all-23 worker and starter; never `evidence-pipeline` |
 | `N8N_PROFFER_BASE_URL` | n8n webhook base (worker only) |
 | `N8N_PROFFER_AUTH_HEADER` / `N8N_PROFFER_AUTH_VALUE` | header the worker sends on every call to the n8n webhooks — must match the `headerAuth` credential on the select/execute Webhook nodes (worker only) |
+| `N8N_FLOW_BINDINGS_FILE` | optional absolute, read-only mounted JSON registry for extra flows invoked through `run_n8n_flow_activity`; an explicitly configured missing or invalid file stops worker startup |
 | `REFERENCE_STARTER_TOKEN` | bearer token the starter HTTP service requires — must match the `headerAuth` credential on the start/decision/preview Webhook nodes |
 | `REFERENCE_STARTER_ADDR` | starter listen address (default `:8091`) |
 | `SELECT_PARSER_HTTP_TIMEOUT` / `EXECUTE_PARSER_HTTP_TIMEOUT` | optional overrides (Go duration strings) |

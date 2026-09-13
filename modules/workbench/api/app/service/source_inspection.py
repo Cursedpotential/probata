@@ -29,16 +29,25 @@ MAX_TEXT_PREVIEW_BYTES = 250_000
 STREAM_CHUNK_BYTES = 1024 * 1024
 _RANGE_PATTERN = re.compile(r"^bytes=(\d*)-(\d*)$")
 _TEXT_EXTENSIONS = {".csv", ".htm", ".html", ".json", ".md", ".txt", ".xml"}
-_IMAGE_EXTENSIONS = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+_IMAGE_EXTENSIONS = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 _DECLARED_FORMATS = {
+    ".avif": "image",
+    ".bmp": "image",
     ".csv": "delimited_text",
     ".docx": "docx",
+    ".gif": "image",
     ".htm": "html",
     ".html": "html",
+    ".jpeg": "image",
+    ".jpg": "image",
     ".json": "message_export_json",
     ".md": "markdown",
     ".pdf": "pdf",
+    ".png": "image",
+    ".tif": "image",
+    ".tiff": "image",
     ".txt": "delimited_text",
+    ".webp": "image",
     ".xml": "sms_export_xml",
     ".zip": "archive",
 }
@@ -90,6 +99,7 @@ def _preflight(key: str) -> ParserPreflight:
         "message_export_json": "JSON message-export route",
         "sms_export_xml": "SMS XML route",
         "delimited_text": "Delimited text route",
+        "image": "Image processing route",
         "archive": "Archive inventory route",
     }.get(declared_format, "Format inspection required")
     return ParserPreflight(declared_format=declared_format, route_label=label)

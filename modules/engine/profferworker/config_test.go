@@ -36,11 +36,34 @@ func setWorkerEnvironment(t *testing.T) {
 		"N8N_PROFFER_BASE_URL":            "https://n8n.example.test/webhook/",
 		"N8N_PROFFER_AUTH_HEADER":         "Authorization",
 		"N8N_PROFFER_AUTH_VALUE_FILE":     authValueFile,
+		"N8N_FLOW_BINDINGS_FILE":          "",
 		"SELECT_PARSER_HTTP_TIMEOUT":      "",
 		"EXECUTE_PARSER_HTTP_TIMEOUT":     "",
 	}
 	for name, value := range values {
 		t.Setenv(name, value)
+	}
+}
+
+func TestLoadConfigAcceptsAnOptionalAbsoluteFlowBindingsFile(t *testing.T) {
+	setWorkerEnvironment(t)
+	path := filepath.Join(t.TempDir(), "n8n-flow-bindings.json")
+	t.Setenv("N8N_FLOW_BINDINGS_FILE", path)
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if cfg.N8NFlowBindingsFile != path {
+		t.Fatalf("N8NFlowBindingsFile = %q, want %q", cfg.N8NFlowBindingsFile, path)
+	}
+}
+
+func TestLoadConfigRejectsRelativeFlowBindingsFile(t *testing.T) {
+	setWorkerEnvironment(t)
+	t.Setenv("N8N_FLOW_BINDINGS_FILE", "config/n8n-flow-bindings.json")
+	_, err := LoadConfig()
+	if err == nil || !strings.Contains(err.Error(), "N8N_FLOW_BINDINGS_FILE must be an absolute path") {
+		t.Fatalf("LoadConfig() error = %v, want absolute flow bindings path rejection", err)
 	}
 }
 

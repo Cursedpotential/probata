@@ -12,7 +12,7 @@ test("repair review is an explicit gate inside the unified intake window", () =>
   assert.match(intake, /aria-label="Repair review gate"/);
   assert.match(intake, /assessment_ref/);
   assert.match(intake, /source_version_ref/);
-  assert.match(intake, /Use original source/);
+  assert.match(intake, /Override repair and use the original source/);
   assert.match(intake, /Confirm and continue/);
   assert.match(intake, /repairChoice === "original"/);
 });
@@ -20,7 +20,9 @@ test("repair review is an explicit gate inside the unified intake window", () =>
 test("clean assessments continue without an operator decision", () => {
   assert.match(intake, /state\.phase === "awaiting_repair_decision" && state\.repair_assessment\?\.review_required/);
   assert.doesNotMatch(intake, /terminalPreviewPhases[^\n]+repair_approved/);
-  assert.match(intake, /ignoredTerminalPhases\.has\(lastState\.phase\)/);
+  assert.match(intake, /previewIsActionableOrSettled\(lastState, ignoredTerminalPhases\)/);
+  assert.match(intake, /state\.lifecycle === "awaiting_repair_decision"/);
+  assert.match(intake, /ignoredPreviewPhases\.has\("awaiting_repair_decision"\)/);
 });
 
 test("repair decision is typed, correlated, and carries no browser-authored tool payload", () => {
@@ -35,5 +37,5 @@ test("repair decision is typed, correlated, and carries no browser-authored tool
 test("the UI does not invent a derived repair choice absent from the assessment contract", () => {
   const assessment = types.slice(types.indexOf("interface ProfferRepairAssessmentView"), types.indexOf("interface ProfferRepairDecisionRequest"));
   assert.doesNotMatch(assessment, /tool|payload|option|choice/);
-  assert.match(intake, /workflow supplied no allowed derived-repair choice/);
+  assert.match(intake, /No compatible derived-repair action was supplied by the workflow/);
 });

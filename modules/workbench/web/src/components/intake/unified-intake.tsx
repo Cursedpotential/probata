@@ -7,7 +7,7 @@
 "use client";
 
 import { AppLink as Link } from "@/lib/router-compat";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -16,7 +16,6 @@ import {
   FileText,
   FolderOpen,
   Loader2,
-  RotateCcw,
   Scale,
   ShieldCheck,
   Upload,
@@ -51,7 +50,7 @@ type IntakePhase = "choose" | "ready" | "starting" | "repair_review" | "review" 
 type PreviewTab = "source" | "metadata" | "parser";
 type OperatorTab = "intake" | "atomic_tools";
 
-const LOCAL_FILE_ACCEPT = ".md,.json,.docx,.html,.htm,.pdf,.png,.jpg,.jpeg,.gif,.tif,.tiff,.bmp";
+const LOCAL_FILE_ACCEPT = ".md,.json,.docx,.html,.htm,.pdf,.png,.jpg,.jpeg,.gif,.webp,.avif,.tif,.tiff,.bmp";
 
 const EMPTY_ASSERTIONS: ProfferHumanSourceAssertions = {
   source_class: "unknown",
@@ -86,6 +85,8 @@ function declaredFormat(source: { name: string }) {
     jpg: "image",
     jpeg: "image",
     gif: "image",
+    webp: "image",
+    avif: "image",
     tif: "image",
     tiff: "image",
     bmp: "image",
@@ -105,6 +106,15 @@ function bytes(value: number) {
 
 const terminalPreviewPhases = new Set(["awaiting_repair_decision", "awaiting_decision", "approved", "rejected", "timed_out"]);
 
+function previewIsActionableOrSettled(state: ProfferPreviewResponse, ignoredPreviewPhases: ReadonlySet<string>) {
+  if (state.lifecycle) {
+    if (state.lifecycle === "awaiting_repair_decision") return !ignoredPreviewPhases.has("awaiting_repair_decision");
+    if (state.lifecycle === "awaiting_preview_decision") return !ignoredPreviewPhases.has("awaiting_decision");
+    return state.lifecycle === "unavailable" || Boolean(state.terminal);
+  }
+  return terminalPreviewPhases.has(state.phase) && !ignoredPreviewPhases.has(state.phase);
+}
+
 async function waitForPreview(previewHandle: string, attempts = 80, ignoredTerminalPhases: ReadonlySet<string> = new Set()) {
   let lastState: ProfferPreviewResponse | null = null;
   let lastError: unknown = null;
@@ -112,7 +122,7 @@ async function waitForPreview(previewHandle: string, attempts = 80, ignoredTermi
     try {
       lastState = await getProfferPreview(previewHandle);
       lastError = null;
-      if (terminalPreviewPhases.has(lastState.phase) && !ignoredTerminalPhases.has(lastState.phase)) return lastState;
+      if (previewIsActionableOrSettled(lastState, ignoredTerminalPhases)) return lastState;
     } catch (requestError) {
       lastError = requestError;
       const transient =
@@ -145,6 +155,9 @@ export function UnifiedIntake() {
   const [sourcesError, setSourcesError] = useState<string | null>(null);
   const [digest, setDigest] = useState("");
   const [textPreview, setTextPreview] = useState("");
+  const [localImagePreviewUrl, setLocalImagePreviewUrl] = useState<string | null>(null);
+  const [localImagePreviewError, setLocalImagePreviewError] = useState(false);
+  const localImagePreviewUrlRef = useRef<string | null>(null);
   const [phase, setPhase] = useState<IntakePhase>("choose");
   const [upload, setUpload] = useState<ProfferUploadResponse | null>(null);
   const [run, setRun] = useState<ProfferStartResponse | null>(null);
@@ -188,6 +201,10 @@ export function UnifiedIntake() {
     };
   }, [sourcePrefix, sourceFilter]);
 
+  useEffect(() => () => {
+    if (localImagePreviewUrlRef.current) URL.revokeObjectURL(localImagePreviewUrlRef.current);
+  }, []);
+
   const lines = useMemo(() => textPreview.split(/\r?\n/).filter(Boolean).slice(0, 12), [textPreview]);
 
   function changeSourcePrefix(nextPrefix: string) {
@@ -200,7 +217,18 @@ export function UnifiedIntake() {
     setSourceFilter(nextFilter);
   }
 
+  function replaceLocalImagePreview(selected: File | null) {
+    if (localImagePreviewUrlRef.current) URL.revokeObjectURL(localImagePreviewUrlRef.current);
+    const nextUrl = selected && declaredFormat(selected) === "image"
+      ? URL.createObjectURL(selected)
+      : null;
+    localImagePreviewUrlRef.current = nextUrl;
+    setLocalImagePreviewUrl(nextUrl);
+    setLocalImagePreviewError(false);
+  }
+
   async function selectFile(selected: File | null) {
+    replaceLocalImagePreview(selected);
     setFile(selected);
     setRemote(null);
     setInspection(null);
@@ -236,6 +264,7 @@ export function UnifiedIntake() {
     const sameSelection = remote?.key === selected.key;
     setRemote(selected);
     setFile(null);
+    replaceLocalImagePreview(null);
     setInspection(null);
     setInspectionError(null);
     setInspectionLoading(true);
@@ -340,6 +369,9 @@ export function UnifiedIntake() {
 
       const state = await waitForPreview(started.preview_handle);
       setPreview(state);
+      if (state.lifecycle === "unavailable" || state.lifecycle === "failed") {
+        throw new Error(state.reason || `The durable workflow is ${state.lifecycle}.`);
+      }
       setPhase(phaseForPreview(state));
     } catch (requestError) {
       setError(errorText(requestError));
@@ -363,6 +395,9 @@ export function UnifiedIntake() {
       setPhase("starting");
       const state = await waitForPreview(run.preview_handle, 80, new Set(["awaiting_repair_decision"]));
       setPreview(state);
+      if (state.lifecycle === "unavailable" || state.lifecycle === "failed") {
+        throw new Error(state.reason || `The durable workflow is ${state.lifecycle}.`);
+      }
       setPhase(phaseForPreview(state));
     } catch (requestError) {
       setError(errorText(requestError));
@@ -373,6 +408,7 @@ export function UnifiedIntake() {
   }
 
   function reset() {
+    replaceLocalImagePreview(null);
     setFile(null);
     setRemote(null);
     setInspection(null);
@@ -506,7 +542,7 @@ export function UnifiedIntake() {
               <div className="border-t bg-accent/30 px-5 py-4 text-sm">
                 <span className="text-muted-foreground">Or add a source from this device: </span>
                 <label className="cursor-pointer font-semibold text-primary hover:underline"><Upload className="mr-1 inline h-4 w-4" />Choose local file<input accept={LOCAL_FILE_ACCEPT} className="sr-only" type="file" onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} /></label>
-                <span className="ml-2 text-xs text-muted-foreground">Markdown, JSON, Word, or HTML</span>
+                <span className="ml-2 text-xs text-muted-foreground">Documents, structured exports, or images</span>
               </div>
             </div>
           ) : (
@@ -548,6 +584,12 @@ export function UnifiedIntake() {
                       <iframe className="h-[560px] w-full border bg-white" src={inspection.preview_url} title={`Read-only preview of ${inspection.name}`} />
                     ) : remote && inspection?.preview_kind === "image" && inspection.preview_url ? (
                       <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={inspection.preview_url} alt={`Read-only preview of ${inspection.name}`} /></div>
+                    ) : file && localImagePreviewUrl ? (
+                      localImagePreviewError ? (
+                        <div className="border bg-background px-4 py-12 text-center text-sm text-muted-foreground">This browser could not render the selected image format inline. The original file remains selected, hashed, and available to the governed workflow.</div>
+                      ) : (
+                        <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={localImagePreviewUrl} alt={`Local preview of ${file.name}`} onError={() => setLocalImagePreviewError(true)} /></div>
+                      )
                     ) : lines.length ? (
                       <div className="max-h-[270px] overflow-auto border bg-background font-mono text-[11px] leading-5" role="region" aria-label="Selected source content" tabIndex={0}>
                         {lines.map((line, index) => <div key={`${index}-${line.slice(0, 24)}`} className="grid grid-cols-[42px_1fr] border-b px-3 py-2 last:border-b-0"><span className="text-muted-foreground">{String(index + 1).padStart(2, "0")}</span><span className="break-words">{line}</span></div>)}
@@ -634,8 +676,9 @@ export function UnifiedIntake() {
                     <p className="platform-rule-title mb-3">Parser route</p>
                     {preview ? (
                       <div className="border bg-accent/30 p-5">
-                        <div className="flex flex-wrap items-center justify-between gap-3"><strong className="capitalize">{preview.phase.replaceAll("_", " ")}</strong><span className="border bg-card px-2 py-1 text-[10px] uppercase text-muted-foreground">Temporal read-back</span></div>
+                        <div className="flex flex-wrap items-center justify-between gap-3"><strong className="capitalize">{(preview.lifecycle ?? preview.phase).replaceAll("_", " ")}</strong><span className="border bg-card px-2 py-1 text-[10px] uppercase text-muted-foreground">Temporal read-back</span></div>
                         <dl className="mt-5 grid gap-4 text-xs">
+                          {preview.lifecycle && <div><dt className="text-muted-foreground">Preview decision phase</dt><dd className="mt-1 capitalize">{preview.phase.replaceAll("_", " ")}</dd></div>}
                           <div><dt className="text-muted-foreground">Parser</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.parser ? `${preview.parser.parser_id} · ${preview.parser.parser_version}` : "Selection has not been recorded yet"}</dd></div>
                           {preview.parser && <div><dt className="text-muted-foreground">Parser config digest</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.parser.config_digest}</dd></div>}
                           {preview.reason && <div><dt className="text-muted-foreground">Runtime reason</dt><dd className="mt-1">{preview.reason}</dd></div>}
@@ -724,6 +767,11 @@ export function UnifiedIntake() {
 }
 
 function phaseForPreview(state: ProfferPreviewResponse): IntakePhase {
+  if (state.lifecycle) {
+    if (state.lifecycle === "awaiting_repair_decision" && state.repair_assessment?.review_required) return "repair_review";
+    if (state.lifecycle === "awaiting_preview_decision") return "review";
+    return "complete";
+  }
   if (state.phase === "awaiting_repair_decision" && state.repair_assessment?.review_required) return "repair_review";
   if (state.phase === "awaiting_decision") return "review";
   return "complete";

@@ -79,6 +79,9 @@ import type {
   VerifyResponse,
   WeaviateDetail,
   Workflow,
+  ProfferOperationDetail,
+  ProfferOperationLifecycle,
+  ProfferOperationListResponse,
   ProfferDecisionResponse,
   ProfferPreviewResponse,
   ProfferRepairDecisionRequest,
@@ -673,6 +676,26 @@ export function startProffer(payload: ProfferStartRequest) {
 
 export function getProfferPreview(previewHandle: string, signal?: AbortSignal) {
   return apiFetch<ProfferPreviewResponse>(`/api/proffer/previews/${encodeURIComponent(previewHandle)}`, { signal });
+}
+
+export function listProfferOperations(params: {
+  status?: ProfferOperationLifecycle;
+  cursor?: string;
+  limit?: number;
+} = {}, signal?: AbortSignal) {
+  const query = new URLSearchParams();
+  if (params.status) query.set("status", params.status);
+  if (params.cursor) query.set("cursor", params.cursor);
+  if (params.limit) query.set("limit", String(params.limit));
+  const suffix = query.size ? `?${query.toString()}` : "";
+  return apiFetch<ProfferOperationListResponse>(`/api/proffer/operations${suffix}`, { signal });
+}
+
+export function getProfferOperation(previewHandle: string, signal?: AbortSignal) {
+  return apiFetch<ProfferOperationDetail>(
+    `/api/proffer/operations/${encodeURIComponent(previewHandle)}`,
+    { signal },
+  );
 }
 
 export function decideProfferRepair(previewHandle: string, payload: ProfferRepairDecisionRequest) {

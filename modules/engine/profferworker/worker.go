@@ -33,6 +33,7 @@ type Registrations struct {
 	InventoryObservation  activities.SourceObservationActivities
 	EmbeddedObservation   activities.SourceObservationActivities
 	N8N                   platformtemporal.N8NActivities
+	N8NFlows              platformtemporal.FlowActivities
 	Hash                  activities.HashActivities
 	Raw                   activities.RawPipelineActivities
 	Normalized            activities.NormalizedPipelineActivities
@@ -54,6 +55,7 @@ func RegisterAll(registrar interface {
 	activities.RegisterEmbeddedMetadataActivity(registrar, registrations.EmbeddedObservation)
 	registrar.RegisterActivityWithOptions(registrations.N8N.SelectParser, activity.RegisterOptions{Name: string(stagegraph.SelectParser)})
 	registrar.RegisterActivityWithOptions(registrations.N8N.ExecuteParser, activity.RegisterOptions{Name: string(stagegraph.ExecuteParser)})
+	registrar.RegisterActivityWithOptions(registrations.N8NFlows.RunFlow, activity.RegisterOptions{Name: platformtemporal.RunFlowActivityName})
 	activities.RegisterRawPipelineActivities(registrar, registrations.Raw)
 	activities.RegisterNormalizedPipelineActivities(registrar, registrations.Normalized)
 	activities.RegisterRepairActivities(registrar, registrations.Repair)
@@ -72,6 +74,10 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := validateSharedPaths(cfg); err != nil {
 		return err
 	}
+	flowRegistry, err := loadConfiguredFlowBindings(cfg.N8NFlowBindingsFile)
+	if err != nil {
+		return err
+	}
 	if err := prepareSharedPaths(cfg); err != nil {
 		return err
 	}
@@ -88,7 +94,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	registrations, err := buildRegistrations(pool, cfg)
+	registrations, err := buildRegistrations(pool, cfg, flowRegistry)
 	if err != nil {
 		return err
 	}
@@ -103,13 +109,20 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := temporalWorker.Start(); err != nil {
 		return fmt.Errorf("proffer worker: start Temporal worker: %w", err)
 	}
-	slog.Info("universal import worker started", "task_queue", cfg.TemporalTaskQueue, "namespace", cfg.TemporalNamespace, "activity_count", len(stagegraph.Stages))
+	slog.Info(
+		"universal import worker started",
+		"task_queue", cfg.TemporalTaskQueue,
+		"namespace", cfg.TemporalNamespace,
+		"activity_count", len(stagegraph.Stages),
+		"n8n_flow_activity", platformtemporal.RunFlowActivityName,
+		"n8n_flow_binding_count", flowRegistry.Count(),
+	)
 	<-ctx.Done()
 	temporalWorker.Stop()
 	return nil
 }
 
-func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
+func buildRegistrations(pool *pgxpool.Pool, cfg Config, flowRegistry *platformtemporal.FlowRegistry) (Registrations, error) {
 	openObject, err := runtimeapi.NewRetainedObjectOpener(pool)
 	if err != nil {
 		return Registrations{}, err
@@ -227,12 +240,30 @@ func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
 		InventoryObservation:  activities.NewSourceObservationActivities(nil, runtimeapi.NewNonContainerMemberEnumerator(), observationRepo),
 		EmbeddedObservation:   activities.NewSourceObservationActivities(embeddedExtractor, nil, observationRepo),
 		N8N:                   platformtemporal.N8NActivities{Client: n8nClient},
+		N8NFlows:              platformtemporal.FlowActivities{Client: n8nClient, Registry: flowRegistry},
 		Hash:                  activities.NewHashActivities(hashRepo),
 		Raw:                   activities.NewRawPipelineActivities(rawRepo),
 		Normalized:            activities.NewNormalizedPipelineActivities(normalizedRepo, normalize.GenericMessageNormalizer{}),
 		Repair:                activities.NewRepairActivities(toolsClient, repairStore),
 		Preview:               activities.PreviewProjectionActivity{Store: previewStore},
 	}, nil
+}
+
+// loadConfiguredFlowBindings preserves the legitimate no-extra-flows mode,
+// while making an explicitly configured file a startup contract. A typo or a
+// missing Coolify mount must not silently become an empty registry.
+func loadConfiguredFlowBindings(path string) (*platformtemporal.FlowRegistry, error) {
+	if strings.TrimSpace(path) == "" {
+		return platformtemporal.LoadFlowBindings("")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("proffer worker: N8N_FLOW_BINDINGS_FILE is configured but unavailable: %w", err)
+	}
+	registry, err := platformtemporal.LoadFlowBindings(path)
+	if err != nil {
+		return nil, fmt.Errorf("proffer worker: invalid N8N_FLOW_BINDINGS_FILE: %w", err)
+	}
+	return registry, nil
 }
 
 func prepareSharedPaths(cfg Config) error {

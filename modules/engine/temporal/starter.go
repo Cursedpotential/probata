@@ -33,6 +33,10 @@ type WorkflowStarter interface {
 	// through the Temporal server against durable workflow state, not any
 	// process-local cache.
 	Preview(ctx context.Context, workflowID string) (proffer.PreviewState, error)
+	// Operation queries the complete lifecycle registered before the first
+	// Activity starts. It is the authoritative read for current stage, human
+	// wait, and terminal state.
+	Operation(ctx context.Context, workflowID string) (proffer.OperationState, error)
 }
 
 // temporalStarter is the production WorkflowStarter, backed by a real
@@ -116,6 +120,22 @@ func (s *temporalStarter) Preview(ctx context.Context, workflowID string) (proff
 	var state proffer.PreviewState
 	if err := value.Get(&state); err != nil {
 		return proffer.PreviewState{}, fmt.Errorf("temporal: decode preview state: %w", err)
+	}
+	return state, nil
+}
+
+// Operation queries a run's current reference-only lifecycle state.
+func (s *temporalStarter) Operation(ctx context.Context, workflowID string) (proffer.OperationState, error) {
+	if strings.TrimSpace(workflowID) == "" {
+		return proffer.OperationState{}, errors.New("temporal: workflow_id is required to query operation state")
+	}
+	value, err := s.client.QueryWorkflow(ctx, workflowID, "", proffer.OperationQueryName)
+	if err != nil {
+		return proffer.OperationState{}, fmt.Errorf("temporal: query operation state: %w", err)
+	}
+	var state proffer.OperationState
+	if err := value.Get(&state); err != nil {
+		return proffer.OperationState{}, fmt.Errorf("temporal: decode operation state: %w", err)
 	}
 	return state, nil
 }

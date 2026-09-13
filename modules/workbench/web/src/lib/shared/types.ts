@@ -1043,6 +1043,52 @@ export interface ProfferStartResponse {
   preview_handle: string;
 }
 
+export type ProfferOperationLifecycle =
+  | "running"
+  | "awaiting_repair_decision"
+  | "awaiting_preview_decision"
+  | "completed"
+  | "failed"
+  | "unavailable";
+
+export type ProfferOperationWait = "repair_decision" | "preview_decision";
+
+export interface ProfferOperationSummary {
+  preview_handle: string;
+  request_id: string;
+  source_ref: string;
+  service: "proffer";
+  created_at: string;
+  lifecycle: ProfferOperationLifecycle;
+  current_stage?: string | null;
+  active_stages: string[];
+  wait?: ProfferOperationWait | null;
+  terminal: boolean;
+  reason?: string;
+  source_version_ref?: string | null;
+  completed_stage_count: number;
+}
+
+export interface ProfferOperationStage {
+  stage: string;
+  status: string;
+  ref?: string | null;
+  receipt_ref?: string | null;
+  reason?: string;
+  attempt?: number | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface ProfferOperationDetail extends ProfferOperationSummary {
+  stages: ProfferOperationStage[];
+}
+
+export interface ProfferOperationListResponse {
+  items: ProfferOperationSummary[];
+  next_cursor?: string | null;
+}
+
 export interface ProfferPreviewReceipt {
   receipt_type: "custody" | "parser_selection" | "parser_execution" | "normalization" | "storage" | "completeness";
   receipt_ref: string;
@@ -1088,6 +1134,12 @@ export interface ProfferPreviewResponse {
   receipts: ProfferPreviewReceipt[];
   reason?: string;
   repair_assessment?: ProfferRepairAssessmentView | null;
+  lifecycle?: ProfferOperationLifecycle | null;
+  current_stage?: string | null;
+  active_stages?: string[];
+  wait?: ProfferOperationWait | null;
+  terminal?: boolean | null;
+  completed_stage_count?: number | null;
 }
 
 export interface ProfferPreviewParticipant {

@@ -20,6 +20,12 @@ const RepairDecisionSignalName = "repair_decision"
 // the workflow has closed (within retention).
 const PreviewQueryName = "preview"
 
+// OperationQueryName exposes the complete, reference-only lifecycle of a
+// Proffer execution. Unlike PreviewQueryName, it is registered before the
+// first Activity is scheduled so an operator can always reopen a run while it
+// is registering, retaining, parsing, waiting for review, or terminating.
+const OperationQueryName = "operation"
+
 // previewDecisionTimeout bounds how long the hold waits for
 // PreviewDecisionSignalName before failing the run closed. This is a real
 // Temporal Timer (workflow.NewTimer), backed by the Temporal server itself —
@@ -86,4 +92,56 @@ type RepairAssessmentView struct {
 	AssessmentRef    Ref  `json:"assessment_ref"`
 	SourceVersionRef Ref  `json:"source_version_ref"`
 	ReviewRequired   bool `json:"review_required"`
+}
+
+// OperationLifecycle is the current externally meaningful state of one
+// Proffer execution. Review waits are first-class lifecycle values rather than
+// an overloaded generic "running" status so an operator can filter for work
+// that needs a decision.
+type OperationLifecycle string
+
+const (
+	OperationRunning                 OperationLifecycle = "running"
+	OperationAwaitingRepairDecision  OperationLifecycle = "awaiting_repair_decision"
+	OperationAwaitingPreviewDecision OperationLifecycle = "awaiting_preview_decision"
+	OperationCompleted               OperationLifecycle = "completed"
+	OperationFailed                  OperationLifecycle = "failed"
+	// OperationUnavailable is emitted by the HTTP read facade when the durable
+	// Temporal query cannot currently be served. Work is never guessed to have
+	// succeeded or failed from an incomplete projection.
+	OperationUnavailable OperationLifecycle = "unavailable"
+)
+
+// OperationWait identifies the human input, if any, that can advance a held
+// workflow. It deliberately contains no actor or decision payload.
+type OperationWait string
+
+const (
+	OperationWaitRepairDecision  OperationWait = "repair_decision"
+	OperationWaitPreviewDecision OperationWait = "preview_decision"
+)
+
+// OperationStage is the compact query projection of one settled Activity.
+// Source bytes and decoded records never enter workflow queries.
+type OperationStage struct {
+	Stage      ActivityName `json:"stage"`
+	Status     Status       `json:"status"`
+	Ref        Ref          `json:"ref,omitempty"`
+	ReceiptRef Ref          `json:"receipt_ref,omitempty"`
+	Reason     string       `json:"reason,omitempty"`
+}
+
+// OperationState is returned by OperationQueryName. ActiveStages is populated
+// for bounded fan-out; CurrentStage is the first still-active stage and gives
+// simple clients a stable scalar without concealing concurrent work.
+type OperationState struct {
+	Lifecycle           OperationLifecycle `json:"lifecycle"`
+	CurrentStage        ActivityName       `json:"current_stage,omitempty"`
+	ActiveStages        []ActivityName     `json:"active_stages"`
+	Wait                OperationWait      `json:"wait,omitempty"`
+	Terminal            bool               `json:"terminal"`
+	Reason              string             `json:"reason,omitempty"`
+	SourceVersionRef    Ref                `json:"source_version_ref,omitempty"`
+	CompletedStageCount int                `json:"completed_stage_count"`
+	Stages              []OperationStage   `json:"stages"`
 }

@@ -35,6 +35,8 @@ import (
 const (
 	maxPreviewRequestBytes int64 = 16 << 10
 	maxPreviewPage               = 250
+	maxOperationPage             = 100
+	maxOperationScan             = 1000
 	maxReasonBytes               = 4000
 )
 
@@ -51,6 +53,7 @@ type PreviewWorkflow interface {
 	Decide(context.Context, string, proffer.PreviewDecision) error
 	DecideRepair(context.Context, string, proffer.RepairDecision) error
 	Preview(context.Context, string) (proffer.PreviewState, error)
+	Operation(context.Context, string) (proffer.OperationState, error)
 }
 
 type RepairDecisionWriter interface {
@@ -119,6 +122,9 @@ func (s *MemoryPreviewStore) Create(_ context.Context, binding PreviewBinding) (
 			return PreviewBinding{}, fmt.Errorf("generate preview handle: %w", err)
 		}
 		binding.Handle = base64.RawURLEncoding.EncodeToString(raw)
+		if binding.CreatedAt.IsZero() {
+			binding.CreatedAt = time.Now().UTC()
+		}
 		if _, exists := s.entries[binding.Handle]; exists {
 			continue
 		}
@@ -129,6 +135,38 @@ func (s *MemoryPreviewStore) Create(_ context.Context, binding PreviewBinding) (
 		return binding, nil
 	}
 	return PreviewBinding{}, errors.New("generate unique preview handle")
+}
+
+func (s *MemoryPreviewStore) ListBindings(_ context.Context, cursor *previewmodel.BindingCursor, limit int) (previewmodel.BindingPage, error) {
+	if limit < 1 {
+		return previewmodel.BindingPage{}, errors.New("preview binding page limit must be positive")
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	bindings := make([]PreviewBinding, 0, len(s.entries))
+	for _, entry := range s.entries {
+		binding := entry.binding
+		if cursor != nil && !binding.CreatedAt.Before(cursor.CreatedAt) && !(binding.CreatedAt.Equal(cursor.CreatedAt) && binding.Handle < cursor.Handle) {
+			continue
+		}
+		bindings = append(bindings, binding)
+	}
+	sort.Slice(bindings, func(i, j int) bool {
+		if bindings[i].CreatedAt.Equal(bindings[j].CreatedAt) {
+			return bindings[i].Handle > bindings[j].Handle
+		}
+		return bindings[i].CreatedAt.After(bindings[j].CreatedAt)
+	})
+	page := previewmodel.BindingPage{Bindings: bindings}
+	if len(page.Bindings) > limit {
+		page.Bindings = page.Bindings[:limit]
+		page.HasMore = true
+	}
+	return page, nil
+}
+
+func (*MemoryPreviewStore) OperationStages(context.Context, string) ([]previewmodel.OperationStage, error) {
+	return []previewmodel.OperationStage{}, nil
 }
 
 func (s *MemoryPreviewStore) Binding(_ context.Context, handle string) (PreviewBinding, error) {
@@ -296,6 +334,7 @@ func memoryDecisionKey(handle string, approved bool, reason, actor string, selec
 func clonePreviewSnapshot(snapshot PreviewSnapshot) PreviewSnapshot {
 	clone := snapshot
 	clone.Receipts = append([]PreviewReceipt(nil), snapshot.Receipts...)
+	clone.ActiveStages = append([]proffer.ActivityName(nil), snapshot.ActiveStages...)
 	if snapshot.Parser != nil {
 		parser := *snapshot.Parser
 		clone.Parser = &parser
@@ -368,6 +407,35 @@ type PreviewHTTPHandler struct {
 	sourceContext    sourcecontext.Validator
 }
 
+// OperationSummary is the browser-safe identity and lifecycle of one Proffer
+// execution. Temporal workflow/run IDs stay behind the service boundary; the
+// opaque preview handle is the only external operation key.
+type OperationSummary struct {
+	PreviewHandle       string                     `json:"preview_handle"`
+	RequestID           string                     `json:"request_id"`
+	SourceRef           proffer.Ref                `json:"source_ref"`
+	Service             string                     `json:"service"`
+	CreatedAt           time.Time                  `json:"created_at"`
+	Lifecycle           proffer.OperationLifecycle `json:"lifecycle"`
+	CurrentStage        proffer.ActivityName       `json:"current_stage,omitempty"`
+	ActiveStages        []proffer.ActivityName     `json:"active_stages"`
+	Wait                proffer.OperationWait      `json:"wait,omitempty"`
+	Terminal            bool                       `json:"terminal"`
+	Reason              string                     `json:"reason,omitempty"`
+	SourceVersionRef    proffer.Ref                `json:"source_version_ref,omitempty"`
+	CompletedStageCount int                        `json:"completed_stage_count"`
+}
+
+type OperationDetail struct {
+	OperationSummary
+	Stages []previewmodel.OperationStage `json:"stages"`
+}
+
+type OperationListResponse struct {
+	Items      []OperationSummary `json:"items"`
+	NextCursor *string            `json:"next_cursor,omitempty"`
+}
+
 func NewPreviewHTTPHandler(workflow PreviewWorkflow, store PreviewStore, repairs RepairDecisionWriter, cursorKey []byte, serviceTokenPath string, validators ...sourcecontext.Validator) (*PreviewHTTPHandler, error) {
 	if workflow == nil || store == nil || repairs == nil {
 		return nil, errors.New("proffer preview handler requires workflow, preview store, and repair decision writer")
@@ -391,6 +459,8 @@ func NewPreviewHTTPHandler(workflow PreviewWorkflow, store PreviewStore, repairs
 func (h *PreviewHTTPHandler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /reference-import/start", h.auth(h.start))
+	mux.HandleFunc("GET /reference-import/operations", h.auth(h.operations))
+	mux.HandleFunc("GET /reference-import/operations/{preview_handle}", h.auth(h.operation))
 	mux.HandleFunc("GET /reference-import/previews/{preview_handle}", h.auth(h.snapshot))
 	mux.HandleFunc("GET /reference-import/previews/{preview_handle}/messages", h.auth(h.messages))
 	mux.HandleFunc("GET /reference-import/previews/{preview_handle}/events", h.auth(h.events))
@@ -418,6 +488,7 @@ func (h *PreviewHTTPHandler) auth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 var serviceTokenPattern = regexp.MustCompile(`^[A-Za-z0-9._~+/\-]+={0,}$`)
+var previewHandlePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{32,128}$`)
 
 func loadServiceToken(path string) ([]byte, error) {
 	if path == "" || path != strings.TrimSpace(path) || !filepath.IsAbs(path) {
@@ -527,30 +598,229 @@ func (h *PreviewHTTPHandler) start(w http.ResponseWriter, r *http.Request) {
 
 func (h *PreviewHTTPHandler) snapshot(w http.ResponseWriter, r *http.Request) {
 	handle := r.PathValue("preview_handle")
+	binding, bindErr := h.store.Binding(r.Context(), handle)
+	if bindErr != nil {
+		h.storeError(w, bindErr)
+		return
+	}
+	operation := h.readOperation(r.Context(), binding)
 	snapshot, err := h.store.Snapshot(r.Context(), handle)
 	if err != nil {
 		if errors.Is(err, ErrPreviewNotReady) {
-			binding, bindErr := h.store.Binding(r.Context(), handle)
-			if bindErr != nil {
-				h.storeError(w, bindErr)
-				return
-			}
 			state, queryErr := h.workflow.Preview(r.Context(), binding.WorkflowID)
-			if queryErr != nil {
-				previewError(w, http.StatusServiceUnavailable, queryErr)
-				return
+			var assessment *proffer.RepairAssessmentView
+			phase := string(operation.Lifecycle)
+			if queryErr == nil {
+				assessment = state.RepairAssessment
+				phase = string(state.Phase)
 			}
 			previewJSON(w, http.StatusOK, struct {
 				PreviewHandle    string                        `json:"preview_handle"`
-				Phase            proffer.PreviewPhase          `json:"phase"`
+				Phase            string                        `json:"phase"`
 				RepairAssessment *proffer.RepairAssessmentView `json:"repair_assessment,omitempty"`
-			}{handle, state.Phase, state.RepairAssessment})
+				Lifecycle        proffer.OperationLifecycle    `json:"lifecycle"`
+				CurrentStage     proffer.ActivityName          `json:"current_stage,omitempty"`
+				ActiveStages     []proffer.ActivityName        `json:"active_stages"`
+				Wait             proffer.OperationWait         `json:"wait,omitempty"`
+				Terminal         bool                          `json:"terminal"`
+				CompletedStages  int                           `json:"completed_stage_count"`
+			}{handle, phase, assessment, operation.Lifecycle,
+				operation.CurrentStage, operation.ActiveStages, operation.Wait,
+				operation.Terminal, operation.CompletedStageCount})
 			return
 		}
 		h.storeError(w, err)
 		return
 	}
+	applyOperationToSnapshot(&snapshot, operation)
 	previewJSON(w, 200, snapshot)
+}
+
+func (h *PreviewHTTPHandler) operations(w http.ResponseWriter, r *http.Request) {
+	limit := 50
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > maxOperationPage {
+			previewError(w, http.StatusUnprocessableEntity, errors.New("limit must be between 1 and 100"))
+			return
+		}
+		limit = value
+	}
+	status := proffer.OperationLifecycle(strings.TrimSpace(r.URL.Query().Get("status")))
+	if status != "" && !validOperationLifecycle(status) {
+		previewError(w, http.StatusUnprocessableEntity, errors.New("status is not a recognized operation lifecycle"))
+		return
+	}
+	var cursor *previewmodel.BindingCursor
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		decoded, err := h.decodeOperationCursor(raw)
+		if err != nil {
+			previewError(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+		cursor = &decoded
+	}
+	response := OperationListResponse{Items: []OperationSummary{}}
+	var lastScanned *previewmodel.BindingCursor
+	hasMore := false
+	for scanned := 0; len(response.Items) < limit && scanned < maxOperationScan; {
+		batchLimit := maxOperationPage
+		page, err := h.store.ListBindings(r.Context(), cursor, batchLimit)
+		if err != nil {
+			previewError(w, http.StatusServiceUnavailable, err)
+			return
+		}
+		if len(page.Bindings) == 0 {
+			hasMore = false
+			break
+		}
+		for index, binding := range page.Bindings {
+			scanned++
+			coordinate := previewmodel.BindingCursor{CreatedAt: binding.CreatedAt, Handle: binding.Handle}
+			lastScanned = &coordinate
+			operation := h.readOperation(r.Context(), binding)
+			if status == "" || operation.Lifecycle == status {
+				response.Items = append(response.Items, operation)
+			}
+			if len(response.Items) == limit || scanned == maxOperationScan {
+				hasMore = index < len(page.Bindings)-1 || page.HasMore
+				break
+			}
+		}
+		if len(response.Items) == limit || scanned == maxOperationScan {
+			break
+		}
+		if !page.HasMore {
+			hasMore = false
+			break
+		}
+		last := page.Bindings[len(page.Bindings)-1]
+		cursor = &previewmodel.BindingCursor{CreatedAt: last.CreatedAt, Handle: last.Handle}
+		hasMore = true
+	}
+	if hasMore && lastScanned != nil {
+		encoded := h.encodeOperationCursor(*lastScanned)
+		response.NextCursor = &encoded
+	}
+	previewJSON(w, http.StatusOK, response)
+}
+
+func (h *PreviewHTTPHandler) operation(w http.ResponseWriter, r *http.Request) {
+	handle := r.PathValue("preview_handle")
+	binding, err := h.store.Binding(r.Context(), handle)
+	if err != nil {
+		h.storeError(w, err)
+		return
+	}
+	summary, queriedStages := h.readOperationState(r.Context(), binding)
+	stages, err := h.store.OperationStages(r.Context(), handle)
+	if err != nil {
+		previewError(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	stages = mergeOperationStages(stages, queriedStages)
+	previewJSON(w, http.StatusOK, OperationDetail{OperationSummary: summary, Stages: stages})
+}
+
+func (h *PreviewHTTPHandler) readOperation(ctx context.Context, binding PreviewBinding) OperationSummary {
+	summary, _ := h.readOperationState(ctx, binding)
+	return summary
+}
+
+func (h *PreviewHTTPHandler) readOperationState(ctx context.Context, binding PreviewBinding) (OperationSummary, []proffer.OperationStage) {
+	state, err := h.workflow.Operation(ctx, binding.WorkflowID)
+	if err != nil || !validOperationLifecycle(state.Lifecycle) {
+		state = proffer.OperationState{
+			Lifecycle:        proffer.OperationUnavailable,
+			ActiveStages:     []proffer.ActivityName{},
+			SourceVersionRef: proffer.Ref(binding.SourceVersionID.String()),
+			Reason:           "durable workflow state is currently unavailable",
+		}
+		if binding.SourceVersionID == uuid.Nil {
+			state.SourceVersionRef = ""
+		}
+	}
+	if state.ActiveStages == nil {
+		state.ActiveStages = []proffer.ActivityName{}
+	}
+	return OperationSummary{
+		PreviewHandle: binding.Handle, RequestID: binding.RequestID, SourceRef: binding.SourceRef,
+		Service: "proffer", CreatedAt: binding.CreatedAt, Lifecycle: state.Lifecycle,
+		CurrentStage: state.CurrentStage, ActiveStages: state.ActiveStages, Wait: state.Wait,
+		Terminal: state.Terminal, Reason: state.Reason, SourceVersionRef: state.SourceVersionRef,
+		CompletedStageCount: state.CompletedStageCount,
+	}, state.Stages
+}
+
+func applyOperationToSnapshot(snapshot *PreviewSnapshot, operation OperationSummary) {
+	snapshot.Lifecycle = operation.Lifecycle
+	snapshot.CurrentStage = operation.CurrentStage
+	snapshot.ActiveStages = operation.ActiveStages
+	snapshot.Wait = operation.Wait
+	snapshot.Terminal = operation.Terminal
+	snapshot.CompletedStageCount = operation.CompletedStageCount
+}
+
+func mergeOperationStages(durable []previewmodel.OperationStage, queried []proffer.OperationStage) []previewmodel.OperationStage {
+	seen := make(map[string]bool, len(durable))
+	for _, stage := range durable {
+		seen[stage.Stage+"\x00"+stage.ReceiptRef] = true
+	}
+	for _, stage := range queried {
+		key := string(stage.Stage) + "\x00" + string(stage.ReceiptRef)
+		if seen[key] {
+			continue
+		}
+		durable = append(durable, previewmodel.OperationStage{
+			Stage: string(stage.Stage), Status: string(stage.Status), Ref: string(stage.Ref),
+			ReceiptRef: string(stage.ReceiptRef), Reason: stage.Reason,
+		})
+	}
+	if durable == nil {
+		return []previewmodel.OperationStage{}
+	}
+	return durable
+}
+
+func validOperationLifecycle(value proffer.OperationLifecycle) bool {
+	switch value {
+	case proffer.OperationRunning, proffer.OperationAwaitingRepairDecision,
+		proffer.OperationAwaitingPreviewDecision, proffer.OperationCompleted,
+		proffer.OperationFailed, proffer.OperationUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *PreviewHTTPHandler) encodeOperationCursor(cursor previewmodel.BindingCursor) string {
+	payload := cursor.CreatedAt.UTC().Format(time.RFC3339Nano) + "\n" + cursor.Handle
+	mac := hmac.New(sha256.New, h.cursorKey)
+	_, _ = mac.Write([]byte("operations\n" + payload))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload + "\n" + hex.EncodeToString(mac.Sum(nil))))
+}
+
+func (h *PreviewHTTPHandler) decodeOperationCursor(cursor string) (previewmodel.BindingCursor, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil || len(decoded) > 1024 {
+		return previewmodel.BindingCursor{}, errors.New("operation cursor is malformed")
+	}
+	parts := strings.Split(string(decoded), "\n")
+	if len(parts) != 3 || !previewHandlePattern.MatchString(parts[1]) {
+		return previewmodel.BindingCursor{}, errors.New("operation cursor is malformed")
+	}
+	payload := parts[0] + "\n" + parts[1]
+	mac := hmac.New(sha256.New, h.cursorKey)
+	_, _ = mac.Write([]byte("operations\n" + payload))
+	actual, err := hex.DecodeString(parts[2])
+	if err != nil || !hmac.Equal(actual, mac.Sum(nil)) {
+		return previewmodel.BindingCursor{}, errors.New("operation cursor signature is invalid")
+	}
+	createdAt, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return previewmodel.BindingCursor{}, errors.New("operation cursor time is invalid")
+	}
+	return previewmodel.BindingCursor{CreatedAt: createdAt, Handle: parts[1]}, nil
 }
 
 func (h *PreviewHTTPHandler) messages(w http.ResponseWriter, r *http.Request) {

@@ -28,7 +28,7 @@ test("source inspection exposes the Source preview, Metadata, and Parser tabs", 
 });
 
 test("local intake selects supported document extensions and declares them truthfully", () => {
-  assert.match(intake, /const LOCAL_FILE_ACCEPT = "\.md,\.json,\.docx,\.html,\.htm,\.pdf";/);
+  assert.match(intake, /const LOCAL_FILE_ACCEPT = "\.md,\.json,\.docx,\.html,\.htm,\.pdf,\.png,\.jpg,\.jpeg,\.gif,\.webp,\.avif,\.tif,\.tiff,\.bmp";/);
   assert.match(intake, /<input accept=\{LOCAL_FILE_ACCEPT\} className="sr-only" type="file"/);
   assert.match(intake, /md: "markdown"/);
   assert.match(intake, /json: "message_export_json"/);
@@ -36,11 +36,26 @@ test("local intake selects supported document extensions and declares them truth
   assert.match(intake, /html: "html"/);
   assert.match(intake, /htm: "html"/);
   assert.match(intake, /pdf: "pdf"/);
+  for (const extension of ["png", "jpg", "jpeg", "gif", "webp", "avif", "tif", "tiff", "bmp"]) {
+    assert.match(intake, new RegExp(`${extension}: "image"`));
+  }
   assert.match(intake, /\/\\\.\(md\|json\|html\?\|txt\|csv\|xml\)\$\/i/);
 });
 
+test("local images receive a bounded object URL preview that is always revoked", () => {
+  assert.match(intake, /URL\.createObjectURL\(selected\)/);
+  assert.match(intake, /URL\.revokeObjectURL\(localImagePreviewUrlRef\.current\)/);
+  assert.match(intake, /replaceLocalImagePreview\(selected\)/);
+  assert.match(intake, /replaceLocalImagePreview\(null\)/);
+  assert.match(intake, /file && localImagePreviewUrl/);
+  assert.match(intake, /src=\{localImagePreviewUrl\}/);
+  assert.match(intake, /alt=\{`Local preview of \$\{file\.name\}`\}/);
+  assert.match(intake, /onError=\{\(\) => setLocalImagePreviewError\(true\)\}/);
+  assert.match(intake, /This browser could not render the selected image format inline/);
+});
+
 test("remote sources are immediately previewed and hashed without claiming custody", () => {
-  assert.match(intake, /inspectUIWSource\(selected\)/);
+  assert.match(intake, /inspectProfferSource\(selected\)/);
   assert.match(intake, /Reading and hashing/);
   assert.match(intake, /Preview checksum/);
   assert.match(intake, /Read-only preview identity/);

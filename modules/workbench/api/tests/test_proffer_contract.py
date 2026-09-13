@@ -13,6 +13,7 @@ import httpx
 from app.config import Settings
 from app.runtime import proffer as runtime
 from app.service import proffer
+from app.service import proffer_operations
 from starlette.requests import Request
 
 from app.types.proffer import (
@@ -45,6 +46,24 @@ def preview_payload(preview_handle: str = PREVIEW_HANDLE) -> dict:
         },
         "preview_digest": "b" * 64,
         "receipts": [],
+    }
+
+
+def operation_payload(preview_handle: str = PREVIEW_HANDLE) -> dict:
+    return {
+        "preview_handle": preview_handle,
+        "request_id": "request-1",
+        "source_ref": "r2://casebible-sorted/photos/cat.jpg",
+        "service": "proffer",
+        "created_at": "2026-09-12T12:30:00Z",
+        "lifecycle": "awaiting_repair_decision",
+        "current_stage": "detect_repair_need",
+        "active_stages": [],
+        "wait": "repair_decision",
+        "terminal": False,
+        "reason": "detector found a repair issue",
+        "source_version_ref": "00000000-0000-0000-0000-000000000011",
+        "completed_stage_count": 3,
     }
 
 
@@ -131,6 +150,96 @@ def test_service_preserves_exact_upstream_contract(monkeypatch) -> None:
     assert captured["kwargs"]["json"]["source_ref"] == "r2://casebible-sorted/intake/source.pdf"
     assert captured["kwargs"]["json"]["matter_id"] == "00000000-0000-0000-0000-000000000001"
     assert captured["kwargs"]["json"]["court_case_id"] == "00000000-0000-0000-0000-000000000002"
+
+
+def test_operation_list_forwards_only_engine_supported_filters(monkeypatch) -> None:
+    class Response:
+        def json(self):
+            return {"items": [operation_payload()], "next_cursor": "next-page"}
+
+    captured = {}
+
+    async def fake_request(method, path, **kwargs):
+        captured.update(method=method, path=path, kwargs=kwargs)
+        return Response()
+
+    monkeypatch.setattr(proffer, "_request", fake_request)
+    result = asyncio.run(
+        proffer_operations.list_operations(
+            status="awaiting_repair_decision",
+            cursor="current-page",
+            limit=50,
+        )
+    )
+
+    assert captured == {
+        "method": "GET",
+        "path": "/reference-import/operations",
+        "kwargs": {
+            "params": {
+                "status": "awaiting_repair_decision",
+                "cursor": "current-page",
+                "limit": 50,
+            }
+        },
+    }
+    assert result.items[0].preview_handle == PREVIEW_HANDLE
+    assert result.items[0].service == "proffer"
+    assert result.next_cursor == "next-page"
+    assert not hasattr(result.items[0], "workflow_id")
+    assert not hasattr(result.items[0], "run_id")
+
+
+def test_operation_detail_is_addressed_and_correlated_by_preview_handle(monkeypatch) -> None:
+    class Response:
+        def json(self):
+            return {
+                **operation_payload(),
+                "stages": [
+                    {
+                        "stage": "register_source",
+                        "status": "completed",
+                        "receipt_ref": "receipt://register/1",
+                        "attempt": 1,
+                        "completed_at": "2026-09-12T12:30:01Z",
+                    }
+                ],
+            }
+
+    captured = {}
+
+    async def fake_request(method, path, **kwargs):
+        captured.update(method=method, path=path, kwargs=kwargs)
+        return Response()
+
+    monkeypatch.setattr(proffer, "_request", fake_request)
+    result = asyncio.run(proffer_operations.operation(PREVIEW_HANDLE))
+
+    assert captured == {
+        "method": "GET",
+        "path": f"/reference-import/operations/{PREVIEW_HANDLE}",
+        "kwargs": {},
+    }
+    assert result.preview_handle == PREVIEW_HANDLE
+    assert result.stages[0].stage == "register_source"
+
+
+def test_operation_detail_rejects_a_different_preview_handle(monkeypatch) -> None:
+    class Response:
+        def json(self):
+            return {**operation_payload(OTHER_PREVIEW_HANDLE), "stages": []}
+
+    async def fake_request(*args, **kwargs):
+        return Response()
+
+    monkeypatch.setattr(proffer, "_request", fake_request)
+    try:
+        asyncio.run(proffer_operations.operation(PREVIEW_HANDLE))
+    except proffer.ProfferError as error:
+        assert error.status_code == 502
+        assert "operation detail correlation failed" in error.detail
+    else:
+        raise AssertionError("operation detail for another preview handle must fail closed")
 
 
 def test_start_fails_closed_when_upstream_has_only_temporal_ids(monkeypatch) -> None:
