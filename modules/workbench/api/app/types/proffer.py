@@ -27,6 +27,7 @@ from app.types.proffer_messages import (
     ProfferPreviewMessagesResponse,  # noqa: F401
     ProfferPreviewParticipant,  # noqa: F401
 )
+from app.types.proffer_content import ProfferContentResponse  # noqa: F401
 from app.types.proffer_sources import (
     ProfferSourceBrowserResponse,  # noqa: F401
     ProfferSourceObject,  # noqa: F401

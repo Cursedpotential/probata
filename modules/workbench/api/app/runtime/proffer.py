@@ -20,6 +20,7 @@ from app.service.proffer import (
     open_preview_event_stream,
     open_upload_stream,
     preview,
+    preview_content,
     preview_messages,
     start,
     validated_preview_events,
@@ -32,6 +33,7 @@ from app.types.proffer import (
     ProfferHandlerSelectionDecisionResponse,
     MatterMode,
     ProfferPreviewMessagesResponse,
+    ProfferContentResponse,
     ProfferPreviewResponse,
     ProfferRepairDecisionRequest,
     ProfferRepairDecisionResponse,
@@ -226,6 +228,26 @@ async def preview_messages_endpoint(
 ):
     try:
         return await preview_messages(preview_handle, mode=mode, cursor=cursor, limit=limit)
+    except ProfferError as error:
+        raise _translate(error) from None
+
+
+@router.get("/previews/{preview_handle}/content", response_model=ProfferContentResponse)
+async def preview_content_endpoint(
+    preview_handle: PreviewHandle,
+    mode: Annotated[MatterMode, Query()],
+    record_cursor: Annotated[str | None, Query(max_length=512)] = None,
+    chunk_cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=250)] = 100,
+):
+    try:
+        return await preview_content(
+            preview_handle,
+            mode=mode,
+            record_cursor=record_cursor,
+            chunk_cursor=chunk_cursor,
+            limit=limit,
+        )
     except ProfferError as error:
         raise _translate(error) from None
 

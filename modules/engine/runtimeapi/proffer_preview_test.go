@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Cursedpotential/probata/engine/proffer"
+	"github.com/Cursedpotential/probata/engine/runtimeapi/previewmodel"
 	"github.com/Cursedpotential/probata/engine/stagegraph"
 )
 
@@ -204,6 +205,49 @@ func putValidProjection(t *testing.T, store *MemoryPreviewStore, handle string) 
 	}
 	event := PreviewEvent{EventID: 1, EventType: "messages_available", OccurredAt: time.Unix(10, 0).UTC(), PreviewHandle: handle, Phase: "awaiting_decision"}
 	require.NoError(t, store.PutProjection(handle, snapshot, []PreviewParticipant{participant}, messages, []PreviewEvent{event}))
+}
+
+func TestPreviewContentReturnsExactGenericRecordsAndScopedChunkCursor(t *testing.T) {
+	handler, store, _ := previewTestHandler(t)
+	handle := startPreview(t, handler)
+	putValidProjection(t, store, handle)
+	content := PreviewContentPage{
+		Package:        previewmodel.Package{SourceVersionRef: "33333333-3333-3333-3333-333333333333", DeclaredFormat: "document", Status: "retained"},
+		Attempt:        previewmodel.Attempt{ProjectionRef: "55555555-5555-5555-5555-555555555555", SourceVersionRef: "33333333-3333-3333-3333-333333333333", RawGenerationRef: "44444444-4444-4444-4444-444444444444", NormalizedGenerationRef: "55555555-5555-5555-5555-555555555555"},
+		AttemptsReason: "complete attempt history is not exposed",
+		Records: []previewmodel.Record{
+			{RecordID: "record-1", Ordinal: 0, RecordType: "document", Payload: json.RawMessage(`{"title":"Exact"}`), SourceLocatorRef: "context.normalized_record_identity/record-1"},
+			{RecordID: "record-2", Ordinal: 1, RecordType: "other", Payload: json.RawMessage(`{"value":2}`), SourceLocatorRef: "context.normalized_record_identity/record-2"},
+		},
+		Chunks: []previewmodel.ContentChunk{
+			{ChunkRef: "chunk-1", Index: 0, Content: "alpha", SHA256: strings.Repeat("a", 64), DerivationMode: "verbatim_span", LocatorRef: "locator-1", ByteStart: 0, ByteEnd: 5},
+			{ChunkRef: "chunk-2", Index: 1, Content: " beta", SHA256: strings.Repeat("b", 64), DerivationMode: "verbatim_span", LocatorRef: "locator-2", ByteStart: 5, ByteEnd: 10},
+		},
+	}
+	require.NoError(t, store.PutContent(handle, content))
+
+	response := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle+"/content?limit=1", nil)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	var page struct {
+		PreviewHandle    string                      `json:"preview_handle"`
+		Records          []previewmodel.Record       `json:"records"`
+		Chunks           []previewmodel.ContentChunk `json:"chunks"`
+		NextRecordCursor string                      `json:"next_record_cursor"`
+		NextChunkCursor  string                      `json:"next_chunk_cursor"`
+	}
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&page))
+	require.Equal(t, handle, page.PreviewHandle)
+	require.Equal(t, json.RawMessage(`{"title":"Exact"}`), page.Records[0].Payload)
+	require.Equal(t, "alpha", page.Chunks[0].Content)
+	require.NotEmpty(t, page.NextRecordCursor)
+	require.NotEmpty(t, page.NextChunkCursor)
+
+	crossed := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle+"/content?limit=1&chunk_cursor="+page.NextRecordCursor, nil)
+	require.Equal(t, http.StatusUnprocessableEntity, crossed.Code, crossed.Body.String())
+	second := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle+"/content?limit=1&record_cursor="+page.NextRecordCursor+"&chunk_cursor="+page.NextChunkCursor, nil)
+	require.Equal(t, http.StatusOK, second.Code, second.Body.String())
+	require.Contains(t, second.Body.String(), `"record_id":"record-2"`)
+	require.Contains(t, second.Body.String(), `"chunk_ref":"chunk-2"`)
 }
 
 func TestMemoryPreviewDecisionsAppendImmutableCompleteSuccessors(t *testing.T) {

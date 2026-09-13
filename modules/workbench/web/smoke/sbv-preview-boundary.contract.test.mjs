@@ -15,6 +15,7 @@ test("SBV preview is native to the Workbench shell and platform contracts", () =
   assert.match(preview, /getProfferPreview/);
   assert.match(preview, /decideProffer/);
   assert.match(preview, /getProfferPreviewMessages/);
+  assert.match(preview, /getProfferPreviewContent/);
   assert.match(preview, /createProfferPreviewEventSource/);
   assert.match(viewer, /PostgreSQL remains canonical/);
   assert.match(preview, /data-testid="back-to-proffer-intake" href="\/intake"/);
@@ -36,7 +37,7 @@ test("Proffer preview never reuses workflow or run identifiers at legacy boundar
   assert.doesNotMatch(preview, /\/api\/runs|\/api\/records/);
 });
 
-test("decisions are centralized behind correlated message and provenance gates", () => {
+test("decisions are centralized behind correlated generic-record provenance gates", () => {
   assert.doesNotMatch(intake, /\bdecideProffer\b|Approve and continue|Reject preview/);
   assert.match(intake, /Review messages and decide/);
   assert.match(preview, /result\.preview_handle !== handle/);
@@ -47,7 +48,8 @@ test("decisions are centralized behind correlated message and provenance gates",
   assert.match(preview, /result\.preview_handle !== handle/);
   assert.match(preview, /provenanceLoaded/);
   assert.match(preview, /receiptsComplete/);
-  assert.match(preview, /message_id/);
+  assert.match(preview, /record\.source_locator_ref/);
+  assert.match(preview, /contentError/);
 });
 
 test("the viewer renders modeled correlation, provenance, participant, attachment, and receipt fields", () => {

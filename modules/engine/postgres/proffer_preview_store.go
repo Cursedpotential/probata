@@ -581,6 +581,170 @@ func (s *ProfferPreviewStore) Page(ctx context.Context, handle string, offset, l
 	return page, attachmentRows.Err()
 }
 
+// Content resolves the generic D-158 operator projection from existing
+// package, normalized-record, and content-chunk tables. It is read-only and
+// does not publish chunks, establish custody, or duplicate retained content.
+func (s *ProfferPreviewStore) Content(ctx context.Context, handle string, recordOffset, chunkOffset, limit int) (previewmodel.ContentPage, error) {
+	if recordOffset < 0 || chunkOffset < 0 || limit < 1 || limit > 250 {
+		return previewmodel.ContentPage{}, errors.New("preview content page bounds are invalid")
+	}
+	binding, err := s.Binding(ctx, handle)
+	if err != nil {
+		return previewmodel.ContentPage{}, err
+	}
+	snapshot, err := s.Snapshot(ctx, handle)
+	if err != nil {
+		return previewmodel.ContentPage{}, err
+	}
+	sourceID := snapshot.Correlation.SourceVersionID
+	page := previewmodel.ContentPage{
+		AttemptsComplete: false,
+		AttemptsReason:   "The current control schema identifies the projected attempt but does not expose a complete comparable attempt history or editable rerun template.",
+		Attempt: previewmodel.Attempt{
+			ProjectionRef: snapshot.Correlation.NormalizedGenerationID.String(), SourceVersionRef: sourceID.String(),
+			RawGenerationRef: snapshot.Correlation.RawGenerationID.String(), NormalizedGenerationRef: snapshot.Correlation.NormalizedGenerationID.String(),
+			Parser: snapshot.Parser, SelectionRef: string(binding.SelectionRef), ParserOptionsRef: string(binding.ParserOptionsRef),
+			Receipts: append([]previewmodel.Receipt(nil), snapshot.Receipts...),
+		},
+	}
+	var originalID, originalSHA, storageClass, filename *string
+	var originalBytes *int64
+	if err := s.db.QueryRow(ctx, `
+		SELECT source.id::text, source.declared_format, source.status, source.original_filename,
+		       retained.id::text, CASE WHEN retained.id IS NULL THEN NULL ELSE encode(retained.content_sha256, 'hex') END,
+		       retained.byte_length, retained.storage_class,
+		       (SELECT count(*) FROM context.source_metadata metadata WHERE metadata.source_version_id=source.id),
+		       (SELECT count(*) FROM context.source_version_object member WHERE member.source_version_id=source.id AND member.object_role='attachment')
+		FROM context.source_version source
+		LEFT JOIN context.retained_object retained ON retained.id=source.original_object_id
+		WHERE source.id=$1::uuid`, sourceID).Scan(
+		&page.Package.SourceVersionRef, &page.Package.DeclaredFormat, &page.Package.Status, &filename,
+		&originalID, &originalSHA, &originalBytes, &storageClass, &page.Package.MetadataCount, &page.Package.AttachmentCount); err != nil {
+		return previewmodel.ContentPage{}, fmt.Errorf("read preview package: %w", err)
+	}
+	page.Package.OriginalFilename, page.Package.OriginalRef = filename, originalID
+	page.Package.OriginalSHA256, page.Package.OriginalBytes, page.Package.StorageClass = originalSHA, originalBytes, storageClass
+
+	recordRows, err := s.db.Query(ctx, `
+		SELECT id::text, record_ordinal, record_type, occurred_at, normalized_payload
+		FROM context.normalized_record_identity
+		WHERE normalized_generation_id=$1::uuid
+		ORDER BY record_ordinal, id OFFSET $2 LIMIT $3`, snapshot.Correlation.NormalizedGenerationID, recordOffset, limit+1)
+	if err != nil {
+		return previewmodel.ContentPage{}, fmt.Errorf("read preview records: %w", err)
+	}
+	for recordRows.Next() {
+		var record previewmodel.Record
+		if err := recordRows.Scan(&record.RecordID, &record.Ordinal, &record.RecordType, &record.OccurredAt, &record.Payload); err != nil {
+			recordRows.Close()
+			return previewmodel.ContentPage{}, fmt.Errorf("scan preview record: %w", err)
+		}
+		if len(record.Payload) > 4<<20 || !json.Valid(record.Payload) {
+			recordRows.Close()
+			return previewmodel.ContentPage{}, errors.New("preview normalized record payload is invalid or exceeds 4 MiB")
+		}
+		record.SourceLocatorRef = "context.normalized_record_identity/" + record.RecordID
+		page.Records = append(page.Records, record)
+	}
+	if err := recordRows.Err(); err != nil {
+		recordRows.Close()
+		return previewmodel.ContentPage{}, err
+	}
+	recordRows.Close()
+	if len(page.Records) > limit {
+		next := recordOffset + limit
+		page.NextRecordOffset = &next
+		page.Records = page.Records[:limit]
+	}
+
+	attachmentRows, err := s.db.Query(ctx, `
+		SELECT member.object_id::text, member.parent_object_id::text, member.member_locator,
+		       encode(object.content_sha256, 'hex'), object.byte_length, object.storage_class
+		FROM context.source_version_object member
+		JOIN context.retained_object object ON object.id=member.object_id
+		WHERE member.source_version_id=$1::uuid AND member.object_role='attachment'
+		ORDER BY member.created_at, member.object_id`, sourceID)
+	if err != nil {
+		return previewmodel.ContentPage{}, fmt.Errorf("read preview package attachments: %w", err)
+	}
+	for attachmentRows.Next() {
+		var attachment previewmodel.PackageAttachment
+		if err := attachmentRows.Scan(&attachment.ObjectRef, &attachment.ParentObjectRef, &attachment.MemberLocator,
+			&attachment.SHA256, &attachment.ByteLength, &attachment.StorageClass); err != nil {
+			attachmentRows.Close()
+			return previewmodel.ContentPage{}, fmt.Errorf("scan preview package attachment: %w", err)
+		}
+		if !json.Valid(attachment.MemberLocator) {
+			attachmentRows.Close()
+			return previewmodel.ContentPage{}, errors.New("preview attachment member locator is invalid")
+		}
+		page.Attachments = append(page.Attachments, attachment)
+	}
+	if err := attachmentRows.Err(); err != nil {
+		attachmentRows.Close()
+		return previewmodel.ContentPage{}, err
+	}
+	attachmentRows.Close()
+
+	var generation previewmodel.ChunkGeneration
+	err = s.db.QueryRow(ctx, `
+		SELECT generation.id::text, generation.generation_ordinal, generation.status,
+		       generation.policy_id, generation.policy_version, generation.chunker_id, generation.chunker_version,
+		       generation.schema_version, generation.source_view, encode(generation.source_sha256, 'hex'),
+		       CASE WHEN generation.manifest_sha256 IS NULL THEN NULL ELSE encode(generation.manifest_sha256, 'hex') END,
+		       generation.chunk_count, generation.activity_receipt_id::text, receipt.verification_result, generation.sealed_at
+		FROM working.content_chunk_generation generation
+		LEFT JOIN working.content_chunk_reassembly_receipt receipt ON receipt.generation_id=generation.id
+		WHERE generation.source_version_id=$1::uuid AND generation.status='sealed'
+		ORDER BY generation.generation_ordinal DESC LIMIT 1`, sourceID).Scan(
+		&generation.GenerationRef, &generation.GenerationOrdinal, &generation.Status,
+		&generation.PolicyID, &generation.PolicyVersion, &generation.ChunkerID, &generation.ChunkerVersion,
+		&generation.SchemaVersion, &generation.SourceView, &generation.SourceSHA256, &generation.ManifestSHA256,
+		&generation.ChunkCount, &generation.ReceiptRef, &generation.ReassemblyResult, &generation.SealedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return page, nil
+	}
+	if err != nil {
+		return previewmodel.ContentPage{}, fmt.Errorf("read preview chunk generation: %w", err)
+	}
+	page.ChunkGeneration = &generation
+	chunkRows, err := s.db.Query(ctx, `
+		SELECT chunk.id::text, chunk.chunk_index, chunk.content, encode(chunk.content_sha256, 'hex'),
+		       chunk.derivation_mode, chunk.token_count, locator.id::text, locator.range_start, locator.range_end
+		FROM working.content_chunk chunk
+		JOIN working.content_chunk_source_span span ON span.chunk_id=chunk.id AND span.member_ordinal=0
+		JOIN context.source_range_locator locator ON locator.id=span.source_range_locator_id
+		WHERE chunk.generation_id=$1::uuid
+		ORDER BY chunk.chunk_index, chunk.id OFFSET $2 LIMIT $3`, generation.GenerationRef, chunkOffset, limit+1)
+	if err != nil {
+		return previewmodel.ContentPage{}, fmt.Errorf("read preview chunks: %w", err)
+	}
+	for chunkRows.Next() {
+		var piece previewmodel.ContentChunk
+		if err := chunkRows.Scan(&piece.ChunkRef, &piece.Index, &piece.Content, &piece.SHA256,
+			&piece.DerivationMode, &piece.TokenCount, &piece.LocatorRef, &piece.ByteStart, &piece.ByteEnd); err != nil {
+			chunkRows.Close()
+			return previewmodel.ContentPage{}, fmt.Errorf("scan preview chunk: %w", err)
+		}
+		if len(piece.Content) > 4<<20 {
+			chunkRows.Close()
+			return previewmodel.ContentPage{}, errors.New("preview chunk content exceeds 4 MiB")
+		}
+		page.Chunks = append(page.Chunks, piece)
+	}
+	if err := chunkRows.Err(); err != nil {
+		chunkRows.Close()
+		return previewmodel.ContentPage{}, err
+	}
+	chunkRows.Close()
+	if len(page.Chunks) > limit {
+		next := chunkOffset + limit
+		page.NextChunkOffset = &next
+		page.Chunks = page.Chunks[:limit]
+	}
+	return page, nil
+}
+
 func (s *ProfferPreviewStore) EventsAfter(ctx context.Context, handle string, after int64) ([]previewmodel.Event, error) {
 	var first, latest *int64
 	if err := s.db.QueryRow(ctx, `SELECT min(event_id), max(event_id) FROM context.proffer_preview_event WHERE preview_handle = $1`, handle).Scan(&first, &latest); err != nil {
@@ -875,3 +1039,4 @@ func decisionKey(handle string, approved bool, reason, actor string, selection, 
 }
 
 var _ previewmodel.Store = (*ProfferPreviewStore)(nil)
+var _ previewmodel.ContentStore = (*ProfferPreviewStore)(nil)

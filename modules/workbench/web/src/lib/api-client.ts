@@ -88,6 +88,7 @@ import type {
   ProfferRepairDecisionRequest,
   ProfferRepairDecisionResponse,
   ProfferPreviewMessagesResponse,
+  ProfferContentResponse,
   ProfferStartRequest,
   ProfferStartResponse,
   ProfferUploadResponse,
@@ -812,6 +813,28 @@ export function getProfferPreviewMessages(
     { signal },
   ).then((response) => {
     if (response.matter_mode !== mode) throw new ApiError("The preview messages did not confirm the active TEST/REAL mode", 502);
+    return response;
+  });
+}
+
+export function getProfferPreviewContent(
+  previewHandle: string,
+  mode: MatterMode,
+  recordCursor?: string,
+  chunkCursor?: string,
+  limit = 100,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ limit: String(limit), mode });
+  if (recordCursor) query.set("record_cursor", recordCursor);
+  if (chunkCursor) query.set("chunk_cursor", chunkCursor);
+  return apiFetch<ProfferContentResponse>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/content?${query.toString()}`,
+    { signal },
+  ).then((response) => {
+    if (response.preview_handle !== previewHandle || response.matter_mode !== mode) {
+      throw new ApiError("The preview content crossed its preview or TEST/REAL boundary", 502);
+    }
     return response;
   });
 }
