@@ -54,6 +54,9 @@ func (f *fakeStarter) Preview(_ context.Context, workflowID string) (proffer.Pre
 	}
 	return f.previewResult, nil
 }
+func (f *fakeStarter) Operation(context.Context, string) (proffer.OperationState, error) {
+	return proffer.OperationState{Lifecycle: proffer.OperationRunning, ActiveStages: []proffer.ActivityName{}}, nil
+}
 
 func newTestHandler(t *testing.T, starter *fakeStarter) http.Handler {
 	t.Helper()

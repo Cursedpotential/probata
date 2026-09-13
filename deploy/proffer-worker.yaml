@@ -54,6 +54,9 @@ services:
       N8N_PROFFER_BASE_URL: ${N8N_PROFFER_BASE_URL:?set}
       N8N_PROFFER_AUTH_HEADER: ${N8N_PROFFER_AUTH_HEADER:?set}
       N8N_PROFFER_AUTH_VALUE_FILE: /run/secrets/n8n-proffer-auth
+      # Optional extra-flow registry. If set, it must name an absolute,
+      # read-only mounted JSON file; a missing or invalid file stops startup.
+      N8N_FLOW_BINDINGS_FILE: ${N8N_FLOW_BINDINGS_FILE:-}
       SELECT_PARSER_HTTP_TIMEOUT: ${SELECT_PARSER_HTTP_TIMEOUT:-35s}
       EXECUTE_PARSER_HTTP_TIMEOUT: ${EXECUTE_PARSER_HTTP_TIMEOUT:-31m}
       SOURCE_OBJECT_DIR: /data/proffer/source-objects

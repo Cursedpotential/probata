@@ -59,7 +59,7 @@ type IntakePhase = "choose" | "ready" | "starting" | "handler_review" | "repair_
 type PreviewTab = "source" | "metadata" | "parser";
 type OperatorTab = "intake" | "atomic_tools";
 
-const LOCAL_FILE_ACCEPT = ".xml,.json,.txt,.csv,.md,.html,.htm,.pdf,.docx,.zip,.tar,.tgz,.gz,.7z,.rar,.png,.jpg,.jpeg,.gif,.tif,.tiff,.bmp";
+const LOCAL_FILE_ACCEPT = ".xml,.json,.txt,.csv,.md,.html,.htm,.pdf,.docx,.zip,.tar,.tgz,.gz,.7z,.rar,.png,.jpg,.jpeg,.gif,.webp,.avif,.tif,.tiff,.bmp";
 
 const EMPTY_ASSERTIONS: ProfferHumanSourceAssertions = {
   source_class: "unknown",
@@ -94,6 +94,8 @@ function declaredFormat(source: { name: string }) {
     jpg: "image",
     jpeg: "image",
     gif: "image",
+    webp: "image",
+    avif: "image",
     tif: "image",
     tiff: "image",
     bmp: "image",
@@ -118,6 +120,16 @@ function bytes(value: number) {
 
 const terminalPreviewPhases = new Set(["awaiting_handler_selection", "awaiting_repair_decision", "awaiting_decision", "approved", "rejected", "timed_out", "failed"]);
 
+function previewIsActionableOrSettled(state: ProfferPreviewResponse, ignoredPreviewPhases: ReadonlySet<string>) {
+  if (terminalPreviewPhases.has(state.phase) && !ignoredPreviewPhases.has(state.phase)) return true;
+  if (state.lifecycle) {
+    if (state.lifecycle === "awaiting_repair_decision") return !ignoredPreviewPhases.has("awaiting_repair_decision");
+    if (state.lifecycle === "awaiting_preview_decision") return !ignoredPreviewPhases.has("awaiting_decision");
+    return state.lifecycle === "unavailable" || Boolean(state.terminal);
+  }
+  return false;
+}
+
 async function waitForPreview(
   previewHandle: string,
   mode: "TEST" | "REAL",
@@ -135,7 +147,7 @@ async function waitForPreview(
       lastError = null;
       const newRecoveryChoice = lastState.phase === "awaiting_handler_selection"
         && previousRecommendationRef && lastState.handler_recommendation_ref !== previousRecommendationRef;
-      if (terminalPreviewPhases.has(lastState.phase) && (!ignoredTerminalPhases.has(lastState.phase) || newRecoveryChoice)) return lastState;
+      if (previewIsActionableOrSettled(lastState, ignoredTerminalPhases) || newRecoveryChoice) return lastState;
     } catch (requestError) {
       lastError = requestError;
       const transient =
@@ -182,6 +194,9 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
   const [sourcesError, setSourcesError] = useState<string | null>(null);
   const [digest, setDigest] = useState("");
   const [textPreview, setTextPreview] = useState("");
+  const [localImagePreviewUrl, setLocalImagePreviewUrl] = useState<string | null>(null);
+  const [localImagePreviewError, setLocalImagePreviewError] = useState(false);
+  const localImagePreviewUrlRef = useRef<string | null>(null);
   const [phase, setPhase] = useState<IntakePhase>("choose");
   const [upload, setUpload] = useState<ProfferUploadResponse | null>(null);
   const [run, setRun] = useState<ProfferStartResponse | null>(null);
@@ -258,6 +273,10 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
     };
   }, [run?.preview_handle, mode]);
 
+  useEffect(() => () => {
+    if (localImagePreviewUrlRef.current) URL.revokeObjectURL(localImagePreviewUrlRef.current);
+  }, []);
+
   const lines = useMemo(() => textPreview.split(/\r?\n/).filter(Boolean).slice(0, 12), [textPreview]);
   const runtimeParserCandidates = preview?.phase === "awaiting_handler_selection" && preview.recommended_handler
     ? [preview.recommended_handler, ...(preview.alternative_handlers ?? [])]
@@ -283,10 +302,21 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
     setSourceFilter(nextFilter);
   }
 
+  function replaceLocalImagePreview(selected: File | null) {
+    if (localImagePreviewUrlRef.current) URL.revokeObjectURL(localImagePreviewUrlRef.current);
+    const nextUrl = selected && declaredFormat(selected) === "image"
+      ? URL.createObjectURL(selected)
+      : null;
+    localImagePreviewUrlRef.current = nextUrl;
+    setLocalImagePreviewUrl(nextUrl);
+    setLocalImagePreviewError(false);
+  }
+
   async function selectFile(selected: File | null) {
     intakeGenerationRef.current += 1;
     const generation = intakeGenerationRef.current;
     setStaged(undefined);
+    replaceLocalImagePreview(selected);
     setFile(selected);
     setRemote(null);
     setInspection(null);
@@ -330,6 +360,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
     const sameSelection = remote?.key === selected.key;
     setRemote(selected);
     setFile(null);
+    replaceLocalImagePreview(null);
     setInspection(null);
     setInspectionError(null);
     setInspectionLoading(true);
@@ -459,6 +490,9 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
       });
       if (generation !== intakeGenerationRef.current) return;
       setPreview(state);
+      if (state.lifecycle === "unavailable" || state.lifecycle === "failed") {
+        throw new Error(state.reason || `The durable workflow is ${state.lifecycle}.`);
+      }
       setPhase(phaseForPreview(state));
       if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
       if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
@@ -490,6 +524,9 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
       });
       if (generation !== intakeGenerationRef.current) return;
       setPreview(state);
+      if (state.lifecycle === "unavailable" || state.lifecycle === "failed") {
+        throw new Error(state.reason || `The durable workflow is ${state.lifecycle}.`);
+      }
       setPhase(phaseForPreview(state));
       if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
       if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
@@ -538,6 +575,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
   function reset() {
     intakeGenerationRef.current += 1;
     setStaged(undefined);
+    replaceLocalImagePreview(null);
     setFile(null);
     setRemote(null);
     setInspection(null);
@@ -667,7 +705,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
               <div className="platform-panel mx-auto max-w-[1180px] px-5 py-4 text-sm">
                 <span className="text-muted-foreground">Or add a source from this device: </span>
                 <label className="cursor-pointer font-semibold text-primary hover:underline"><Upload className="mr-1 inline h-4 w-4" />Choose local file<input accept={LOCAL_FILE_ACCEPT} className="sr-only" type="file" onChange={(event) => void selectFile(event.target.files?.[0] ?? null)} /></label>
-                <span className="ml-2 text-xs text-muted-foreground">XML, JSON, text, CSV, Markdown, HTML, PDF, Word, or ZIP/archive</span>
+                <span className="ml-2 text-xs text-muted-foreground">XML, JSON, text, CSV, Markdown, HTML, PDF, Word, archives, or images</span>
               </div>
             </div>
           ) : (
@@ -709,6 +747,12 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
                       <iframe className="h-[560px] w-full border bg-white" src={inspection.preview_url} title={`Read-only preview of ${inspection.name}`} />
                     ) : remote && inspection?.preview_kind === "image" && inspection.preview_url ? (
                       <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={inspection.preview_url} alt={`Read-only preview of ${inspection.name}`} /></div>
+                    ) : file && localImagePreviewUrl ? (
+                      localImagePreviewError ? (
+                        <div className="border bg-background px-4 py-12 text-center text-sm text-muted-foreground">This browser could not render the selected image format inline. The original file remains selected, hashed, and available to the governed workflow.</div>
+                      ) : (
+                        <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={localImagePreviewUrl} alt={`Local preview of ${file.name}`} onError={() => setLocalImagePreviewError(true)} /></div>
+                      )
                     ) : lines.length ? (
                       <div className="max-h-[270px] overflow-auto border bg-background font-mono text-[11px] leading-5" role="region" aria-label="Selected source content" tabIndex={0}>
                         {lines.map((line, index) => <div key={`${index}-${line.slice(0, 24)}`} className="grid grid-cols-[42px_1fr] border-b px-3 py-2 last:border-b-0"><span className="text-muted-foreground">{String(index + 1).padStart(2, "0")}</span><span className="break-words">{line}</span></div>)}
@@ -888,6 +932,11 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
 
 function phaseForPreview(state: ProfferPreviewResponse): IntakePhase {
   if (state.phase === "awaiting_handler_selection") return "handler_review";
+  if (state.lifecycle) {
+    if (state.lifecycle === "awaiting_repair_decision" && state.repair_assessment?.review_required) return "repair_review";
+    if (state.lifecycle === "awaiting_preview_decision") return "review";
+    return "complete";
+  }
   if (state.phase === "awaiting_repair_decision" && state.repair_assessment?.review_required) return "repair_review";
   if (state.phase === "awaiting_decision") return "review";
   if (state.phase === "failed") return "error";

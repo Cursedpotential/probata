@@ -68,7 +68,21 @@ func fingerprintVocabularyFor(ctx workflow.Context) fingerprintVocabulary {
 // canon name (ActivityName, identical to stagegraph.StageID) so a worker in
 // a later lane can register real Activities without this file changing.
 func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, error) {
-	r := &run{requestID: in.RequestID, matterID: in.MatterID, courtCaseID: in.CourtCaseID}
+	r := &run{
+		requestID:   in.RequestID,
+		matterID:    in.MatterID,
+		courtCaseID: in.CourtCaseID,
+		operation: OperationState{
+			Lifecycle:    OperationRunning,
+			ActiveStages: []ActivityName{},
+			Stages:       []OperationStage{},
+		},
+	}
+	if err := workflow.SetQueryHandler(ctx, OperationQueryName, func() (OperationState, error) {
+		return r.operationSnapshot(), nil
+	}); err != nil {
+		return r.result(""), fmt.Errorf("proffer: register operation query handler: %w", err)
+	}
 	fingerprint := fingerprintVocabularyFor(ctx)
 	integratedPreview := workflow.GetVersion(ctx, integratedPreviewChangeID, workflow.DefaultVersion, integratedPreviewVersion)
 	durableReviewWait := workflow.GetVersion(ctx, durableReviewWaitChangeID, workflow.DefaultVersion, durableReviewWaitVersion)
@@ -86,6 +100,7 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		return r.result(""), err
 	}
 	r.sourceVersionRef = sourceVersionRef
+	r.operation.SourceVersionRef = sourceVersionRef
 
 	// Stage 2: retain_original_activity — the only stage after
 	// register_source that must run before anything touches source bytes.
@@ -128,10 +143,13 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 			refs["auto_clean_assessment"] = repairAssessmentRef
 		} else {
 			preview.Phase = PhaseAwaitingRepairDecision
+			r.awaiting(OperationAwaitingRepairDecision, OperationWaitRepairDecision)
 			repairDecision, waitErr := awaitRepairDecision(ctx, &preview, durableReviewWait)
 			if waitErr != nil {
+				r.operation.Reason = waitErr.Error()
 				return r.result(""), waitErr
 			}
+			r.running()
 			refs["repair_decision"] = repairDecision.DecisionRef
 		}
 		activeOriginalRef, err = r.exec(ctx, stagegraph.ResolveSourceRepair, in.DeclaredFormat, refs)
@@ -269,9 +287,12 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 				return r.result(""), fmt.Errorf("proffer: register legacy preview query handler: %w", err)
 			}
 		}
+		r.awaiting(OperationAwaitingPreviewDecision, OperationWaitPreviewDecision)
 		if err := awaitLegacyPreviewDecision(ctx, &preview, &activeSelectionRef, &activeParserOptionsRef, durableReviewWait); err != nil {
+			r.operation.Reason = err.Error()
 			return r.result(""), err
 		}
+		r.running()
 	}
 
 	// Stage 8: execute_parser_activity's logical extraction boundary. New
@@ -537,9 +558,12 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		preview.Phase, preview.PreviewHandle = PhaseAwaitingDecision, previewHandle
 		preview.SelectRef, preview.ParserOptionsRef = activeSelectionRef, activeParserOptionsRef
 		preview.Reason = ""
+		r.awaiting(OperationAwaitingPreviewDecision, OperationWaitPreviewDecision)
 		if err := awaitPreviewDecision(ctx, &preview, durableReviewWait); err != nil {
+			r.operation.Reason = err.Error()
 			return r.result(""), err
 		}
+		r.running()
 	}
 
 	// Stage 21: seal_generation_activity.
@@ -695,6 +719,7 @@ type run struct {
 	courtCaseID      string
 	sourceVersionRef Ref
 	results          []StageResult
+	operation        OperationState
 }
 
 // pending is an in-flight Activity future paired with the stage id that
@@ -764,6 +789,7 @@ func structuredELTEligible(declaredFormat string) bool {
 
 func (r *run) execPreview(ctx workflow.Context, request PreviewPublicationRequest) (Ref, error) {
 	id := stagegraph.PublishPreview
+	r.markStageStarted(id)
 	actCtx := workflow.WithActivityOptions(ctx, optionsFor(id))
 	future := workflow.ExecuteActivity(actCtx, string(id), request)
 	return r.settle(id, future.Get, ctx)
@@ -781,6 +807,7 @@ func (r *run) receiptRef(id stagegraph.StageID) Ref {
 // start schedules one Activity without blocking, for use in parallel
 // fan-outs and branches.
 func (r *run) start(ctx workflow.Context, id stagegraph.StageID, declaredFormat string, refs map[string]Ref) pending {
+	r.markStageStarted(id)
 	req := StageRequest{
 		RequestID:        r.requestID,
 		MatterID:         r.matterID,
@@ -804,6 +831,7 @@ func (r *run) start(ctx workflow.Context, id stagegraph.StageID, declaredFormat 
 //   - a result whose Status doesn't carry the receipt evidence that Status
 //     requires — see validateStageResult.
 func (r *run) settle(id stagegraph.StageID, get func(workflow.Context, interface{}) error, ctx workflow.Context) (Ref, error) {
+	defer r.markStageSettled(id)
 	var res StageResult
 	if err := get(ctx, &res); err != nil {
 		// The Activity may have crashed before producing a receipt at all,
@@ -928,8 +956,19 @@ func (r *run) branch(ctx workflow.Context, fn func(workflow.Context) (Ref, error
 // far. publicationRef is empty on any non-success path.
 func (r *run) result(publicationRef Ref) WorkflowResult {
 	status := StatusSuccess
+	r.operation.ActiveStages = []ActivityName{}
+	r.operation.CurrentStage = ""
+	r.operation.Wait = ""
+	r.operation.Terminal = true
 	if publicationRef == "" {
 		status = StatusFailed
+		r.operation.Lifecycle = OperationFailed
+		if r.operation.Reason == "" && len(r.results) > 0 {
+			r.operation.Reason = r.results[len(r.results)-1].Reason
+		}
+	} else {
+		r.operation.Lifecycle = OperationCompleted
+		r.operation.Reason = ""
 	}
 	return WorkflowResult{
 		SourceVersionRef: r.sourceVersionRef,
@@ -937,4 +976,64 @@ func (r *run) result(publicationRef Ref) WorkflowResult {
 		Status:           status,
 		Stages:           r.results,
 	}
+}
+
+func (r *run) awaiting(lifecycle OperationLifecycle, wait OperationWait) {
+	r.operation.Lifecycle = lifecycle
+	r.operation.Wait = wait
+	r.operation.CurrentStage = ""
+	r.operation.Reason = ""
+}
+
+func (r *run) running() {
+	r.operation.Lifecycle = OperationRunning
+	r.operation.Wait = ""
+	r.operation.Reason = ""
+	if len(r.operation.ActiveStages) > 0 {
+		r.operation.CurrentStage = r.operation.ActiveStages[0]
+	}
+}
+
+func (r *run) markStageStarted(id ActivityName) {
+	for _, active := range r.operation.ActiveStages {
+		if active == id {
+			return
+		}
+	}
+	r.operation.ActiveStages = append(r.operation.ActiveStages, id)
+	if r.operation.Wait == "" {
+		r.operation.Lifecycle = OperationRunning
+		if r.operation.CurrentStage == "" {
+			r.operation.CurrentStage = id
+		}
+	}
+}
+
+func (r *run) markStageSettled(id ActivityName) {
+	active := r.operation.ActiveStages[:0]
+	for _, candidate := range r.operation.ActiveStages {
+		if candidate != id {
+			active = append(active, candidate)
+		}
+	}
+	r.operation.ActiveStages = active
+	r.operation.CurrentStage = ""
+	if len(active) > 0 && r.operation.Wait == "" {
+		r.operation.CurrentStage = active[0]
+	}
+}
+
+func (r *run) operationSnapshot() OperationState {
+	state := r.operation
+	state.SourceVersionRef = r.sourceVersionRef
+	state.ActiveStages = append([]ActivityName(nil), r.operation.ActiveStages...)
+	state.CompletedStageCount = len(r.results)
+	state.Stages = make([]OperationStage, 0, len(r.results))
+	for _, result := range r.results {
+		state.Stages = append(state.Stages, OperationStage{
+			Stage: result.Stage, Status: result.Status, Ref: result.Ref,
+			ReceiptRef: result.ReceiptRef, Reason: result.Reason,
+		})
+	}
+	return state
 }

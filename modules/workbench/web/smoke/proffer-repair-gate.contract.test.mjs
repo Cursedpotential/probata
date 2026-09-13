@@ -20,7 +20,9 @@ test("repair review is an explicit gate inside the unified intake window", () =>
 test("clean assessments continue without an operator decision", () => {
   assert.match(intake, /state\.phase === "awaiting_repair_decision" && state\.repair_assessment\?\.review_required/);
   assert.doesNotMatch(intake, /terminalPreviewPhases[^\n]+repair_approved/);
-  assert.match(intake, /ignoredTerminalPhases\.has\(lastState\.phase\)/);
+  assert.match(intake, /previewIsActionableOrSettled\(lastState, ignoredTerminalPhases\)/);
+  assert.match(intake, /state\.lifecycle === "awaiting_repair_decision"/);
+  assert.match(intake, /ignoredPreviewPhases\.has\("awaiting_repair_decision"\)/);
 });
 
 test("repair decision is typed, correlated, and carries no browser-authored tool payload", () => {

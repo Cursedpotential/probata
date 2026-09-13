@@ -240,6 +240,18 @@ def test_source_inspection_hashes_immediately_without_claiming_a_custody_digest(
     }
 
 
+def test_image_extensions_share_one_preview_and_preflight_classification() -> None:
+    expected_extensions = {".avif", ".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
+
+    assert source_inspection._IMAGE_EXTENSIONS == expected_extensions
+    for extension in expected_extensions:
+        preflight = source_inspection._preflight(f"photos/source{extension}")
+        assert preflight.declared_format == "image"
+        assert preflight.route_label == "Image processing route"
+        assert preflight.basis == "filename_extension"
+        assert preflight.authoritative is False
+
+
 def test_source_inspection_rejects_a_changed_listing_identity(monkeypatch) -> None:
     monkeypatch.setattr(
         source_inspection,

@@ -40,6 +40,12 @@ from app.types.proffer import (
     ProfferStartResponse,
     ProfferUploadResponse,
 )
+from app.service.proffer_operations import list_operations, operation
+from app.types.proffer_operations import (
+    ProfferOperationDetail,
+    ProfferOperationLifecycle,
+    ProfferOperationListResponse,
+)
 
 router = APIRouter(prefix="/api/proffer", tags=["proffer"])
 
@@ -177,6 +183,26 @@ async def repair_decision_endpoint(
 async def preview_endpoint(preview_handle: PreviewHandle, mode: Annotated[MatterMode, Query()]):
     try:
         return await preview(preview_handle, mode=mode)
+    except ProfferError as error:
+        raise _translate(error) from None
+
+
+@router.get("/operations", response_model=ProfferOperationListResponse)
+async def operations_endpoint(
+    status: Annotated[ProfferOperationLifecycle | None, Query()] = None,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+):
+    try:
+        return await list_operations(status=status, cursor=cursor, limit=limit)
+    except ProfferError as error:
+        raise _translate(error) from None
+
+
+@router.get("/operations/{preview_handle}", response_model=ProfferOperationDetail)
+async def operation_endpoint(preview_handle: PreviewHandle):
+    try:
+        return await operation(preview_handle)
     except ProfferError as error:
         raise _translate(error) from None
 

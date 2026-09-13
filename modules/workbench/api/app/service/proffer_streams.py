@@ -5,12 +5,13 @@ Byline: Codex · GPT-5.6-Sol · 2026-08-30.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 import json
+from collections.abc import AsyncIterator
 
 import httpx
 
 from app.config import settings
+from app.service.matter_mode import MatterModeError, require_preview_mode
 from app.service.proffer import (
     ProfferError,
     _json_payload,
@@ -19,7 +20,6 @@ from app.service.proffer import (
     _service_authorization_headers,
     _validated,
 )
-from app.service.matter_mode import MatterModeError, require_preview_mode
 from app.types.proffer import MatterMode, ProfferPreviewEvent, ProfferUploadResponse
 
 

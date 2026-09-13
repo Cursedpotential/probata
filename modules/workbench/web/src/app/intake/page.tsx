@@ -9,27 +9,27 @@
  */
 import { UnifiedIntake } from "@/components/intake/unified-intake";
 import { IntakeTable } from "@/components/intake/intake-table";
-import { RunsTable } from "@/components/runs/runs-table";
+import { ProfferOperationsTable } from "@/components/intake/proffer-operations-table";
 
 export default function IntakePage() {
   return (
     <div className="space-y-8 pb-10">
       <UnifiedIntake />
-      <section className="space-y-4 px-5 lg:px-8" aria-labelledby="intake-inventory-heading">
-        <div>
-          <p className="platform-kicker mb-1">Persistent inventory</p>
-          <h2 id="intake-inventory-heading" className="text-xl font-semibold tracking-tight">All intake sources</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Filter and reopen sources without losing the active workflow context above.</p>
-        </div>
-        <IntakeTable />
-      </section>
-      <section className="space-y-4 px-5 lg:px-8" aria-labelledby="intake-runs-heading">
+      <section className="space-y-4 px-5 lg:px-8" aria-labelledby="proffer-operations-heading">
         <div>
           <p className="platform-kicker mb-1">Process visibility</p>
-          <h2 id="intake-runs-heading" className="text-xl font-semibold tracking-tight">All in-flight and completed processes</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Running, paused, failed, and completed work remains visible here across navigation and refresh.</p>
+          <h2 id="proffer-operations-heading" className="text-xl font-semibold tracking-tight">Proffer operations</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Running, waiting, failed, unavailable, and completed Proffer work remains visible across navigation and refresh.</p>
         </div>
-        <RunsTable />
+        <ProfferOperationsTable />
+      </section>
+      <section className="space-y-4 px-5 lg:px-8" aria-labelledby="intake-inventory-heading">
+        <div>
+          <p className="platform-kicker mb-1">Legacy staging inventory</p>
+          <h2 id="intake-inventory-heading" className="text-xl font-semibold tracking-tight">Workbench staged files</h2>
+          <p className="mt-1 text-sm text-muted-foreground">This existing file list is not a Proffer operation history. Durable Proffer work is listed above.</p>
+        </div>
+        <IntakeTable />
       </section>
     </div>
   );

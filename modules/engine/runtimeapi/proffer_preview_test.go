@@ -19,15 +19,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/Cursedpotential/probata/engine/proffer"
+	"github.com/Cursedpotential/probata/engine/stagegraph"
 )
 
 type previewWorkflowStub struct {
-	started  proffer.WorkflowInput
-	decision proffer.PreviewDecision
-	repair   proffer.RepairDecision
-	handler  proffer.HandlerSelectionDecision
-	state    proffer.PreviewState
-	order    *[]string
+	started        proffer.WorkflowInput
+	decision       proffer.PreviewDecision
+	repair         proffer.RepairDecision
+	handler        proffer.HandlerSelectionDecision
+	state          proffer.PreviewState
+	operation      proffer.OperationState
+	operations     map[string]proffer.OperationState
+	operationErr   error
+	operationCalls int
+	order          *[]string
 }
 
 func (s *previewWorkflowStub) Start(_ context.Context, in proffer.WorkflowInput) (string, string, error) {
@@ -54,6 +59,27 @@ func (s *previewWorkflowStub) DecideHandler(_ context.Context, _ string, decisio
 }
 func (s *previewWorkflowStub) Preview(context.Context, string) (proffer.PreviewState, error) {
 	return s.state, nil
+}
+func (s *previewWorkflowStub) Operation(_ context.Context, workflowID string) (proffer.OperationState, error) {
+	s.operationCalls++
+	if s.operationErr != nil {
+		return proffer.OperationState{}, s.operationErr
+	}
+	if state, ok := s.operations[workflowID]; ok {
+		return state, nil
+	}
+	if s.operation.Lifecycle != "" {
+		return s.operation, nil
+	}
+	lifecycle := proffer.OperationRunning
+	wait := proffer.OperationWait("")
+	switch s.state.Phase {
+	case proffer.PhaseAwaitingRepairDecision:
+		lifecycle, wait = proffer.OperationAwaitingRepairDecision, proffer.OperationWaitRepairDecision
+	case proffer.PhaseAwaitingDecision, proffer.PhaseRejected:
+		lifecycle, wait = proffer.OperationAwaitingPreviewDecision, proffer.OperationWaitPreviewDecision
+	}
+	return proffer.OperationState{Lifecycle: lifecycle, Wait: wait, ActiveStages: []proffer.ActivityName{}}, nil
 }
 
 type countingEntropy struct{ next byte }
@@ -289,6 +315,113 @@ func TestPreviewSurfaceCorrelatesPagesDecisionsAndReplay(t *testing.T) {
 	require.Contains(t, events.Header().Get("Content-Type"), "text/event-stream")
 	require.Contains(t, events.Body.String(), "id: 1")
 	require.Contains(t, events.Body.String(), "id: 2")
+}
+
+func TestOperationSurfaceListsFiltersPagesAndOpensByOpaqueHandle(t *testing.T) {
+	handler, store, workflow := previewTestHandler(t)
+	base := time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC)
+	create := func(requestID, workflowID string, createdAt time.Time) PreviewBinding {
+		binding, err := store.Create(t.Context(), PreviewBinding{
+			RequestID: requestID, SourceRef: proffer.Ref("upload://" + strings.Repeat(requestID[len(requestID)-1:], 64)),
+			WorkflowID: workflowID, RunID: "internal-" + workflowID, ParserOptionsRef: "options-1", CreatedAt: createdAt,
+		})
+		require.NoError(t, err)
+		return binding
+	}
+	oldest := create("request-1", "workflow-1", base)
+	waiting := create("request-2", "workflow-2", base.Add(time.Minute))
+	newest := create("request-3", "workflow-3", base.Add(2*time.Minute))
+	workflow.operations = map[string]proffer.OperationState{
+		"workflow-1": {Lifecycle: proffer.OperationCompleted, Terminal: true, ActiveStages: []proffer.ActivityName{}, CompletedStageCount: 26},
+		"workflow-2": {Lifecycle: proffer.OperationAwaitingRepairDecision, Wait: proffer.OperationWaitRepairDecision, ActiveStages: []proffer.ActivityName{}, CompletedStageCount: 3},
+		"workflow-3": {
+			Lifecycle: proffer.OperationRunning, CurrentStage: stagegraph.ExecuteParser,
+			ActiveStages: []proffer.ActivityName{stagegraph.ExecuteParser}, CompletedStageCount: 8,
+			SourceVersionRef: "33333333-3333-3333-3333-333333333333",
+			Stages:           []proffer.OperationStage{{Stage: stagegraph.RegisterSource, Status: proffer.StatusSuccess, Ref: "source-ref", ReceiptRef: "source-receipt"}},
+		},
+	}
+
+	first := servePreview(handler.Routes(), http.MethodGet, "/reference-import/operations?limit=2", nil)
+	require.Equal(t, http.StatusOK, first.Code, first.Body.String())
+	var page OperationListResponse
+	require.NoError(t, json.NewDecoder(first.Body).Decode(&page))
+	require.Len(t, page.Items, 2)
+	require.Equal(t, newest.Handle, page.Items[0].PreviewHandle)
+	require.Equal(t, waiting.Handle, page.Items[1].PreviewHandle)
+	require.NotNil(t, page.NextCursor)
+	require.NotContains(t, first.Body.String(), "workflow_id")
+	require.NotContains(t, first.Body.String(), "run_id")
+
+	second := servePreview(handler.Routes(), http.MethodGet, "/reference-import/operations?limit=2&cursor="+*page.NextCursor, nil)
+	require.Equal(t, http.StatusOK, second.Code, second.Body.String())
+	page = OperationListResponse{}
+	require.NoError(t, json.NewDecoder(second.Body).Decode(&page))
+	require.Len(t, page.Items, 1)
+	require.Equal(t, oldest.Handle, page.Items[0].PreviewHandle)
+	require.Nil(t, page.NextCursor)
+
+	filtered := servePreview(handler.Routes(), http.MethodGet, "/reference-import/operations?status=awaiting_repair_decision", nil)
+	require.Equal(t, http.StatusOK, filtered.Code, filtered.Body.String())
+	page = OperationListResponse{}
+	require.NoError(t, json.NewDecoder(filtered.Body).Decode(&page))
+	require.Len(t, page.Items, 1)
+	require.Equal(t, waiting.Handle, page.Items[0].PreviewHandle)
+	require.Equal(t, proffer.OperationWaitRepairDecision, page.Items[0].Wait)
+
+	workflow.operationCalls = 0
+	detailResponse := servePreview(handler.Routes(), http.MethodGet, "/reference-import/operations/"+newest.Handle, nil)
+	require.Equal(t, http.StatusOK, detailResponse.Code, detailResponse.Body.String())
+	var detail OperationDetail
+	require.NoError(t, json.NewDecoder(detailResponse.Body).Decode(&detail))
+	require.Equal(t, newest.Handle, detail.PreviewHandle)
+	require.Equal(t, proffer.OperationRunning, detail.Lifecycle)
+	require.Equal(t, stagegraph.ExecuteParser, detail.CurrentStage)
+	require.Equal(t, "proffer", detail.Service)
+	require.Len(t, detail.Stages, 1)
+	require.Equal(t, string(stagegraph.RegisterSource), detail.Stages[0].Stage)
+	require.Equal(t, 1, workflow.operationCalls, "detail must use one authoritative Temporal query")
+}
+
+func TestOperationCursorAndFilterFailClosed(t *testing.T) {
+	handler, _, _ := previewTestHandler(t)
+	badFilter := servePreview(handler.Routes(), http.MethodGet, "/reference-import/operations?status=spinning", nil)
+	require.Equal(t, http.StatusUnprocessableEntity, badFilter.Code)
+	badCursor := servePreview(handler.Routes(), http.MethodGet, "/reference-import/operations?cursor=not-signed", nil)
+	require.Equal(t, http.StatusUnprocessableEntity, badCursor.Code)
+}
+
+func TestPreviewSnapshotCarriesLiveOperationWithoutErasingDecisionPhase(t *testing.T) {
+	handler, store, workflow := previewTestHandler(t)
+	handle := startPreview(t, handler)
+	putValidProjection(t, store, handle)
+	workflow.operation = proffer.OperationState{
+		Lifecycle: proffer.OperationCompleted, Terminal: true, ActiveStages: []proffer.ActivityName{}, CompletedStageCount: 26,
+	}
+	response := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle, nil)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	var snapshot PreviewSnapshot
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&snapshot))
+	require.Equal(t, "awaiting_decision", snapshot.Phase, "phase remains the immutable preview decision projection")
+	require.Equal(t, proffer.OperationCompleted, snapshot.Lifecycle)
+	require.True(t, snapshot.Terminal)
+	require.Equal(t, 26, snapshot.CompletedStageCount)
+}
+
+func TestPreviewSnapshotNeverGuessesTerminalStateFromPostgresProjection(t *testing.T) {
+	handler, store, workflow := previewTestHandler(t)
+	handle := startPreview(t, handler)
+	putValidProjection(t, store, handle)
+	require.NoError(t, store.RecordDecision(t.Context(), handle, true, "approved", "actor-1", "selection-1", "options-1"))
+	workflow.operationErr = errors.New("temporal query unavailable")
+
+	response := servePreview(handler.Routes(), http.MethodGet, "/reference-import/previews/"+handle, nil)
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	var snapshot PreviewSnapshot
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&snapshot))
+	require.Equal(t, "approved", snapshot.Phase)
+	require.Equal(t, proffer.OperationUnavailable, snapshot.Lifecycle)
+	require.False(t, snapshot.Terminal, "an approved PG projection is not proof that the workflow terminated")
 }
 
 func TestPreviewSurfaceFailsClosedOnAuthUnknownHandleAndEventGap(t *testing.T) {

@@ -226,6 +226,9 @@ func (s *ProfferPreviewStore) Create(ctx context.Context, binding previewmodel.B
 	if strings.TrimSpace(binding.RequestID) == "" || strings.TrimSpace(string(binding.SourceRef)) == "" || strings.TrimSpace(binding.WorkflowID) == "" || strings.TrimSpace(binding.RunID) == "" || strings.TrimSpace(string(binding.ParserOptionsRef)) == "" {
 		return previewmodel.Binding{}, errors.New("postgres Proffer preview binding is incomplete")
 	}
+	if binding.CreatedAt.IsZero() {
+		binding.CreatedAt = s.clock()
+	}
 	for attempt := 0; attempt < 4; attempt++ {
 		raw := make([]byte, 24)
 		if _, err := io.ReadFull(s.entropy, raw); err != nil {
@@ -239,10 +242,10 @@ func (s *ProfferPreviewStore) Create(ctx context.Context, binding previewmodel.B
 		rollback := func() { cleanup, cancel := boundedCleanup(ctx); defer cancel(); _ = tx.Rollback(cleanup) }
 		result, err := tx.Exec(ctx, `
 			INSERT INTO context.proffer_preview_binding
-			    (preview_handle, request_id, source_ref, workflow_id, run_id, parser_options_ref)
-			VALUES ($1, $2, $3, $4, $5, $6)
+			    (preview_handle, request_id, source_ref, workflow_id, run_id, parser_options_ref, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			ON CONFLICT DO NOTHING`, binding.Handle, binding.RequestID, binding.SourceRef,
-			binding.WorkflowID, binding.RunID, binding.ParserOptionsRef)
+			binding.WorkflowID, binding.RunID, binding.ParserOptionsRef, binding.CreatedAt)
 		if err != nil {
 			rollback()
 			return previewmodel.Binding{}, fmt.Errorf("insert preview binding: %w", err)
@@ -265,10 +268,10 @@ func (s *ProfferPreviewStore) Create(ctx context.Context, binding previewmodel.B
 
 		var existing previewmodel.Binding
 		err = tx.QueryRow(ctx, `
-			SELECT preview_handle, request_id, source_ref, workflow_id, run_id, parser_options_ref
+			SELECT preview_handle, request_id, source_ref, workflow_id, run_id, parser_options_ref, created_at
 			FROM context.proffer_preview_binding WHERE request_id = $1`, binding.RequestID).Scan(
 			&existing.Handle, &existing.RequestID, &existing.SourceRef, &existing.WorkflowID,
-			&existing.RunID, &existing.ParserOptionsRef)
+			&existing.RunID, &existing.ParserOptionsRef, &existing.CreatedAt)
 		rollback()
 		if err == nil {
 			if existing.SourceRef != binding.SourceRef || existing.WorkflowID != binding.WorkflowID || existing.RunID != binding.RunID || existing.ParserOptionsRef != binding.ParserOptionsRef {
@@ -291,9 +294,10 @@ func (s *ProfferPreviewStore) Binding(ctx context.Context, handle string) (previ
 		       binding.workflow_id, binding.run_id,
 		       COALESCE(decision.selection_ref, ''),
 		       COALESCE(decision.parser_options_ref, binding.parser_options_ref),
-		       snapshot.source_version_id, snapshot.raw_generation_id,
-		       snapshot.normalized_generation_id
+		       COALESCE(snapshot.source_version_id, version.id), snapshot.raw_generation_id,
+		       snapshot.normalized_generation_id, binding.created_at
 		FROM context.proffer_preview_binding binding
+		LEFT JOIN context.source_version version ON version.workflow_id = binding.workflow_id
 		LEFT JOIN LATERAL (
 		    SELECT selection_ref, parser_options_ref
 		    FROM context.proffer_preview_decision
@@ -308,7 +312,8 @@ func (s *ProfferPreviewStore) Binding(ctx context.Context, handle string) (previ
 		) snapshot ON true
 		WHERE binding.preview_handle = $1`, handle).Scan(
 		&binding.Handle, &binding.RequestID, &binding.SourceRef, &binding.WorkflowID, &binding.RunID,
-		&binding.SelectionRef, &binding.ParserOptionsRef, &sourceVersion, &rawGeneration, &normalizedGeneration)
+		&binding.SelectionRef, &binding.ParserOptionsRef, &sourceVersion, &rawGeneration, &normalizedGeneration,
+		&binding.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return previewmodel.Binding{}, previewmodel.ErrNotFound
 	}
@@ -325,6 +330,104 @@ func (s *ProfferPreviewStore) Binding(ctx context.Context, handle string) (previ
 		binding.NormalizedGenerationID = *normalizedGeneration
 	}
 	return binding, nil
+}
+
+// ListBindings pages the append-only opaque-handle registry using a stable
+// (created_at, preview_handle) keyset. Temporal identities remain internal to
+// the returned Binding and are never serialized by the HTTP operation model.
+func (s *ProfferPreviewStore) ListBindings(ctx context.Context, cursor *previewmodel.BindingCursor, limit int) (previewmodel.BindingPage, error) {
+	if limit < 1 || limit > 500 {
+		return previewmodel.BindingPage{}, errors.New("preview binding page limit must be between 1 and 500")
+	}
+	hasCursor := cursor != nil
+	var createdAt time.Time
+	var handle string
+	if cursor != nil {
+		createdAt, handle = cursor.CreatedAt, cursor.Handle
+		if createdAt.IsZero() || strings.TrimSpace(handle) == "" {
+			return previewmodel.BindingPage{}, errors.New("preview binding cursor is incomplete")
+		}
+	}
+	rows, err := s.db.Query(ctx, `
+		SELECT binding.preview_handle, binding.request_id, binding.source_ref,
+		       binding.workflow_id, binding.run_id, binding.parser_options_ref,
+		       version.id, binding.created_at
+		FROM context.proffer_preview_binding binding
+		LEFT JOIN context.source_version version ON version.workflow_id = binding.workflow_id
+		WHERE NOT $1::boolean OR (binding.created_at, binding.preview_handle) < ($2::timestamptz, $3::text)
+		ORDER BY binding.created_at DESC, binding.preview_handle DESC
+		LIMIT $4`, hasCursor, createdAt, handle, limit+1)
+	if err != nil {
+		return previewmodel.BindingPage{}, fmt.Errorf("list preview bindings: %w", err)
+	}
+	defer rows.Close()
+	page := previewmodel.BindingPage{}
+	for rows.Next() {
+		var binding previewmodel.Binding
+		var sourceVersion *uuid.UUID
+		if err := rows.Scan(&binding.Handle, &binding.RequestID, &binding.SourceRef,
+			&binding.WorkflowID, &binding.RunID, &binding.ParserOptionsRef,
+			&sourceVersion, &binding.CreatedAt); err != nil {
+			return previewmodel.BindingPage{}, fmt.Errorf("scan preview binding: %w", err)
+		}
+		if sourceVersion != nil {
+			binding.SourceVersionID = *sourceVersion
+		}
+		page.Bindings = append(page.Bindings, binding)
+	}
+	if err := rows.Err(); err != nil {
+		return previewmodel.BindingPage{}, fmt.Errorf("iterate preview bindings: %w", err)
+	}
+	if len(page.Bindings) > limit {
+		page.Bindings = page.Bindings[:limit]
+		page.HasMore = true
+	}
+	return page, nil
+}
+
+// OperationStages reads the latest durable terminal receipt for every
+// Activity belonging to an opaque preview handle. It is a fallback/audit
+// projection; current in-flight state remains a Temporal query.
+func (s *ProfferPreviewStore) OperationStages(ctx context.Context, handle string) ([]previewmodel.OperationStage, error) {
+	rows, err := s.db.Query(ctx, `
+		SELECT execution.activity_name, receipt.status,
+		       COALESCE(receipt.result_ref->>'ref_id', receipt.result_ref->>'ref', ''),
+		       receipt.id::text,
+		       COALESCE(receipt.not_applicable_reason, receipt.error_detail->>'message',
+		                CASE WHEN receipt.status = 'failed' THEN 'activity failed' ELSE '' END),
+		       receipt.attempt, receipt.started_at, receipt.completed_at
+		FROM context.proffer_preview_binding binding
+		JOIN context.source_version version ON version.workflow_id = binding.workflow_id
+		JOIN context.activity_execution execution ON execution.source_version_id = version.id
+		JOIN LATERAL (
+			SELECT candidate.* FROM context.activity_receipt candidate
+			WHERE candidate.activity_execution_id = execution.id
+			ORDER BY candidate.attempt DESC LIMIT 1
+		) receipt ON true
+		WHERE binding.preview_handle = $1
+		ORDER BY execution.created_at, execution.activity_name`, handle)
+	if err != nil {
+		return nil, fmt.Errorf("read operation stage receipts: %w", err)
+	}
+	defer rows.Close()
+	stages := []previewmodel.OperationStage{}
+	for rows.Next() {
+		var stage previewmodel.OperationStage
+		if err := rows.Scan(&stage.Stage, &stage.Status, &stage.Ref, &stage.ReceiptRef,
+			&stage.Reason, &stage.Attempt, &stage.StartedAt, &stage.CompletedAt); err != nil {
+			return nil, fmt.Errorf("scan operation stage receipt: %w", err)
+		}
+		stages = append(stages, stage)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate operation stage receipts: %w", err)
+	}
+	if len(stages) == 0 {
+		if _, err := s.Binding(ctx, handle); err != nil {
+			return nil, err
+		}
+	}
+	return stages, nil
 }
 
 func (s *ProfferPreviewStore) Snapshot(ctx context.Context, handle string) (previewmodel.Snapshot, error) {

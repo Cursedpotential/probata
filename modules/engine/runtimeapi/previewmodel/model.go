@@ -31,6 +31,33 @@ type Binding struct {
 	SourceVersionID        uuid.UUID
 	RawGenerationID        uuid.UUID
 	NormalizedGenerationID uuid.UUID
+	CreatedAt              time.Time
+}
+
+// BindingCursor is a stable keyset coordinate over the append-only preview
+// binding registry. Newer rows do not shift an in-progress listing.
+type BindingCursor struct {
+	CreatedAt time.Time
+	Handle    string
+}
+
+type BindingPage struct {
+	Bindings []Binding
+	HasMore  bool
+}
+
+// OperationStage is the durable receipt projection for one settled Activity.
+// It intentionally carries references and accounting timestamps, never source
+// or normalized payloads.
+type OperationStage struct {
+	Stage       string     `json:"stage"`
+	Status      string     `json:"status"`
+	Ref         string     `json:"ref,omitempty"`
+	ReceiptRef  string     `json:"receipt_ref,omitempty"`
+	Reason      string     `json:"reason,omitempty"`
+	Attempt     int        `json:"attempt,omitempty"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 type Receipt struct {
 	ReceiptType string    `json:"receipt_type"`
@@ -53,10 +80,16 @@ type Snapshot struct {
 		RawGenerationID        uuid.UUID `json:"raw_generation_id"`
 		NormalizedGenerationID uuid.UUID `json:"normalized_generation_id"`
 	} `json:"correlation"`
-	Parser        *Parser   `json:"parser,omitempty"`
-	PreviewDigest string    `json:"preview_digest"`
-	Receipts      []Receipt `json:"receipts"`
-	Reason        string    `json:"reason,omitempty"`
+	Parser              *Parser                    `json:"parser,omitempty"`
+	PreviewDigest       string                     `json:"preview_digest"`
+	Receipts            []Receipt                  `json:"receipts"`
+	Reason              string                     `json:"reason,omitempty"`
+	Lifecycle           proffer.OperationLifecycle `json:"lifecycle"`
+	CurrentStage        proffer.ActivityName       `json:"current_stage,omitempty"`
+	ActiveStages        []proffer.ActivityName     `json:"active_stages"`
+	Wait                proffer.OperationWait      `json:"wait,omitempty"`
+	Terminal            bool                       `json:"terminal"`
+	CompletedStageCount int                        `json:"completed_stage_count"`
 }
 type Participant struct {
 	ParticipantID    string  `json:"participant_id"`
@@ -104,6 +137,8 @@ type Store interface {
 	Page(context.Context, string, int, int) (Page, error)
 	EventsAfter(context.Context, string, int64) ([]Event, error)
 	RecordDecision(context.Context, string, bool, string, string, proffer.Ref, proffer.Ref) error
+	ListBindings(context.Context, *BindingCursor, int) (BindingPage, error)
+	OperationStages(context.Context, string) ([]OperationStage, error)
 }
 
 // ReceiptTypes are context-import completeness checkpoints. The first receipt

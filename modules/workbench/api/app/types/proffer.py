@@ -5,9 +5,9 @@ Byline: Codex · GPT-5 · 2026-08-28.
 
 from __future__ import annotations
 
-from datetime import datetime
 import json
 import re
+from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import unquote, urlsplit
 from uuid import UUID
@@ -20,6 +20,13 @@ from app.types.proffer_handler import (
     ProfferHandlerSelectionDecisionRequest,  # noqa: F401
     ProfferHandlerSelectionDecisionResponse,  # noqa: F401
 )
+from app.types.proffer_messages import (
+    ProfferPreviewAttachment,  # noqa: F401
+    ProfferPreviewEvent,  # noqa: F401
+    ProfferPreviewMessage,  # noqa: F401
+    ProfferPreviewMessagesResponse,  # noqa: F401
+    ProfferPreviewParticipant,  # noqa: F401
+)
 from app.types.proffer_sources import (
     ProfferSourceBrowserResponse,  # noqa: F401
     ProfferSourceObject,  # noqa: F401
@@ -28,14 +35,6 @@ from app.types.proffer_sources import (
     SourceFileKind,  # noqa: F401
     SourceLocation,  # noqa: F401
 )
-from app.types.proffer_messages import (
-    ProfferPreviewAttachment,  # noqa: F401
-    ProfferPreviewEvent,  # noqa: F401
-    ProfferPreviewMessage,  # noqa: F401
-    ProfferPreviewMessagesResponse,  # noqa: F401
-    ProfferPreviewParticipant,  # noqa: F401
-)
-
 
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OpaquePreviewHandle = Annotated[
@@ -50,6 +49,15 @@ BoundedActorIdentity = Annotated[
     StringConstraints(strip_whitespace=True, min_length=1, max_length=512, pattern=r"^[^\x00\r\n]+$"),
 ]
 BoundedToolID = Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)]
+ProfferOperationLifecycle = Literal[
+    "running",
+    "awaiting_repair_decision",
+    "awaiting_preview_decision",
+    "completed",
+    "failed",
+    "unavailable",
+]
+ProfferOperationWait = Literal["repair_decision", "preview_decision"]
 
 
 def validate_authorized_source_ref(value: str) -> str:
@@ -82,7 +90,6 @@ def validate_authorized_source_ref(value: str) -> str:
 
 class ProfferStartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     request_id: NonBlank
     matter_id: UUID
     court_case_id: UUID
@@ -108,7 +115,6 @@ class ProfferStartResponse(BaseModel):
 
 class ProfferUploadResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
-
     acquisition_ref: NonBlank
     sha256: Sha256Digest
     byte_length: Annotated[int, Field(ge=0)]
@@ -233,7 +239,6 @@ class ProfferPreviewCheckpoint(BaseModel):
 
 class ProfferRepairAssessmentView(BaseModel):
     model_config = ConfigDict(extra="ignore")
-
     assessment_ref: Annotated[NonBlank, StringConstraints(max_length=512)]
     source_version_ref: Annotated[NonBlank, StringConstraints(max_length=512)]
     review_required: bool
@@ -241,7 +246,6 @@ class ProfferRepairAssessmentView(BaseModel):
 
 class ProfferPreviewResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
-
     preview_handle: OpaquePreviewHandle
     phase: NonBlank
     correlation: ProfferPreviewCorrelation | None = None
@@ -259,6 +263,12 @@ class ProfferPreviewResponse(BaseModel):
     recommended_handler: ProfferHandlerCandidate | None = None
     alternative_handlers: Annotated[list[ProfferHandlerCandidate], Field(max_length=3)] | None = None
     matter_mode: MatterMode
+    lifecycle: ProfferOperationLifecycle | None = None
+    current_stage: NonBlank | None = None
+    active_stages: Annotated[list[NonBlank], Field(max_length=64)] = Field(default_factory=list)
+    wait: ProfferOperationWait | None = None
+    terminal: bool | None = None
+    completed_stage_count: Annotated[int, Field(ge=0)] | None = None
 
     @model_validator(mode="after")
     def validate_snapshot_shape(self) -> ProfferPreviewResponse:
@@ -281,9 +291,9 @@ class ProfferPreviewResponse(BaseModel):
             if self.repair_assessment is None or not self.repair_assessment.review_required:
                 raise ValueError("an awaiting repair decision snapshot requires a review assessment")
             return self
-        if self.phase == "awaiting_decision" or any(
-            value is not None for value in (self.correlation, self.preview_digest, self.receipts)
-        ):
-            if self.correlation is None or self.preview_digest is None or self.receipts is None:
-                raise ValueError("a projected preview snapshot requires correlation, preview_digest, and receipts")
+        if (
+            self.phase == "awaiting_decision"
+            or any(value is not None for value in (self.correlation, self.preview_digest, self.receipts))
+        ) and (self.correlation is None or self.preview_digest is None or self.receipts is None):
+            raise ValueError("a projected preview snapshot requires correlation, preview_digest, and receipts")
         return self

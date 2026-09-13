@@ -167,6 +167,19 @@ func mockAllStagesSucceed(env *testsuite.TestWorkflowEnvironment) {
 	mockStages(env, nil, nil)
 }
 
+func queryOperation(t *testing.T, env *testsuite.TestWorkflowEnvironment) OperationState {
+	t.Helper()
+	encoded, err := env.QueryWorkflow(OperationQueryName)
+	if err != nil {
+		t.Fatalf("query operation state: %v", err)
+	}
+	var state OperationState
+	if err := encoded.Get(&state); err != nil {
+		t.Fatalf("decode operation state: %v", err)
+	}
+	return state
+}
+
 // recorder captures Activity invocation names in the order Temporal starts
 // them, via SetOnActivityStartedListener. It is safe to append from
 // concurrently scheduled activities.
@@ -265,6 +278,60 @@ func TestGoldenPathRunsEveryStageExactlyOnce(t *testing.T) {
 		if !order.contains(string(d.ID)) {
 			t.Errorf("stage %q was never started as a Temporal Activity", d.ID)
 		}
+	}
+}
+
+func TestOperationQueryTracksStagesHumanWaitsAndTerminalCompletion(t *testing.T) {
+	var suite testsuite.WorkflowTestSuite
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(ProfferWorkflow)
+	mockAllStagesSucceed(env)
+
+	var registering, repairWait, previewWait OperationState
+	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, _ converter.EncodedValues) {
+		if info.ActivityType.Name == string(stagegraph.RegisterSource) {
+			registering = queryOperation(t, env)
+		}
+	})
+	env.RegisterDelayedCallback(func() {
+		repairWait = queryOperation(t, env)
+		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+	}, time.Hour)
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(HandlerSelectionDecisionSignalName, HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
+	}, 2*time.Hour)
+	env.RegisterDelayedCallback(func() {
+		previewWait = queryOperation(t, env)
+		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: true, Decider: "operator"})
+	}, 3*time.Hour)
+
+	env.ExecuteWorkflow(ProfferWorkflow, testInput())
+	if err := env.GetWorkflowError(); err != nil {
+		t.Fatalf("workflow returned error: %v", err)
+	}
+
+	if registering.Lifecycle != OperationRunning || registering.CurrentStage != stagegraph.RegisterSource {
+		t.Fatalf("registering state = %#v", registering)
+	}
+	if repairWait.Lifecycle != OperationAwaitingRepairDecision || repairWait.Wait != OperationWaitRepairDecision || repairWait.Terminal {
+		t.Fatalf("repair wait state = %#v", repairWait)
+	}
+	if previewWait.Lifecycle != OperationAwaitingPreviewDecision || previewWait.Wait != OperationWaitPreviewDecision || previewWait.Terminal {
+		t.Fatalf("preview wait state = %#v", previewWait)
+	}
+	if previewWait.CompletedStageCount <= repairWait.CompletedStageCount {
+		t.Fatalf("completed stage count did not advance: repair=%d preview=%d", repairWait.CompletedStageCount, previewWait.CompletedStageCount)
+	}
+
+	terminal := queryOperation(t, env)
+	if terminal.Lifecycle != OperationCompleted || !terminal.Terminal || terminal.Wait != "" || terminal.CurrentStage != "" {
+		t.Fatalf("terminal state = %#v", terminal)
+	}
+	if terminal.SourceVersionRef != stageStub(stagegraph.RegisterSource).Ref {
+		t.Fatalf("terminal source version ref = %q", terminal.SourceVersionRef)
+	}
+	if terminal.CompletedStageCount != len(stagegraph.Stages) || len(terminal.Stages) != len(stagegraph.Stages) {
+		t.Fatalf("terminal stages = count %d query rows %d, want %d", terminal.CompletedStageCount, len(terminal.Stages), len(stagegraph.Stages))
 	}
 }
 

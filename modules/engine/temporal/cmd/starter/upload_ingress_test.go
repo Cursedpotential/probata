@@ -30,6 +30,9 @@ func (uploadTestStarter) DecideHandler(context.Context, string, proffer.HandlerS
 func (uploadTestStarter) Preview(context.Context, string) (proffer.PreviewState, error) {
 	return proffer.PreviewState{Phase: proffer.PhaseAwaitingDecision}, nil
 }
+func (uploadTestStarter) Operation(context.Context, string) (proffer.OperationState, error) {
+	return proffer.OperationState{Lifecycle: proffer.OperationAwaitingPreviewDecision, Wait: proffer.OperationWaitPreviewDecision, ActiveStages: []proffer.ActivityName{}}, nil
+}
 
 func TestStarterRoutesMountsTailnetAuthorizedUploadOnSharedRoot(t *testing.T) {
 	root := t.TempDir()
