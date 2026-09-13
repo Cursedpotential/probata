@@ -1,8 +1,8 @@
 # Proffer current state, plan, and gap ledger
 
-**Date:** 2026-09-13  
-**Branch:** `codex/propria-reconcile-20260913`  
-**Repository:** Probata child repository under the Propria umbrella  
+**Date:** 2026-09-13
+**Branch:** `codex/propria-reconcile-20260913`
+**Repository:** Probata child repository under the Propria umbrella
 **Status:** active integration; source changes are reviewable locally; deployment and canonical-checkout reconciliation remain open
 
 This is the consolidated operating record for the Proffer intake-to-Context repair. It records what exists, what has been proved, what is still missing, and the order in which the remaining work must proceed. It supplements the binding [precommit Review contract](2026-09-13-proffer-precommit-review-contract.md) and the [integration branch receipt](2026-09-13-integration-branch-receipt.md). It does not create evidence, custody, or promotion state.

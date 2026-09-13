@@ -1,8 +1,8 @@
 # Proffer precommit proposal and Review workspace contract
 
-**Status:** owner-directed implementation contract  
-**Date:** 2026-09-13  
-**Scope:** Proffer intake-to-Context preparation, review, approval, and projection  
+**Status:** owner-directed implementation contract
+**Date:** 2026-09-13
+**Scope:** Proffer intake-to-Context preparation, review, approval, and projection
 **Implementation proof:** this document defines the target and acceptance gates; it does not claim the current runtime satisfies them.
 
 ## Product purpose

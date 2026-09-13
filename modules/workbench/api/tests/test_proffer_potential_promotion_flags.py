@@ -217,4 +217,3 @@ def test_flag_service_persists_governed_metadata_without_promoting(monkeypatch) 
     }
     assert result.classification == "potential_promotion"
     assert result.attempt_id == ATTEMPT_ID
-
