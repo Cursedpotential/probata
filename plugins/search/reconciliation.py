@@ -28,6 +28,11 @@ def _roots() -> dict[str,list[Path]]:
 def inventory(project_root: str|None=None) -> dict[str,dict[str,Any]]:
     root=str(Path(project_root or os.getcwd()).resolve()); roots=_roots(); se=Path(__file__).with_name("smart_explore.py").resolve()
     ccc=shutil.which("ccc"); doc_cmd=os.getenv("PROPRIA_DOCSTORE_ADAPTER")
+    memsearch=shutil.which("memsearch"); mem_config=Path.home()/".memsearch"/"config.toml"
+    mem_refs=[]
+    if mem_config.is_file():
+      mem_refs=sorted(set(re.findall(r"env:([A-Za-z_][A-Za-z0-9_]*)",mem_config.read_text(encoding="utf-8",errors="ignore"))))
+    mem_missing=[name for name in mem_refs if not os.getenv(name)]
     data={
       "smart_explore":{"available":True,"adapter":"native","identity":{"engine":str(se),"project_root":root}},
       "ccc":{"available":bool(ccc and (Path(root)/".cocoindex_code"/"settings.yml").exists()),"adapter":ccc,"identity":{"project_root":root,"settings":str(Path(root)/".cocoindex_code"/"settings.yml"),"index":str(Path(root)/".cocoindex_code"/"target_sqlite.db")}},
@@ -35,7 +40,9 @@ def inventory(project_root: str|None=None) -> dict[str,dict[str,Any]]:
     }
     for name in ("codex_memory","claude_memory","cnf","remember","memsearch"):
       existing=[str(p) for p in roots[name] if p.exists()]
-      data[name]={"available":bool(existing),"adapter":"filesystem-text" if name!="memsearch" else (shutil.which("memsearch") or "filesystem-text"),"identity":{"roots":existing}}
+      if name=="memsearch":
+        data[name]={"available":bool(existing and memsearch and mem_config.is_file() and not mem_missing),"adapter":memsearch,"identity":{"roots":existing,"config":str(mem_config),"credential_env_refs":mem_refs,"missing_credential_env":mem_missing,"health":"ready" if not mem_missing else "config_error"},"next_action":None if not mem_missing else f"set {', '.join(mem_missing)} in the invoking environment and rerun memsearch stats"}
+      else:data[name]={"available":bool(existing),"adapter":"filesystem-text","identity":{"roots":existing}}
     return data
 
 def select_stores(mode:str, stores:list[str]|None)->list[str]:
@@ -79,6 +86,7 @@ def _filesystem_search(store:str, query:str, roots:list[str], limit:int)->list[d
       for p in root.rglob("*"):
         if len(rows)>=limit: break
         if not p.is_file() or p.suffix.lower() not in TEXT_SUFFIXES: continue
+        if any(part.lower() in {"to_be_deleted","_backup","backups"} for part in p.parts): continue
         try:
           text=p.read_text(encoding="utf-8",errors="ignore")
         except OSError: continue
@@ -138,7 +146,9 @@ def recall(query:str, project_root:str|None=None, mode:str="auto", stores:list[s
     next_actions=[]
     for run in runs:
       if run["requested"] and not run["available"]:
-        next_actions.append("configure PROPRIA_DOCSTORE_ADAPTER and retry" if run["store"]=="docstore" else f"make the {run['store']} adapter available and retry")
+        if run["store"]=="docstore": next_actions.append("configure PROPRIA_DOCSTORE_ADAPTER and retry")
+        elif run["store"]=="memsearch": next_actions.append(ident["memsearch"].get("next_action") or "repair memsearch health and retry")
+        else: next_actions.append(f"make the {run['store']} adapter available and retry")
       elif run["requested"] and run["error"]:
         next_actions.append(f"inspect the {run['store']} error and retry that selected store")
     if conflicts: next_actions.append("run reconcile repair to create a provenance-rich agent action packet")

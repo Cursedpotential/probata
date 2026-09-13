@@ -47,6 +47,13 @@ class ReconciliationTests(unittest.TestCase):
   self.assertFalse(out['attribution_clean'])
   self.assertIn('configure PROPRIA_DOCSTORE_ADAPTER and retry',out['next_actions'])
 
+ def test_memsearch_missing_credential_is_not_reported_available(self):
+  with patch.dict(os.environ,{},clear=True), patch.object(rec.shutil,'which',side_effect=lambda name: 'memsearch.exe' if name=='memsearch' else None), patch.object(Path,'home',return_value=Path('C:/fakehome')), patch.object(Path,'exists',return_value=True), patch.object(Path,'is_file',return_value=True), patch.object(Path,'read_text',return_value='api_key = "env:NVIDIA_NIM_API_KEY"'):
+   data=rec.inventory(str(ROOT))['memsearch']
+  self.assertFalse(data['available'])
+  self.assertEqual(data['identity']['missing_credential_env'],['NVIDIA_NIM_API_KEY'])
+  self.assertIn('rerun memsearch stats',data['next_action'])
+
  def test_active_wal_is_reported_and_never_stale(self):
   with tempfile.TemporaryDirectory() as td, patch.dict(os.environ, {'SMART_EXPLORE_HOME': td}):
    indexes=Path(td)/'indexes'; indexes.mkdir()
