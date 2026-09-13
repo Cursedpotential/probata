@@ -54,7 +54,7 @@ export function ParserSelectionPanel({
         <div className="border bg-background p-5">
           <strong className="block text-sm">Parser selection occurs after intake starts</strong>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Source inspection can show a filename preflight, but it is not authoritative. The workflow must read the content, persist its signature recommendation, and pause before this screen can offer registered handlers.
+            Source inspection can show a filename preflight, but it is not authoritative. The engine automatically selects its registered content handler. Inspect that decision here; a logged execution failure opens compatible recovery choices.
           </p>
           {inspection?.parser_preflight && (
             <dl className="mt-4 grid gap-3 border bg-accent/20 p-4 text-xs sm:grid-cols-2">
@@ -136,6 +136,9 @@ function DurableReadBack({ preview, receipt, selected, localDecisionRef }: { pre
         <span className="border bg-card px-2 py-1 text-[10px] font-semibold text-muted-foreground">Durable workflow read-back</span>
       </div>
       <dl className="mt-5 grid gap-4 text-xs sm:grid-cols-2">
+        <div><dt className="text-muted-foreground">Content signature</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.signature_ref ?? "Not yet reported"}</dd></div>
+        <div><dt className="text-muted-foreground">Detected format</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.detected_format ?? "Not yet reported"}</dd></div>
+        {preview.recommended_handler && <div className="sm:col-span-2"><dt className="text-muted-foreground">Why this route</dt><dd className="mt-1">{preview.recommended_handler.reason}</dd></div>}
         <div><dt className="text-muted-foreground">Selected handler</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.parser ? `${preview.parser.parser_id} · ${preview.parser.parser_version}` : "Selection has not been recorded yet"}</dd></div>
         <div><dt className="text-muted-foreground">Handler decision</dt><dd className="mt-1 break-all font-mono text-[11px]">{preview.handler_decision_ref ?? localDecisionRef ?? "Pending"}</dd></div>
         <div><dt className="text-muted-foreground">Parser-selection receipt</dt><dd className="mt-1 break-all font-mono text-[11px]">{receipt?.receipt_ref ?? "Pending"}</dd></div>

@@ -567,8 +567,9 @@ export async function createMatter(payload: {
   description?: string;
   partition_key?: string;
   created_by?: "owner";
-}) {
-  return apiFetch<Matter>("/api/matters", {
+}, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<Matter>(`/api/matters?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -597,29 +598,18 @@ export async function getCaseManagementCapabilities() {
 // ---------------------------------------------------------------------------
 
 export async function uploadProfferSource(file: File, mode: MatterMode) {
-  const query = new URLSearchParams({ mode });
-  const response = await fetch(`${API_BASE}/api/proffer/upload?${query.toString()}`, {
+  // Existing authenticated server ingress writes Nexus; only the server authors its acquisition reference.
+  const staged = await uploadFile(file);
+  return acquireStagedProfferSource(staged.id, mode);
+}
+
+export function acquireStagedProfferSource(stagedId: string, mode: MatterMode) {
+  return apiFetch<ProfferUploadResponse>(`/api/proffer/staged/${encodeURIComponent(stagedId)}/acquisition?mode=${mode}`, {
     method: "POST",
-    headers: {
-      "Content-Type": file.type || "application/octet-stream",
-      "X-Source-Filename": file.name,
-    },
-    body: file,
-    credentials: "same-origin",
+  }).then((result) => {
+    if (result.matter_mode !== mode) throw new ApiError("Staged acquisition did not confirm TEST/REAL mode", 502);
+    return result;
   });
-  if (!response.ok) {
-    let detail = `Upload failed (${response.status})`;
-    try {
-      const body = await response.json();
-      if (typeof body?.detail === "string") detail = body.detail;
-    } catch {
-      // Preserve the status-based message when the upstream body is not JSON.
-    }
-    throw new ApiError(detail, response.status);
-  }
-  const result = (await response.json()) as ProfferUploadResponse;
-  if (result.matter_mode !== mode) throw new ApiError("The upload response did not confirm the active TEST/REAL mode", 502);
-  return result;
 }
 
 export function listProfferSources(params: {
@@ -811,17 +801,20 @@ export async function createCourtCase(
     is_primary?: boolean;
     created_by?: "owner";
   },
+  mode: MatterMode,
 ) {
-  return apiFetch<CourtCase>(`/api/matters/${encodeURIComponent(matterId)}/court-cases`, {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<CourtCase>(`/api/matters/${encodeURIComponent(matterId)}/court-cases?${query.toString()}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
 
-export async function resolveKnowledgeSource(matterId: string, source: KnowledgeSourceRef) {
+export async function resolveKnowledgeSource(matterId: string, source: KnowledgeSourceRef, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<KnowledgeSourceResolution>(
-    `/api/matters/${encodeURIComponent(matterId)}/knowledge/resolve`,
+    `/api/matters/${encodeURIComponent(matterId)}/knowledge/resolve?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -841,9 +834,11 @@ export async function createEvidenceItem(
     evidence_type?: string;
     created_by?: "owner";
   },
+  mode: MatterMode,
 ) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidencePromotionResult>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -852,34 +847,38 @@ export async function createEvidenceItem(
   );
 }
 
-export async function listEvidenceItems(matterId: string, limit = 50, offset = 0) {
-  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+export async function listEvidenceItems(matterId: string, mode: MatterMode, limit = 50, offset = 0) {
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset), mode });
   return apiFetch<EvidenceItemListResponse>(
     `/api/matters/${encodeURIComponent(matterId)}/evidence-items?${qs.toString()}`,
   );
 }
 
-export async function getEvidenceDetail(matterId: string, evidenceItemId: string) {
+export async function getEvidenceDetail(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceDetail>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}?${query.toString()}`,
   );
 }
 
-export async function getEvidenceSourceContent(matterId: string, evidenceItemId: string) {
+export async function getEvidenceSourceContent(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceSourceContent>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/source-content`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/source-content?${query.toString()}`,
   );
 }
 
-export async function getEvidenceConversationContext(matterId: string, evidenceItemId: string) {
+export async function getEvidenceConversationContext(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ before: "25", after: "25", mode });
   return apiFetch<EvidenceConversationContext>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/conversation-context?before=25&after=25`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/conversation-context?${query.toString()}`,
   );
 }
 
-export async function getCourtReadiness(matterId: string, evidenceItemId: string) {
+export async function getCourtReadiness(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<CourtReadiness>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/court-readiness`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/court-readiness?${query.toString()}`,
   );
 }
 
@@ -891,9 +890,11 @@ export async function reviewEvidenceItem(
     rationale: string;
     reviewer?: "owner";
   },
+  mode: MatterMode,
 ) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceReviewResult>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews?${query.toString()}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -902,9 +903,10 @@ export async function reviewEvidenceItem(
   );
 }
 
-export async function listEvidenceReviews(matterId: string, evidenceItemId: string) {
+export async function listEvidenceReviews(matterId: string, evidenceItemId: string, mode: MatterMode) {
+  const query = new URLSearchParams({ mode });
   return apiFetch<EvidenceReviewListResponse>(
-    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews`,
+    `/api/matters/${encodeURIComponent(matterId)}/evidence-items/${encodeURIComponent(evidenceItemId)}/reviews?${query.toString()}`,
   );
 }
 

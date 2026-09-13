@@ -1,4 +1,4 @@
-// Byline: Codex · GPT-5.6 · 2026-08-29
+// Byline: Codex · GPT-5.6 · 2026-09-12 (hydrate deep-linked preview mode and handle atomically)
 "use client";
 
 import { Activity, Check, ChevronLeft, Link2, Loader2, RefreshCw, ShieldCheck, X } from "lucide-react";
@@ -41,8 +41,9 @@ export function ProfferPreviewClient() {
 }
 
 function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
-  const [draftHandle, setDraftHandle] = useState("");
-  const [previewHandle, setPreviewHandle] = useState("");
+  const [initialUrlHandle] = useState(() => initialHandle(mode));
+  const [draftHandle, setDraftHandle] = useState(initialUrlHandle);
+  const [previewHandle, setPreviewHandle] = useState(initialUrlHandle);
   const [preview, setPreview] = useState<ProfferPreviewResponse | null>(null);
   const [messages, setMessages] = useState<ProfferPreviewMessage[]>([]);
   const [participants, setParticipants] = useState<ProfferPreviewParticipant[]>([]);
@@ -55,8 +56,8 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [decisionPending, setDecisionPending] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
-  const generationRef = useRef(0);
-  const activeHandleRef = useRef("");
+  const generationRef = useRef(initialUrlHandle ? 1 : 0);
+  const activeHandleRef = useRef(initialUrlHandle);
   const snapshotControllerRef = useRef<AbortController | null>(null);
   const messageControllersRef = useRef(new Map<string, AbortController>());
   const requestedCursorsRef = useRef(new Set<string>());
@@ -86,8 +87,6 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const handle = initialHandle(mode);
-      setDraftHandle(handle);
-      activateHandle(handle);
       const url = new URL(window.location.href);
       url.search = "";
       url.searchParams.set("mode", mode);
@@ -95,7 +94,7 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
       window.history.replaceState({}, "", url);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [activateHandle, mode]);
+  }, [mode]);
 
   const loadSnapshot = useCallback(async () => {
     const handle = previewHandle;

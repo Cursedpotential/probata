@@ -2,7 +2,7 @@
 "use client";
 
 /**
- * The stage rail: custody -> parse -> store -> knowledge, in whatever order
+ * Historical ingest stage rail, in whatever order
  * and under whatever names the API actually returned for THIS run (per
  * workflow, per the build brief) — `FALLBACK_STAGE_NAMES` only fills in a
  * label when a run genuinely has no stages yet (e.g. still queued).
@@ -19,9 +19,10 @@ import { Check, X, Loader2, Circle, Minus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { StageStatus } from "@/lib/shared/types";
+import { ingestStageLabel } from "./stage-label";
 
 /** Only used when a run has zero stages reported yet — never overrides real API data. */
-const FALLBACK_STAGE_NAMES = ["custody", "parse", "store", "knowledge"];
+const FALLBACK_STAGE_NAMES = ["raw_source_verification", "parse", "store", "knowledge"];
 
 interface StageLike {
   seq: number;
@@ -91,7 +92,7 @@ export function StageRail({ stages, variant = "full", activeSeq, onSelect, gated
               />
             </TooltipTrigger>
             <TooltipContent>
-              {stage.name}: {stage.status}
+              {ingestStageLabel(stage.name)}: {stage.status}
               {stage.seq === gatedSeq ? " (gated)" : ""}
             </TooltipContent>
           </Tooltip>
@@ -124,7 +125,7 @@ export function StageRail({ stages, variant = "full", activeSeq, onSelect, gated
             >
               <StatusIcon status={stage.status} />
             </span>
-            <span className="max-w-20 truncate text-xs font-medium capitalize">{stage.name}</span>
+            <span className="max-w-28 text-xs font-medium capitalize">{ingestStageLabel(stage.name)}</span>
           </button>
           {i < items.length - 1 && (
             <div

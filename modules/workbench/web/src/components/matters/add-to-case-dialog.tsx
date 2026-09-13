@@ -24,6 +24,7 @@ import {
   listMatters,
   resolveKnowledgeSource,
 } from "@/lib/api-client";
+import { useFixedCase } from "@/lib/fixed-case-context";
 import type {
   EvidencePromotionResult,
   KnowledgeSourceRef,
@@ -51,6 +52,7 @@ export function AddToCaseDialog({
   defaultCourtCaseId,
   onPromoted,
 }: AddToCaseDialogProps) {
+  const { mode } = useFixedCase();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [matters, setMatters] = useState<Matter[]>([]);
@@ -105,7 +107,7 @@ export function AddToCaseDialog({
       setMatter(boundMatter);
       setCourtCaseId(defaultCourtCaseId || "");
       try {
-        const resolution = await resolveKnowledgeSource(boundMatter.id, source);
+        const resolution = await resolveKnowledgeSource(boundMatter.id, source, mode);
         if (operation !== operationRef.current) return;
         setCandidates(resolution.candidates);
         if (resolution.candidates.length === 0) {
@@ -122,7 +124,7 @@ export function AddToCaseDialog({
       return;
     }
     try {
-      const response = await listMatters();
+      const response = await listMatters(50, 0, mode);
       if (operation !== operationRef.current) return;
       setMatters(response.data.filter((item) => item.status === "active"));
       if (response.data.length === 0) setError("No active Matter is available.");
@@ -145,8 +147,8 @@ export function AddToCaseDialog({
     setError(null);
     try {
       const [detail, resolution] = await Promise.all([
-        getMatter(requestedMatterId),
-        resolveKnowledgeSource(requestedMatterId, source),
+        getMatter(requestedMatterId, mode),
+        resolveKnowledgeSource(requestedMatterId, source, mode),
       ]);
       if (operation !== operationRef.current) return;
       setMatter(detail);
@@ -185,7 +187,7 @@ export function AddToCaseDialog({
         description: description.trim() || undefined,
         quote: exactQuote,
         evidence_type: "communication",
-      });
+      }, mode);
       if (operation !== operationRef.current) return;
       if (
         promotion.created &&

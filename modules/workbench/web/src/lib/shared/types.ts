@@ -157,11 +157,11 @@ export interface RunStageSummary {
   content?: string | null;
 }
 
-/** Typed `output` shapes per stage — keyed by convention on stage `name`
- * ("custody" | "parse" | "store" | "knowledge"). Field names verified
+/** Historical ingest output shapes; the old first-stage wire name remains
+ * readable but is displayed as raw-source verification. Field names verified
  * against the real implementation (server/evidence/workflows.py's
  * `_ledger_stage_output`), not just the build brief's prose description. */
-export interface CustodyOutput {
+export interface RawSourceVerificationOutput {
   sha256?: string | null;
   artifact_id?: string | null;
   duplicate?: boolean;
@@ -197,7 +197,7 @@ export interface KnowledgeOutput {
   [key: string]: unknown;
 }
 
-export type StageOutput = CustodyOutput | ParseOutput | StoreOutput | KnowledgeOutput | Record<string, unknown>;
+export type StageOutput = RawSourceVerificationOutput | ParseOutput | StoreOutput | KnowledgeOutput | Record<string, unknown>;
 
 /** A stage as returned by `GET /v1/runs/{run_id}` (the detail view) —
  * `SELECT *` off `analysis.workflow_run_stage`, so `stage_id`/`run_id` also

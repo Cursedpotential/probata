@@ -16,7 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getEvidenceConversationContext, getEvidenceDetail, getEvidenceSourceContent, listEvidenceReviews } from "@/lib/api-client";
-import type { EvidenceConversationContext, EvidenceDetail, EvidenceItem, EvidenceReviewRecord, EvidenceSourceContent } from "@/lib/shared/types";
+import { useFixedCase } from "@/lib/fixed-case-context";
+import type { EvidenceConversationContext, EvidenceDetail, EvidenceItem, EvidenceReviewRecord, EvidenceSourceContent, MatterMode } from "@/lib/shared/types";
 
 function readableDate(value?: string | null) {
   if (!value) return "Not established";
@@ -40,6 +41,7 @@ function SourcePointer({ pointer }: { pointer?: Record<string, unknown> | null }
 }
 
 function OperationsViews({ detail }: { detail: EvidenceDetail }) {
+  const { mode } = useFixedCase();
   const [view, setView] = useState<"source" | "normalized" | "context" | "review">("normalized");
   const [source, setSource] = useState<EvidenceSourceContent | null>(null);
   const [context, setContext] = useState<EvidenceConversationContext | null>(null);
@@ -55,9 +57,9 @@ function OperationsViews({ detail }: { detail: EvidenceDetail }) {
       setLoading({ source: true, context: true, review: true });
       setErrors({ source: null, context: null, review: null });
       const results = await Promise.allSettled([
-        getEvidenceSourceContent(detail.item.matter_id, detail.item.id),
-        getEvidenceConversationContext(detail.item.matter_id, detail.item.id),
-        listEvidenceReviews(detail.item.matter_id, detail.item.id),
+        getEvidenceSourceContent(detail.item.matter_id, detail.item.id, mode),
+        getEvidenceConversationContext(detail.item.matter_id, detail.item.id, mode),
+        listEvidenceReviews(detail.item.matter_id, detail.item.id, mode),
       ]);
       if (request !== requestRef.current) return;
       const [sourceResult, contextResult, reviewResult] = results;
@@ -68,7 +70,7 @@ function OperationsViews({ detail }: { detail: EvidenceDetail }) {
     };
     void load();
     return () => { requestRef.current += 1; };
-  }, [detail.item.id, detail.item.matter_id]);
+  }, [detail.item.id, detail.item.matter_id, mode]);
 
   const tabs = [["source", "Original Source"], ["normalized", "Normalized Message"], ["context", "Conversation Context"], ["review", "Human Review"]] as const;
   return <section aria-label="Evidence Operations Desk" className="space-y-3 rounded-md border bg-background p-3">
@@ -135,8 +137,8 @@ export function validateEvidenceDetail(detail: EvidenceDetail, expected: Evidenc
   return null;
 }
 
-export async function loadValidatedEvidenceDetail(item: EvidenceItem) {
-  const detail = await getEvidenceDetail(item.matter_id, item.id);
+export async function loadValidatedEvidenceDetail(item: EvidenceItem, mode: MatterMode) {
+  const detail = await getEvidenceDetail(item.matter_id, item.id, mode);
   const invalid = validateEvidenceDetail(detail, item);
   if (invalid) throw new Error(invalid);
   return detail;
@@ -280,6 +282,7 @@ export function EvidenceDetailContent({ detail }: { detail: EvidenceDetail }) {
 }
 
 export function EvidenceDetailDialog({ item }: { item: EvidenceItem }) {
+  const { mode } = useFixedCase();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detail, setDetail] = useState<EvidenceDetail | null>(null);
@@ -292,7 +295,7 @@ export function EvidenceDetailDialog({ item }: { item: EvidenceItem }) {
     setDetail(null);
     setError(null);
     try {
-      const result = await loadValidatedEvidenceDetail(item);
+      const result = await loadValidatedEvidenceDetail(item, mode);
       if (request !== requestRef.current) return;
       setDetail(result);
     } catch (requestError) {

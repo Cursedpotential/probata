@@ -28,6 +28,7 @@ import { SourceExplorer } from "@/components/intake/source-explorer";
 import { Button } from "@/components/ui/button";
 import {
   ApiError,
+  acquireStagedProfferSource,
   createProfferPreviewEventSource,
   createProfferSourceContext,
   decideProfferHandler,
@@ -83,7 +84,7 @@ function errorText(error: unknown) {
 function declaredFormat(source: { name: string }) {
   const extension = source.name.split(".").pop()?.toLowerCase();
   const formats: Record<string, string> = {
-    xml: "sms_export_xml",
+    xml: "xml",
     json: "message_export_json",
     md: "markdown",
     txt: "delimited_text",
@@ -123,6 +124,7 @@ async function waitForPreview(
   attempts = 80,
   ignoredTerminalPhases: ReadonlySet<string> = new Set(),
   onState?: (state: ProfferPreviewResponse) => void,
+  previousRecommendationRef?: string,
 ) {
   let lastState: ProfferPreviewResponse | null = null;
   let lastError: unknown = null;
@@ -131,7 +133,9 @@ async function waitForPreview(
       lastState = await getProfferPreview(previewHandle, mode);
       onState?.(lastState);
       lastError = null;
-      if (terminalPreviewPhases.has(lastState.phase) && !ignoredTerminalPhases.has(lastState.phase)) return lastState;
+      const newRecoveryChoice = lastState.phase === "awaiting_handler_selection"
+        && previousRecommendationRef && lastState.handler_recommendation_ref !== previousRecommendationRef;
+      if (terminalPreviewPhases.has(lastState.phase) && (!ignoredTerminalPhases.has(lastState.phase) || newRecoveryChoice)) return lastState;
     } catch (requestError) {
       lastError = requestError;
       const transient =
@@ -150,17 +154,20 @@ async function fileDigest(file: File) {
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-export function UnifiedIntake() {
+type StagedSource = { id: string; name: string; byte_length: number };
+
+export function UnifiedIntake({ stagedSource }: { stagedSource?: StagedSource } = {}) {
   const { mode } = useFixedCase();
-  return <UnifiedIntakeMode key={mode} mode={mode} />;
+  return <UnifiedIntakeMode key={mode} mode={mode} stagedSource={stagedSource} />;
 }
 
 function parserCandidateKey(candidate: ProfferParserCandidate) {
   return [candidate.handler_id, candidate.handler_version, candidate.execution_path, candidate.compatibility_ref].join("\u0000");
 }
 
-function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
+function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stagedSource?: StagedSource }) {
   const { matter, primaryCourtCase, loading: scopeLoading, error: scopeError } = useFixedCase();
+  const [staged, setStaged] = useState(stagedSource);
   const [file, setFile] = useState<File | null>(null);
   const [remote, setRemote] = useState<ProfferSourceObject | null>(null);
   const [inspection, setInspection] = useState<ProfferSourceInspection | null>(null);
@@ -279,6 +286,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
   async function selectFile(selected: File | null) {
     intakeGenerationRef.current += 1;
     const generation = intakeGenerationRef.current;
+    setStaged(undefined);
     setFile(selected);
     setRemote(null);
     setInspection(null);
@@ -318,6 +326,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
   async function selectRemote(selected: ProfferSourceObject) {
     intakeGenerationRef.current += 1;
     const generation = intakeGenerationRef.current;
+    setStaged(undefined);
     const sameSelection = remote?.key === selected.key;
     setRemote(selected);
     setFile(null);
@@ -385,17 +394,17 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
   }
 
   async function start() {
-    if ((!file && !remote) || !matter || !primaryCourtCase) return;
+    if ((!file && !remote && !staged) || !matter || !primaryCourtCase) return;
     const generation = intakeGenerationRef.current;
     setPhase("starting");
     setError(null);
     setRepairChoice(null);
     setRepairDecisionRef(null);
     try {
-      const sealed = file ? await uploadProfferSource(file, mode) : null;
+      const sealed = file ? await uploadProfferSource(file, mode) : staged ? await acquireStagedProfferSource(staged.id, mode) : null;
       if (generation !== intakeGenerationRef.current) return;
       setUpload(sealed);
-      const selected = file ?? remote;
+      const selected = file ?? remote ?? staged;
       if (!selected) return;
       const requestId = intakeRequestId ?? `proffer-${matter.id}-${crypto.randomUUID()}`;
       setIntakeRequestId(requestId);
@@ -414,8 +423,8 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
           preview_sha256: inspection.sha256,
           verification_state: "preview_only",
         } : {
-          key: file?.name ?? "local-source",
-          name: file?.name ?? "local-source",
+          key: selected.name,
+          name: selected.name,
           byte_length: sealed?.byte_length ?? file?.size ?? 0,
           etag: `sha256:${sealed?.sha256 ?? digest}`,
           preview_sha256: sealed?.sha256 ?? digest,
@@ -451,6 +460,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
       if (generation !== intakeGenerationRef.current) return;
       setPreview(state);
       setPhase(phaseForPreview(state));
+      if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
       if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
     } catch (requestError) {
       if (generation !== intakeGenerationRef.current) return;
@@ -481,6 +491,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
       if (generation !== intakeGenerationRef.current) return;
       setPreview(state);
       setPhase(phaseForPreview(state));
+      if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
       if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
     } catch (requestError) {
       if (generation !== intakeGenerationRef.current) return;
@@ -509,10 +520,11 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
       setPhase("starting");
       const state = await waitForPreview(run.preview_handle, mode, 80, new Set(["awaiting_handler_selection"]), (next) => {
         if (generation === intakeGenerationRef.current) setPreview(next);
-      });
+      }, preview.handler_recommendation_ref);
       if (generation !== intakeGenerationRef.current) return;
       setPreview(state);
       setPhase(phaseForPreview(state));
+      if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
       if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
     } catch (requestError) {
       if (generation !== intakeGenerationRef.current) return;
@@ -525,6 +537,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
 
   function reset() {
     intakeGenerationRef.current += 1;
+    setStaged(undefined);
     setFile(null);
     setRemote(null);
     setInspection(null);
@@ -549,8 +562,8 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
     setPhase("choose");
   }
 
-  const selectedSource = file ?? remote;
-  const selectedSize = file?.size ?? remote?.byte_length ?? 0;
+  const selectedSource = file ?? remote ?? staged;
+  const selectedSize = file?.size ?? remote?.byte_length ?? staged?.byte_length ?? 0;
   const selectedSourceRef = upload?.acquisition_ref ?? inspection?.source_ref ?? remote?.source_ref ?? null;
   const contextFlowComplete = profferContextFlowComplete(preview?.receipts, preview?.checkpoints);
 
@@ -634,7 +647,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
             </section>
           )}
 
-          {!file && !remote ? (
+          {!file && !remote && !staged ? (
             <div className="space-y-4">
               <SourceExplorer
                 response={sources}
@@ -663,8 +676,8 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
                 <div className="grid h-10 w-10 place-items-center border bg-accent text-accent-foreground"><FileText className="h-5 w-5" /></div>
                 <div className="min-w-0 flex-1">
                   <p className="platform-rule-title">Selected source</p>
-                  <strong className="block truncate text-sm">{file?.name ?? remote?.name}</strong>
-                  <span className="text-xs text-muted-foreground">{declaredFormat(file ?? remote!)} · {bytes(file?.size ?? remote?.byte_length ?? 0)}</span>
+                  <strong className="block truncate text-sm">{file?.name ?? remote?.name ?? staged?.name}</strong>
+                  <span className="text-xs text-muted-foreground">{declaredFormat(selectedSource!)} · {bytes(file?.size ?? remote?.byte_length ?? staged?.byte_length ?? 0)}</span>
                 </div>
                 <Button variant="outline" onClick={reset}><ArrowLeft className="h-4 w-4" /> Back to sources</Button>
               </div>
@@ -712,7 +725,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
                     <dl className="grid gap-px border bg-border sm:grid-cols-2">
                       <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Name</dt><dd className="mt-1 break-words text-sm font-semibold">{selectedSource.name}</dd></div>
                       <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Declared format</dt><dd className="mt-1 font-mono text-xs">{declaredFormat(selectedSource)}</dd></div>
-                      <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Source location</dt><dd className="mt-1 text-sm">{remote ? `${remote.source_location.toUpperCase()} · ${remote.bucket}` : "This device"}</dd></div>
+                      <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Source location</dt><dd className="mt-1 text-sm">{remote ? `${remote.source_location.toUpperCase()} · ${remote.bucket}`  : staged ? "Server staging · Nexus / R2" : "This device"}</dd></div>
                       <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Declared size</dt><dd className="mt-1 text-sm">{bytes(selectedSize)}</dd></div>
                       {remote && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">File kind</dt><dd className="mt-1 text-sm">{remote.file_kind}{remote.archive_format ? ` · ${remote.archive_format}` : ""}</dd></div>}
                       {remote && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Media type</dt><dd className="mt-1 text-sm">{remote.media_type || "Not reported"}</dd></div>}
@@ -807,7 +820,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
                 ) : phase === "complete" ? (
                   <><div className="flex-1 text-sm"><strong className="capitalize">{preview?.phase ?? "Decision signaled"}</strong><p className="text-xs text-muted-foreground">The result below was read back from the durable workflow.</p></div><Button variant="outline" onClick={reset}>Start another intake</Button></>
                 ) : (
-                  <><div className="flex-1 text-xs text-muted-foreground">{matter && !primaryCourtCase ? "The fixed case needs its primary proceeding restored before context intake can start." : !file && !remote ? "Choose a local file or an R2 source to begin." : remote && !inspection ? "The selected R2 source must finish inspection before intake can start." : `Ready to start in ${mode} mode. The workflow will inspect content and pause for explicit handler selection.`}</div><Button disabled={!matter || !primaryCourtCase || (!file && !remote) || phase === "starting" || inspectionLoading || Boolean(remote && !inspection)} onClick={() => void start()} className="min-w-56">{phase === "starting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Start {mode} context intake <ChevronRight className="h-4 w-4" /></Button></>
+                  <><div className="flex-1 text-xs text-muted-foreground">{matter && !primaryCourtCase ? "The fixed case needs its primary proceeding restored before context intake can start."  : !file && !remote && !staged ? "Choose a local file or an R2 source to begin." : remote && !inspection ? "The selected R2 source must finish inspection before intake can start." : `Ready to start in ${mode} mode. The engine automatically selects the registered content handler. A logged failure opens guided recovery.`}</div><Button disabled={!matter || !primaryCourtCase || (!file && !remote && !staged) || phase === "starting" || inspectionLoading || Boolean(remote && !inspection)} onClick={() => void start()} className="min-w-56">{phase === "starting" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Start {mode} context intake <ChevronRight className="h-4 w-4" /></Button></>
                 )}
               </div>
 
@@ -849,7 +862,7 @@ function UnifiedIntakeMode({ mode }: { mode: "TEST" | "REAL" }) {
             <p className="platform-rule-title mb-3">Integrity preview</p>
             <dl className="space-y-3 text-xs">
               <div><dt className="text-muted-foreground">Preview SHA-256</dt><dd className="mt-1 break-all font-mono text-[10px]">{inspectionLoading ? "Hashing now" : upload?.sha256 || digest || "Choose a source"}</dd></div>
-              <div className="grid grid-cols-2 gap-3"><div><dt className="text-muted-foreground">Source size</dt><dd>{file ? bytes(file.size) : remote ? bytes(remote.byte_length) : "—"}</dd></div><div><dt className="text-muted-foreground">Inspected size</dt><dd>{inspection ? bytes(inspection.byte_length) : upload ? bytes(upload.byte_length) : inspectionLoading ? "Reading" : "—"}</dd></div></div>
+              <div className="grid grid-cols-2 gap-3"><div><dt className="text-muted-foreground">Source size</dt><dd>{file ? bytes(file.size) : remote ? bytes(remote.byte_length) : staged ? bytes(staged.byte_length) : "—"}</dd></div><div><dt className="text-muted-foreground">Inspected size</dt><dd>{inspection ? bytes(inspection.byte_length) : upload ? bytes(upload.byte_length) : inspectionLoading ? "Reading" : "—"}</dd></div></div>
               {upload && <div><dt className="text-muted-foreground">Acquisition reference</dt><dd className="mt-1 break-all font-mono text-[10px]">{upload.acquisition_ref}</dd></div>}
             </dl>
           </section>

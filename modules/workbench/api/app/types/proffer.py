@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import re
 from typing import Annotated, Any, Literal
 from urllib.parse import unquote, urlsplit
 from uuid import UUID
@@ -66,7 +67,10 @@ def validate_authorized_source_ref(value: str) -> str:
         return value
     if (
         parsed.scheme == "r2"
-        and parsed.netloc in {"casebible-raw", "casebible-sorted", "casebible-quarantine"}
+        and (
+            parsed.netloc in {"casebible-raw", "casebible-sorted", "casebible-quarantine"}
+            or (parsed.netloc == "nexus" and re.fullmatch(r"/workbench/staging/[0-9a-f]{64}/.+", unquote(parsed.path)))
+        )
         and not parsed.query
         and not parsed.fragment
     ):

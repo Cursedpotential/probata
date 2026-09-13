@@ -161,6 +161,7 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 	activeFormat := in.DeclaredFormat
 	useStructuredELT := structuredELTRoute != workflow.DefaultVersion && structuredELTEligible(in.DeclaredFormat)
 	var selectionProgressReceipt Ref
+	recoverableHandler := false
 	selectionRefs := map[string]Ref{
 		"filesystem_metadata": filesystemMetadataRef,
 		"container_manifest":  containerManifestRef,
@@ -196,14 +197,24 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 				return r.result(""), fmt.Errorf("proffer: register handler-selection preview query: %w", err)
 			}
 		}
-		decision, decisionErr := awaitHandlerSelectionDecision(ctx, &preview, durableReviewWait)
+		decision := HandlerSelectionDecision{DecisionRef: recommendation.EngineDecisionRef}
+		recoverableHandler = recommendation.EngineDecisionRef != ""
+		if in.ParserOptionsRef == OperatorHandlerSelectionOptions {
+			decision.DecisionRef = ""
+		}
+		var decisionErr error
+		// Historical recommendations without an engine decision preserve their
+		// original replay behavior. New runs are signature-selected server-side.
+		if decision.DecisionRef == "" {
+			decision, decisionErr = awaitHandlerSelectionDecision(ctx, &preview, durableReviewWait)
+		}
 		if decisionErr != nil {
 			preview.setCheckpoint("parser_selection", CheckpointFailed, recommendation.ReceiptRef, decisionErr.Error())
 			return r.result(""), decisionErr
 		}
 		validation, validationErr := validateSelectedHandler(ctx, StageRequest{
 			RequestID: r.requestID, MatterID: r.matterID, CourtCaseID: r.courtCaseID,
-			SourceVersionRef: r.sourceVersionRef, DeclaredFormat: recommendation.DetectedFormat,
+			SourceVersionRef: r.sourceVersionRef, DeclaredFormat: in.DeclaredFormat,
 			Refs: map[string]Ref{
 				"handler_recommendation": recommendation.RecommendationRef,
 				"handler_decision":       decision.DecisionRef,
@@ -221,7 +232,6 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		}
 		preview.Phase = PhaseHandlerSelected
 		preview.HandlerDecisionRef = decision.DecisionRef
-		activeFormat = recommendation.DetectedFormat
 		useStructuredELT = validation.Chosen.ExecutionPath == HandlerPathDuckDB
 		selectionRefs["handler_recommendation"] = recommendation.RecommendationRef
 		selectionRefs["handler_decision"] = decision.DecisionRef
@@ -288,6 +298,68 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		}
 	}
 	rawBundleRef, err := r.execActivity(ctx, stagegraph.ExecuteParser, executionActivity, activeFormat, executionRefs)
+	// Only new engine-selected runs enter this bounded recovery hold. A failed
+	// selected unit is logged before any backup is offered; an authenticated
+	// operator must select a durable compatibility reference for each retry.
+	for recoveryAttempt := 1; err != nil && recoverableHandler && recoveryAttempt <= 3; recoveryAttempt++ {
+		failureReason := err.Error()
+		var recommendation HandlerRecommendationResult
+		recoveryContext := workflow.WithActivityOptions(ctx, optionsFor(stagegraph.SelectParser))
+		recoveryReq := HandlerRecoveryRequest{
+			Request: StageRequest{RequestID: r.requestID, MatterID: r.matterID, CourtCaseID: r.courtCaseID,
+				SourceVersionRef: r.sourceVersionRef, DeclaredFormat: activeFormat, Refs: executionRefs},
+			AttemptIdentity: fmt.Sprintf("%s:%d", workflow.GetInfo(ctx).WorkflowExecution.RunID, recoveryAttempt), FailureReason: failureReason,
+		}
+		if recoveryErr := workflow.ExecuteActivity(recoveryContext, RecoverHandlerActivityName, recoveryReq).Get(recoveryContext, &recommendation); recoveryErr != nil {
+			return r.result(""), fmt.Errorf("log selected handler failure and prepare recovery: %w", recoveryErr)
+		}
+		if recoveryErr := validateHandlerRecommendation(recommendation); recoveryErr != nil {
+			return r.result(""), recoveryErr
+		}
+		if recommendation.FailureReceiptRef == "" {
+			return r.result(""), errors.New("handler recovery lacks a durable selected-unit failure receipt")
+		}
+		preview.Phase = PhaseAwaitingHandlerSelection
+		preview.HandlerRecommendationRef = recommendation.RecommendationRef
+		preview.RecommendedHandler = &recommendation.Recommended
+		preview.AlternativeHandlers = append([]HandlerCandidate(nil), recommendation.Alternatives...)
+		preview.setCheckpoint("parser_execution", CheckpointFailed, recommendation.FailureReceiptRef, failureReason)
+		decision, decisionErr := awaitHandlerSelectionDecision(ctx, &preview, durableReviewWait)
+		if decisionErr != nil {
+			return r.result(""), decisionErr
+		}
+		validationReq := recoveryReq.Request
+		validationReq.Refs = map[string]Ref{"handler_recommendation": recommendation.RecommendationRef,
+			"handler_decision": decision.DecisionRef, "detected_format": recommendation.DetectedFormatRef, "content_signature": recommendation.SignatureRef}
+		validation, validationErr := validateSelectedHandler(ctx, validationReq)
+		if validationErr != nil {
+			return r.result(""), validationErr
+		}
+		if validationErr = validateHandlerSelection(recommendation, decision.DecisionRef, validation); validationErr != nil {
+			return r.result(""), validationErr
+		}
+		for key, value := range validationReq.Refs {
+			selectionRefs[key] = value
+			executionRefs[key] = value
+		}
+		selectionRefs["handler_validation"] = validation.ValidationReceipt
+		selectionRefs["handler_compatibility"] = validation.Chosen.CompatibilityRef
+		executionRefs["handler_validation"] = validation.ValidationReceipt
+		executionRefs["handler_compatibility"] = validation.Chosen.CompatibilityRef
+		preview.HandlerDecisionRef = decision.DecisionRef
+		preview.Phase = PhaseHandlerSelected
+		selectionActivity, executionActivity = string(stagegraph.SelectParser), string(stagegraph.ExecuteParser)
+		if validation.Chosen.ExecutionPath == HandlerPathDuckDB {
+			selectionActivity, executionActivity = SelectStructuredELTActivityName, ExecuteStructuredELTActivityName
+		}
+		activeSelectionRef, err = r.execActivity(ctx, stagegraph.SelectParser, selectionActivity, activeFormat, selectionRefs)
+		if err != nil {
+			break
+		}
+		executionRefs["parser_selection"] = activeSelectionRef
+		preview.setCheckpoint("parser_execution", CheckpointRunning, recommendation.ReceiptRef, "operator-directed recovery")
+		rawBundleRef, err = r.execActivity(ctx, stagegraph.ExecuteParser, executionActivity, activeFormat, executionRefs)
+	}
 	if err != nil {
 		preview.setCheckpoint("parser_execution", CheckpointFailed, r.receiptRef(stagegraph.ExecuteParser), err.Error())
 		return r.result(""), err

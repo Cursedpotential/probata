@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from app.runtime import case_management, proffer as proffer_runtime, source_inspection
-from app.service import proffer, proffer_sources, source_context
+from app.service import matter_mode, proffer, proffer_sources, source_context
 from app.service.matter_mode import _clear_preview_modes_for_tests, require_preview_mode
 from app.types.proffer import (
     ProfferDecisionActor,
@@ -26,6 +26,31 @@ from app.types.source_context import SourceContextCreateRequest
 TEST_MATTER_ID = "deadbeef-dead-beef-dead-beefdeadbeef"
 TEST_COURT_CASE_ID = "cafebabe-cafe-babe-cafe-babecafebabe"
 PREVIEW_HANDLE = "preview_handle_abcdefghijklmnopqrstuvwxyz"
+
+CASE_MANAGEMENT_SCOPED_OPERATIONS = [
+    ("/api/matters", "get"),
+    ("/api/matters", "post"),
+    ("/api/matters/{matter_id}", "get"),
+    ("/api/matters/{matter_id}/court-cases", "post"),
+    ("/api/matters/{matter_id}/knowledge/resolve", "post"),
+    ("/api/matters/{matter_id}/evidence-items", "post"),
+    ("/api/matters/{matter_id}/evidence-items", "get"),
+    ("/api/matters/{matter_id}/evidence-items/{evidence_item_id}", "get"),
+    (
+        "/api/matters/{matter_id}/evidence-items/{evidence_item_id}/source-content",
+        "get",
+    ),
+    (
+        "/api/matters/{matter_id}/evidence-items/{evidence_item_id}/conversation-context",
+        "get",
+    ),
+    (
+        "/api/matters/{matter_id}/evidence-items/{evidence_item_id}/court-readiness",
+        "get",
+    ),
+    ("/api/matters/{matter_id}/evidence-items/{evidence_item_id}/reviews", "post"),
+    ("/api/matters/{matter_id}/evidence-items/{evidence_item_id}/reviews", "get"),
+]
 
 
 @pytest.fixture(autouse=True)
@@ -323,9 +348,7 @@ def test_mode_is_required_on_every_scoped_http_operation() -> None:
     app.include_router(proffer_runtime.router)
     app.include_router(source_inspection.router)
     schema = app.openapi()
-    operations = [
-        ("/api/matters", "get"),
-        ("/api/matters/{matter_id}", "get"),
+    operations = CASE_MANAGEMENT_SCOPED_OPERATIONS + [
         ("/api/proffer/sources", "get"),
         ("/api/proffer/upload", "post"),
         ("/api/proffer/source-inspection", "post"),
@@ -342,6 +365,7 @@ def test_mode_is_required_on_every_scoped_http_operation() -> None:
         parameters = schema["paths"][path][method]["parameters"]
         mode = next(item for item in parameters if item["name"] == "mode" and item["in"] == "query")
         assert mode["required"] is True, f"{method.upper()} {path} must require mode"
+        assert mode["schema"]["enum"] == ["TEST", "REAL"]
 
 
 def test_matters_route_fetches_only_exact_configured_id_and_echoes_mode(monkeypatch) -> None:
@@ -376,3 +400,181 @@ def test_matters_route_fetches_only_exact_configured_id_and_echoes_mode(monkeypa
     assert calls == [TEST_MATTER_ID]
     assert response.json()["matter_mode"] == "TEST"
     assert response.json()["data"][0]["matter_mode"] == "TEST"
+
+
+def _case_route_requests(matter_id: str) -> list[tuple[str, str, dict | None]]:
+    evidence_item_id = "88888888-8888-4888-8888-888888888888"
+    source = {
+        "lane": "evidence",
+        "partition_key": "primary",
+        "artifact_id": "33333333-3333-4333-8333-333333333333",
+        "sha256": "a" * 64,
+        "retrieval_ref": "hit-1",
+    }
+    return [
+        ("POST", f"/api/matters/{matter_id}/court-cases", {"caption": "Configured case"}),
+        ("POST", f"/api/matters/{matter_id}/knowledge/resolve", source),
+        (
+            "POST",
+            f"/api/matters/{matter_id}/evidence-items",
+            {
+                "court_case_id": TEST_COURT_CASE_ID,
+                "source": {
+                    **source,
+                    "normalized_record_id": "44444444-4444-4444-8444-444444444444",
+                },
+                "title": "Draft evidence",
+            },
+        ),
+        ("GET", f"/api/matters/{matter_id}/evidence-items", None),
+        ("GET", f"/api/matters/{matter_id}/evidence-items/{evidence_item_id}", None),
+        (
+            "GET",
+            f"/api/matters/{matter_id}/evidence-items/{evidence_item_id}/source-content",
+            None,
+        ),
+        (
+            "GET",
+            f"/api/matters/{matter_id}/evidence-items/{evidence_item_id}/conversation-context",
+            None,
+        ),
+        (
+            "GET",
+            f"/api/matters/{matter_id}/evidence-items/{evidence_item_id}/court-readiness",
+            None,
+        ),
+        (
+            "POST",
+            f"/api/matters/{matter_id}/evidence-items/{evidence_item_id}/reviews",
+            {"decision": "approved", "rationale": "Exact record reviewed."},
+        ),
+        ("GET", f"/api/matters/{matter_id}/evidence-items/{evidence_item_id}/reviews", None),
+    ]
+
+
+def _deny_all_case_management_upstream(monkeypatch) -> None:
+    def forbidden(*args, **kwargs):
+        raise AssertionError("case-management upstream must not run")
+
+    for name in (
+        "create_matter",
+        "create_court_case",
+        "resolve_knowledge_source",
+        "create_evidence_item",
+        "list_evidence_items",
+        "get_evidence_detail",
+        "get_original_source_content",
+        "get_conversation_context",
+        "get_court_readiness",
+        "review_evidence_item",
+        "list_evidence_reviews",
+    ):
+        monkeypatch.setattr(case_management.service, name, forbidden)
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    _case_route_requests("11111111-1111-4111-8111-111111111111"),
+)
+def test_arbitrary_matter_ids_fail_before_case_management_upstream(
+    monkeypatch,
+    method: str,
+    path: str,
+    payload: dict | None,
+) -> None:
+    _deny_all_case_management_upstream(monkeypatch)
+    app = FastAPI()
+    app.include_router(case_management.router)
+
+    response = TestClient(app).request(method, path, params={"mode": "TEST"}, json=payload)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "matter_id does not belong to TEST mode"}
+
+
+@pytest.mark.parametrize(("method", "path", "payload"), _case_route_requests(TEST_MATTER_ID))
+def test_cross_mode_matter_ids_fail_before_case_management_upstream(
+    monkeypatch,
+    method: str,
+    path: str,
+    payload: dict | None,
+) -> None:
+    _deny_all_case_management_upstream(monkeypatch)
+    monkeypatch.setattr(
+        case_management.service,
+        "get_matter",
+        lambda *_: (_ for _ in ()).throw(AssertionError("case-management upstream must not run")),
+    )
+    monkeypatch.setattr(
+        matter_mode.settings,
+        "proffer_real_matter_id",
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    )
+    monkeypatch.setattr(
+        matter_mode.settings,
+        "proffer_real_court_case_id",
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    )
+    app = FastAPI()
+    app.include_router(case_management.router)
+
+    response = TestClient(app).request(method, path, params={"mode": "REAL"}, json=payload)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "matter_id does not belong to REAL mode"}
+
+
+def test_evidence_create_rejects_arbitrary_court_scope_before_upstream(monkeypatch) -> None:
+    _deny_all_case_management_upstream(monkeypatch)
+    method, path, payload = _case_route_requests(TEST_MATTER_ID)[2]
+    assert payload is not None
+    payload["court_case_id"] = "22222222-2222-4222-8222-222222222222"
+    app = FastAPI()
+    app.include_router(case_management.router)
+
+    response = TestClient(app).request(method, path, params={"mode": "TEST"}, json=payload)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "court_case_id does not belong to TEST mode"}
+
+
+def test_matter_creation_is_explicitly_disabled_without_upstream(monkeypatch) -> None:
+    _deny_all_case_management_upstream(monkeypatch)
+    app = FastAPI()
+    app.include_router(case_management.router)
+
+    response = TestClient(app).post(
+        "/api/matters",
+        params={"mode": "TEST"},
+        json={"title": "A generated identity cannot satisfy the fixed scope"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": (
+            "Matter creation is disabled in fixed TEST/REAL mode; "
+            "provision the configured matter identity outside this scoped runtime"
+        )
+    }
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [("GET", "/api/matters", None), ("POST", "/api/matters", {"title": "Unavailable"})]
+    + _case_route_requests(TEST_MATTER_ID),
+)
+def test_unconfigured_real_scope_fails_closed_before_case_management_upstream(
+    monkeypatch,
+    method: str,
+    path: str,
+    payload: dict | None,
+) -> None:
+    _deny_all_case_management_upstream(monkeypatch)
+    monkeypatch.setattr(matter_mode.settings, "proffer_real_matter_id", "")
+    app = FastAPI()
+    app.include_router(case_management.router)
+
+    response = TestClient(app).request(method, path, params={"mode": "REAL"}, json=payload)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "REAL matter identity is not configured"}

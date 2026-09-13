@@ -40,7 +40,7 @@ const (
 	StructuredELTParserVersion = "1.0.0"
 )
 
-var structuredELTDecisionRefs = [...]string{
+var handlerDecisionRefs = [...]string{
 	"handler_recommendation",
 	"handler_decision",
 	"handler_validation",
@@ -54,14 +54,18 @@ var structuredELTDecisionRefs = [...]string{
 // binds it to activity.GetInfo(ctx).Attempt like every other Activities
 // struct in this package (see NewStructuredELTActivities in register.go).
 type StructuredELTActivities struct {
-	Rows    StructuredELTRowRepository
-	Store   ParserActivityStore
-	Attempt Attempt
+	Rows          StructuredELTRowRepository
+	Store         ParserActivityStore
+	Authorization HandlerExecutionAuthorizationStore
+	Attempt       Attempt
 }
 
 func (a StructuredELTActivities) validateStore() error {
 	if a.Store == nil {
 		return errors.New("structured elt activities: parser store is required")
+	}
+	if a.Authorization == nil {
+		return errors.New("structured elt activities: handler authorization store is required")
 	}
 	return nil
 }
@@ -145,6 +149,23 @@ type StructuredELTRowRepository interface {
 	OpenStructuredELTRows(context.Context, proffer.StageRequest, StructuredELTFormat) (StructuredELTRowReader, error)
 }
 
+// HandlerExecutionAuthorization is the compact result of reloading the exact
+// durable handler validation and compatibility records selected by the
+// operator. DetectedFormat chooses the DuckDB template; it never replaces the
+// immutable declared format carried by StageRequest and parser records.
+type HandlerExecutionAuthorization struct {
+	DetectedFormat string
+	HandlerID      string
+	HandlerVersion string
+	ExecutionPath  proffer.HandlerExecutionPath
+}
+
+// HandlerExecutionAuthorizationStore proves that all six handler references
+// name one durable, source-bound validation before a selected handler runs.
+type HandlerExecutionAuthorizationStore interface {
+	LoadHandlerExecutionAuthorization(context.Context, proffer.StageRequest) (HandlerExecutionAuthorization, error)
+}
+
 // StructuredELTFormatForDeclaredFormat maps source signatures to explicit
 // templates. Unknown formats fail closed rather than falling into a catch-all
 // query or running both DuckDB and a decoder.
@@ -192,12 +213,50 @@ func StructuredELTTemplateForFormat(format StructuredELTFormat) (string, error) 
 // validation. The references themselves remain compact; their payloads stay
 // in PostgreSQL rather than Temporal history.
 func requireStructuredELTDecisionRefs(req proffer.StageRequest) error {
-	for _, name := range structuredELTDecisionRefs {
-		if strings.TrimSpace(string(req.Refs[name])) == "" {
-			return fmt.Errorf("structured elt requires durable %q reference", name)
-		}
+	present, err := handlerDecisionRefsPresent(req)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return errors.New("structured elt requires the complete durable handler decision reference set")
 	}
 	return nil
+}
+
+func handlerDecisionRefsPresent(req proffer.StageRequest) (bool, error) {
+	present := 0
+	for _, name := range handlerDecisionRefs {
+		ref, ok := req.Refs[name]
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(string(ref)) == "" {
+			return false, fmt.Errorf("handler decision reference %q is empty", name)
+		}
+		present++
+	}
+	if present != 0 && present != len(handlerDecisionRefs) {
+		return false, errors.New("handler decision references must be supplied all-or-none")
+	}
+	return present == len(handlerDecisionRefs), nil
+}
+
+func (a StructuredELTActivities) authorizedFormat(ctx context.Context, req proffer.StageRequest) (StructuredELTFormat, error) {
+	if err := requireStructuredELTDecisionRefs(req); err != nil {
+		return "", err
+	}
+	authorization, err := a.Authorization.LoadHandlerExecutionAuthorization(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("load structured elt handler authorization: %w", err)
+	}
+	if authorization.HandlerID != StructuredELTParserID || authorization.HandlerVersion != StructuredELTParserVersion || authorization.ExecutionPath != proffer.HandlerPathDuckDB {
+		return "", errors.New("validated handler authorization is not the pinned DuckDB structured-ELT implementation")
+	}
+	format, err := StructuredELTFormatForDeclaredFormat(authorization.DetectedFormat)
+	if err != nil {
+		return "", fmt.Errorf("validated detected format: %w", err)
+	}
+	return format, nil
 }
 
 // SelectStructuredELT records the exact DuckDB implementation and template
@@ -214,10 +273,7 @@ func (a StructuredELTActivities) SelectStructuredELT(ctx context.Context, req pr
 	if strings.TrimSpace(req.RequestID) == "" || req.SourceVersionRef == "" {
 		return proffer.StageResult{}, errors.New("select structured elt requires request and source version references")
 	}
-	if err := requireStructuredELTDecisionRefs(req); err != nil {
-		return proffer.StageResult{}, err
-	}
-	if _, err := StructuredELTFormatForDeclaredFormat(req.DeclaredFormat); err != nil {
+	if _, err := a.authorizedFormat(ctx, req); err != nil {
 		return proffer.StageResult{}, err
 	}
 	selectionRef, receiptRef, err := a.Store.PersistParserSelection(ctx, ParserSelectionSpec{
@@ -249,9 +305,6 @@ func (a StructuredELTActivities) ExecuteStructuredELT(ctx context.Context, req p
 	if strings.TrimSpace(req.RequestID) == "" || req.SourceVersionRef == "" {
 		return proffer.StageResult{}, errors.New("execute structured elt requires request and source version references")
 	}
-	if err := requireStructuredELTDecisionRefs(req); err != nil {
-		return proffer.StageResult{}, err
-	}
 	selectionRef, err := requiredParserRef(req, "parser_selection")
 	if err != nil {
 		return proffer.StageResult{}, err
@@ -259,7 +312,7 @@ func (a StructuredELTActivities) ExecuteStructuredELT(ctx context.Context, req p
 	if _, err := requiredParserRef(req, "original"); err != nil {
 		return proffer.StageResult{}, err
 	}
-	format, err := StructuredELTFormatForDeclaredFormat(req.DeclaredFormat)
+	format, err := a.authorizedFormat(ctx, req)
 	if err != nil {
 		return proffer.StageResult{}, err
 	}

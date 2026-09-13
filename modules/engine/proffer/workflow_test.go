@@ -1112,7 +1112,10 @@ func TestEligibleStructuredSourceRunsOnlyDuckDBImplementation(t *testing.T) {
 	registerAllStages(env)
 	env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: SelectStructuredELTActivityName})
 	env.RegisterActivityWithOptions(placeholderActivity, activity.RegisterOptions{Name: ExecuteStructuredELTActivityName})
-	mockHandlerActivities(env, "smsbackuprestore_xml", HandlerPathDuckDB)
+	recommendation := handlerRecommendation("smsbackuprestore_xml", HandlerPathDuckDB)
+	recommendation.EngineDecisionRef = "handler-decision-ref"
+	env.OnActivity(RecommendHandlerActivityName, mock.Anything, mock.Anything).Return(recommendation, nil).Once()
+	env.OnActivity(ValidateHandlerSelectionActivityName, mock.Anything, mock.Anything).Return(handlerValidation(recommendation), nil).Once()
 	for _, descriptor := range stagegraph.Stages {
 		if descriptor.ID == stagegraph.SelectParser || descriptor.ID == stagegraph.ExecuteParser {
 			// Keep the canonical implementation registered so an accidental
@@ -1133,12 +1136,13 @@ func TestEligibleStructuredSourceRunsOnlyDuckDBImplementation(t *testing.T) {
 	env.OnActivity(ExecuteStructuredELTActivityName, mock.Anything, mock.Anything).Return(eltResult, nil).Once()
 	order := newOrderRecorder(env)
 	var selectedRequest StageRequest
+	var validatedRequest StageRequest
 	var requestMu sync.Mutex
 	env.SetOnActivityStartedListener(func(info *activity.Info, _ context.Context, args converter.EncodedValues) {
 		order.mu.Lock()
 		order.order = append(order.order, info.ActivityType.Name)
 		order.mu.Unlock()
-		if info.ActivityType.Name != SelectStructuredELTActivityName {
+		if info.ActivityType.Name != SelectStructuredELTActivityName && info.ActivityType.Name != ValidateHandlerSelectionActivityName {
 			return
 		}
 		var request StageRequest
@@ -1147,10 +1151,18 @@ func TestEligibleStructuredSourceRunsOnlyDuckDBImplementation(t *testing.T) {
 			return
 		}
 		requestMu.Lock()
-		selectedRequest = request
+		if info.ActivityType.Name == SelectStructuredELTActivityName {
+			selectedRequest = request
+		} else {
+			validatedRequest = request
+		}
 		requestMu.Unlock()
 	})
-	approveHold(env)
+	// No handler-selection signal is sent: selection belongs to the engine.
+	env.RegisterDelayedCallback(func() {
+		env.SignalWorkflow(RepairDecisionSignalName, RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(PreviewDecisionSignalName, PreviewDecision{Approved: true, Decider: "test-operator"})
+	}, time.Millisecond)
 	in := testInput()
 	// This is intake metadata only. The content-backed recommendation above
 	// is authoritative and must route the detected SMS signature to DuckDB.
@@ -1166,10 +1178,14 @@ func TestEligibleStructuredSourceRunsOnlyDuckDBImplementation(t *testing.T) {
 		t.Fatal("eligible structured source also dispatched an N8N parser Activity")
 	}
 	requestMu.Lock()
-	gotDetectedFormat := selectedRequest.DeclaredFormat
+	gotDeclaredFormat := selectedRequest.DeclaredFormat
+	gotValidationDeclaredFormat := validatedRequest.DeclaredFormat
 	requestMu.Unlock()
-	if gotDetectedFormat != "smsbackuprestore_xml" {
-		t.Fatalf("DuckDB select received declared extension metadata %q instead of detected content format", gotDetectedFormat)
+	if gotDeclaredFormat != in.DeclaredFormat {
+		t.Fatalf("DuckDB select changed immutable declared format from %q to %q", in.DeclaredFormat, gotDeclaredFormat)
+	}
+	if gotValidationDeclaredFormat != in.DeclaredFormat {
+		t.Fatalf("handler validation changed immutable declared format from %q to %q", in.DeclaredFormat, gotValidationDeclaredFormat)
 	}
 	var result WorkflowResult
 	if err := env.GetWorkflowResult(&result); err != nil {

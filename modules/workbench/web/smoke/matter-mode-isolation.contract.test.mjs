@@ -1,4 +1,4 @@
-// Byline: Codex · GPT-5 · 2026-09-12 (TEST/REAL fail-closed UI isolation contract)
+// Byline: Codex · GPT-5 · 2026-09-12 (TEST/REAL fail-closed UI isolation and deep-link hydration contract)
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -36,7 +36,7 @@ test("mode switching clears matter scope and remounts every import or preview ca
 
 test("all import and preview boundaries carry and verify the active mode", () => {
   for (const phrase of [
-    "upload response did not confirm",
+    "Staged acquisition did not confirm TEST/REAL mode",
     "source browser did not confirm",
     "source inspection did not confirm",
     "source-context receipt did not confirm",
@@ -53,4 +53,19 @@ test("all import and preview boundaries carry and verify the active mode", () =>
 test("a URL preview handle is accepted only for its matching mode", () => {
   assert.match(preview, /query\.get\("mode"\) === mode/);
   assert.match(preview, /url\.searchParams\.set\("mode", mode\)/);
+});
+
+test("a direct REAL preview deep link hydrates mode before resolving its handle", () => {
+  assert.match(context, /function initialMatterMode\(\): MatterMode/);
+  assert.match(context, /requestedMode === "REAL" \? "REAL" : "TEST"/);
+  assert.match(context, /useState<MatterMode>\(initialMatterMode\)/);
+  assert.doesNotMatch(context, /useState<MatterMode>\("TEST"\)/);
+
+  const handleInitializer = preview.indexOf("useState(() => initialHandle(mode))");
+  const activeHandleInitializer = preview.indexOf("useRef(initialUrlHandle)");
+  const locationCanonicalizer = preview.indexOf("window.history.replaceState");
+  assert.ok(handleInitializer >= 0, "the URL handle must initialize synchronously for the validated mode");
+  assert.ok(activeHandleInitializer > handleInitializer, "the active correlation ref must start with the URL handle");
+  assert.ok(locationCanonicalizer > activeHandleInitializer, "URL canonicalization must run after initial correlation state exists");
+  assert.doesNotMatch(preview, /setDraftHandle\(handle\);\s*activateHandle\(handle\)/);
 });

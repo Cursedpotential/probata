@@ -19,8 +19,9 @@ import (
 // r2://nexus/proffer/test-fixtures/…, but this allowlist rejected it at the API.
 // Production source authority (upload:// or Case Bible Sorted) is unchanged.
 const (
-	devFixtureBucket = "nexus"
-	devFixturePrefix = "proffer/test-fixtures/"
+	devFixtureBucket       = "nexus"
+	devFixturePrefix       = "proffer/test-fixtures/"
+	workbenchStagingPrefix = "workbench/staging/"
 )
 
 var devSourceBuckets = map[string]struct{}{
@@ -49,13 +50,24 @@ func validateAuthorizedSourceRef(value string) (string, string, error) {
 		}
 	}
 	devMode := devFixtureSourcesEnabled()
+	stagedUpload := parsed.Scheme == "r2" && parsed.Host == "nexus" && strings.HasPrefix(parsed.Path, "/"+workbenchStagingPrefix)
 	devFixture := parsed.Scheme == "r2" && parsed.Host == devFixtureBucket && devMode
 	_, devSourceBucket := devSourceBuckets[parsed.Host]
 	devSourceBucket = parsed.Scheme == "r2" && devSourceBucket && devMode
-	if parsed.Scheme == "r2" && (parsed.Host == "casebible-sorted" || devFixture || devSourceBucket) {
+	if parsed.Scheme == "r2" && (parsed.Host == "casebible-sorted" || devFixture || devSourceBucket || stagedUpload) {
 		key, unescapeErr := url.PathUnescape(strings.TrimPrefix(parsed.EscapedPath(), "/"))
-		if devFixture && !strings.HasPrefix(key, devFixturePrefix) {
+		if devFixture && !stagedUpload && !strings.HasPrefix(key, devFixturePrefix) {
 			return "", "", errors.New("source_ref is outside the authorized Case Bible intake roots")
+		}
+		if stagedUpload {
+			parts := strings.Split(strings.TrimPrefix(key, workbenchStagingPrefix), "/")
+			if len(parts) != 2 || parts[1] == "" || parts[1] == "." {
+				return "", "", errors.New("source_ref is not a content-addressed Workbench staging object")
+			}
+			digest, decodeErr := hex.DecodeString(parts[0])
+			if decodeErr != nil || len(digest) != sha256.Size {
+				return "", "", errors.New("source_ref staging object requires a SHA-256 coordinate")
+			}
 		}
 		if unescapeErr == nil && key != "" && !strings.HasPrefix(key, "/") && !strings.Contains(key, `\`) {
 			valid := true

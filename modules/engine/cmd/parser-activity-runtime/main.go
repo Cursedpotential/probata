@@ -104,7 +104,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("build parser capability registry: %w", err)
 	}
-	parserActivities := activities.ParserActivities{Registry: registry, Store: parserStore}
+	handlerAuthorization, err := platformpostgres.NewHandlerSelectionStore(pool, objectOpener)
+	if err != nil {
+		return fmt.Errorf("configure handler execution authorization: %w", err)
+	}
+	parserActivities := activities.ParserActivities{Registry: registry, Store: parserStore, Authorization: handlerAuthorization}
 	handler, err := runtimeapi.NewParserActivityHandler(parserActivities, token)
 	if err != nil {
 		return err
@@ -149,7 +153,7 @@ func run() error {
 }
 
 func probeRuntimeSchema(ctx context.Context, pool *pgxpool.Pool) error {
-	const requiredRelationCount = 5
+	const requiredRelationCount = 11
 	var found int
 	if err := pool.QueryRow(ctx, `
 		SELECT count(*)
@@ -158,7 +162,13 @@ func probeRuntimeSchema(ctx context.Context, pool *pgxpool.Pool) error {
 		    (to_regclass('context.source_version')),
 		    (to_regclass('context.source_version_object')),
 		    (to_regclass('context.activity_execution')),
-		    (to_regclass('context.activity_receipt'))
+		    (to_regclass('context.activity_receipt')),
+		    (to_regclass('context.handler_selection_validation')),
+		    (to_regclass('context.handler_recommendation')),
+		    (to_regclass('context.handler_selection_decision')),
+		    (to_regclass('context.handler_detected_format')),
+		    (to_regclass('context.handler_content_signature')),
+		    (to_regclass('context.handler_compatibility'))
 		) AS required(relation)
 		WHERE relation IS NOT NULL`).Scan(&found); err != nil {
 		return errors.New("verify parser runtime database schema: unavailable")

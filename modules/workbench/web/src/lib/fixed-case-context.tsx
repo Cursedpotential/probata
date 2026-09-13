@@ -1,4 +1,4 @@
-// Byline: Codex · GPT-5 · 2026-08-29 (single canonical case shell context)
+// Byline: Codex · GPT-5 · 2026-09-12 (URL-hydrated, single canonical case shell context)
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
@@ -25,11 +25,17 @@ function errorText(error: unknown) {
       : "The fixed case could not be loaded";
 }
 
+function initialMatterMode(): MatterMode {
+  if (typeof window === "undefined") return "TEST";
+  const requestedMode = new URLSearchParams(window.location.search).get("mode");
+  return requestedMode === "REAL" ? "REAL" : "TEST";
+}
+
 export function FixedCaseProvider({ children }: { children: React.ReactNode }) {
   const [matter, setMatter] = useState<MatterDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setModeState] = useState<MatterMode>("TEST");
+  const [mode, setModeState] = useState<MatterMode>(initialMatterMode);
 
   const setMode = useCallback((nextMode: MatterMode) => {
     if (nextMode === mode) return;

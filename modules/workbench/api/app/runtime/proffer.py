@@ -107,6 +107,19 @@ async def upload_endpoint(request: Request, mode: Annotated[MatterMode, Query()]
         raise _translate(error) from None
 
 
+@router.post("/staged/{staged_id}/acquisition", response_model=ProfferUploadResponse, status_code=201)
+async def staged_acquisition_endpoint(
+    staged_id: Annotated[str, Path(pattern=r"^[a-f0-9]{64}$")],
+    mode: Annotated[MatterMode, Query()],
+):
+    from app.service.proffer_staged import acquire_staged
+
+    try:
+        return await acquire_staged(staged_id, mode=mode)
+    except ProfferError as error:
+        raise _translate(error) from None
+
+
 PreviewHandle = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{32,128}$")]
 
 

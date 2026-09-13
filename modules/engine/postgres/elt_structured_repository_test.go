@@ -193,7 +193,11 @@ func TestStructuredELTQueriesEmitCanonicalBundleColumns(t *testing.T) {
 
 func TestStructuredELTQueriesUseFormatSpecificDuckDBReaders(t *testing.T) {
 	tests := map[activities.StructuredELTFormat][]string{
-		activities.StructuredELTFormatSMSXML:       {"read_xml(", "record_element := 'sms'", "record_element := 'mms'"},
+		activities.StructuredELTFormatSMSXML: {
+			"read_xml(", "record_element := 'sms'", "record_element := 'mms'",
+			"'$.address'", "'$.date'", "'$.type'", "'$.body'",
+			"'$.parts.part[0].text'", "epoch_ms(", "'occurred_at'",
+		},
 		activities.StructuredELTFormatChatGPTJSON:  {"read_text(", "json_each("},
 		activities.StructuredELTFormatIMessageText: {"read_text(", "regexp_split_to_array("},
 	}

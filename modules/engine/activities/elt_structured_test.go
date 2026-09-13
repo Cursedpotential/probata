@@ -44,6 +44,24 @@ type fakeStructuredELTRowRepository struct {
 	err    error
 }
 
+type fakeHandlerExecutionAuthorizationStore struct {
+	authorization HandlerExecutionAuthorization
+	req           proffer.StageRequest
+	err           error
+}
+
+func (s *fakeHandlerExecutionAuthorizationStore) LoadHandlerExecutionAuthorization(_ context.Context, req proffer.StageRequest) (HandlerExecutionAuthorization, error) {
+	s.req = req
+	return s.authorization, s.err
+}
+
+func structuredELTAuthorization() *fakeHandlerExecutionAuthorizationStore {
+	return &fakeHandlerExecutionAuthorizationStore{authorization: HandlerExecutionAuthorization{
+		DetectedFormat: "smsbackuprestore_xml", HandlerID: StructuredELTParserID,
+		HandlerVersion: StructuredELTParserVersion, ExecutionPath: proffer.HandlerPathDuckDB,
+	}}
+}
+
 func (r *fakeStructuredELTRowRepository) OpenStructuredELTRows(_ context.Context, req proffer.StageRequest, format StructuredELTFormat) (StructuredELTRowReader, error) {
 	r.req, r.format = req, format
 	if r.err != nil {
@@ -54,7 +72,7 @@ func (r *fakeStructuredELTRowRepository) OpenStructuredELTRows(_ context.Context
 
 func structuredELTStageFixture() (proffer.StageRequest, *runtimeStore, *runtimeBundleWriter) {
 	req := proffer.StageRequest{
-		RequestID: "workflow:elt", SourceVersionRef: "source:elt", DeclaredFormat: "smsbackuprestore_xml",
+		RequestID: "workflow:elt", SourceVersionRef: "source:elt", DeclaredFormat: "sms_export_xml",
 		Refs: map[string]proffer.Ref{
 			"parser_selection":       "selection:elt",
 			"original":               "original:elt",
@@ -87,7 +105,7 @@ func structuredELTStageFixture() (proffer.StageRequest, *runtimeStore, *runtimeB
 func TestSelectStructuredELTRequiresDurableContentDecision(t *testing.T) {
 	req, store, _ := structuredELTStageFixture()
 	delete(req.Refs, "content_signature")
-	if _, err := (StructuredELTActivities{Store: store}).SelectStructuredELT(context.Background(), req); err == nil {
+	if _, err := (StructuredELTActivities{Store: store, Authorization: structuredELTAuthorization()}).SelectStructuredELT(context.Background(), req); err == nil {
 		t.Fatal("expected selection without content signature to fail closed")
 	}
 	if store.selectionSpec.ParserID != "" {
@@ -99,7 +117,7 @@ func TestExecuteStructuredELTRequiresDurableHandlerValidation(t *testing.T) {
 	req, store, writer := structuredELTStageFixture()
 	delete(req.Refs, "handler_validation")
 	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{}}
-	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store, Authorization: structuredELTAuthorization()}).ExecuteStructuredELT(context.Background(), req); err == nil {
 		t.Fatal("expected execution without handler validation to fail closed")
 	}
 	if writer.records != 0 || store.persistExecCalls != 0 {
@@ -109,7 +127,8 @@ func TestExecuteStructuredELTRequiresDurableHandlerValidation(t *testing.T) {
 
 func TestSelectStructuredELTPinsDuckDBIdentity(t *testing.T) {
 	req, store, _ := structuredELTStageFixture()
-	result, err := (StructuredELTActivities{Store: store, Attempt: func(context.Context) int32 { return 4 }}).SelectStructuredELT(context.Background(), req)
+	authorization := structuredELTAuthorization()
+	result, err := (StructuredELTActivities{Store: store, Authorization: authorization, Attempt: func(context.Context) int32 { return 4 }}).SelectStructuredELT(context.Background(), req)
 	if err != nil {
 		t.Fatalf("SelectStructuredELT() error = %v", err)
 	}
@@ -119,6 +138,9 @@ func TestSelectStructuredELTPinsDuckDBIdentity(t *testing.T) {
 	if store.selectionSpec.ParserID != StructuredELTParserID || store.selectionSpec.ParserVersion != StructuredELTParserVersion || store.selectionSpec.Attempt != 4 {
 		t.Fatalf("selection was not pinned to DuckDB: %+v", store.selectionSpec)
 	}
+	if store.selectionSpec.DeclaredFormat != parser.FormatID(req.DeclaredFormat) || authorization.req.DeclaredFormat != req.DeclaredFormat {
+		t.Fatalf("operator declaration was not preserved through DuckDB selection: selection=%+v authorization=%+v", store.selectionSpec, authorization.req)
+	}
 }
 
 func TestExecuteStructuredELTEmitsStandardBundleAndParserReceipt(t *testing.T) {
@@ -127,7 +149,7 @@ func TestExecuteStructuredELTEmitsStandardBundleAndParserReceipt(t *testing.T) {
 		{StoredBytes: []byte(`{"address":"+1555","body":"one"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"one"}`), NativeMetadata: json.RawMessage(`{"duckdb_template":"sms_xml_v1"}`)},
 		{StoredBytes: []byte(`{"address":"+1555","body":"two"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"two"}`), NativeMetadata: json.RawMessage(`{"duckdb_template":"sms_xml_v1"}`)},
 	}}}
-	result, err := (StructuredELTActivities{Rows: repo, Store: store, Attempt: func(context.Context) int32 { return 3 }}).ExecuteStructuredELT(context.Background(), req)
+	result, err := (StructuredELTActivities{Rows: repo, Store: store, Authorization: structuredELTAuthorization(), Attempt: func(context.Context) int32 { return 3 }}).ExecuteStructuredELT(context.Background(), req)
 	if err != nil {
 		t.Fatalf("ExecuteStructuredELT() error = %v", err)
 	}
@@ -151,7 +173,7 @@ func TestExecuteStructuredELTEmitsStandardBundleAndParserReceipt(t *testing.T) {
 func TestExecuteStructuredELTEmptyQueryFailsBeforeReceiptAndAbortsBundle(t *testing.T) {
 	req, store, writer := structuredELTStageFixture()
 	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{}}
-	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store, Authorization: structuredELTAuthorization()}).ExecuteStructuredELT(context.Background(), req); err == nil {
 		t.Fatal("expected empty DuckDB extraction to fail")
 	}
 	if writer.aborts != 1 || writer.finalizes != 0 || store.persistExecCalls != 0 {
@@ -164,7 +186,7 @@ func TestExecuteStructuredELTRejectsTemplateMismatch(t *testing.T) {
 	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{rows: []StructuredELTRow{
 		{StoredBytes: []byte(`{"body":"one"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"one"}`), NativeMetadata: json.RawMessage(`{"duckdb_template":"calls_xml_v1"}`)},
 	}}}
-	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store, Authorization: structuredELTAuthorization()}).ExecuteStructuredELT(context.Background(), req); err == nil {
 		t.Fatal("expected mismatched DuckDB template to fail closed")
 	}
 	if writer.records != 0 || writer.finalizes != 0 || writer.aborts != 1 || store.persistExecCalls != 0 {
@@ -178,11 +200,26 @@ func TestExecuteStructuredELTRejectsDecoderSelection(t *testing.T) {
 	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{rows: []StructuredELTRow{
 		{StoredBytes: []byte(`{"body":"one"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"one"}`), NativeMetadata: json.RawMessage(`{}`)},
 	}}}
-	if _, err := (StructuredELTActivities{Rows: repo, Store: store}).ExecuteStructuredELT(context.Background(), req); err == nil {
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store, Authorization: structuredELTAuthorization()}).ExecuteStructuredELT(context.Background(), req); err == nil {
 		t.Fatal("expected decoder selection to fail closed")
 	}
 	if writer.records != 0 || store.persistExecCalls != 0 {
 		t.Fatalf("decoder selection wrote ELT output: records=%d receipt_calls=%d", writer.records, store.persistExecCalls)
+	}
+}
+
+func TestExecuteStructuredELTRejectsNonDuckDBAuthorization(t *testing.T) {
+	req, store, writer := structuredELTStageFixture()
+	authorization := structuredELTAuthorization()
+	authorization.authorization.ExecutionPath = proffer.HandlerPathDecoder
+	repo := &fakeStructuredELTRowRepository{reader: &fakeStructuredELTRowReader{rows: []StructuredELTRow{
+		{StoredBytes: []byte(`{"body":"one"}`), NativeFields: json.RawMessage(`{"record_kind":"message","body":"one"}`), NativeMetadata: json.RawMessage(`{"duckdb_template":"sms_xml_v1"}`)},
+	}}}
+	if _, err := (StructuredELTActivities{Rows: repo, Store: store, Authorization: authorization}).ExecuteStructuredELT(context.Background(), req); err == nil {
+		t.Fatal("expected decoder authorization to fail before DuckDB execution")
+	}
+	if repo.req.RequestID != "" || writer.records != 0 || store.persistExecCalls != 0 {
+		t.Fatalf("non-DuckDB authorization reached extraction: request=%+v records=%d receipt_calls=%d", repo.req, writer.records, store.persistExecCalls)
 	}
 }
 

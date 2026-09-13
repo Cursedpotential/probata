@@ -1,10 +1,68 @@
 # DuckDB live-test repair receipt
 
 > Byline: Codex · GPT-5 · 2026-09-12
-> Status: implementation and local integration verification complete on `codex/duckdb-live-test-20260912`; deployment and end-to-end post-deploy proof pending
+> Status: IN PROGRESS on `codex/duckdb-live-test-20260912`; post-crash caller and handler defects are being repaired. Earlier local checks are historical checkpoints, not completion. Deployment and end-to-end proof remain pending.
 > Scope: observed synthetic failures plus the verified real-source rehearsal manifest below. Nothing in this receipt is an evidence promotion or an approval to promote.
 
 ## Result
+
+### Post-crash recovery checkpoint
+
+Verified updates after the initial inspection:
+
+- Execution queue cleared through exact-scope canonical ledger retirement:
+  13 zero-stage TEST retries now `failed` with the retained `abort` flag;
+  six preexisting failed runs remained byte-for-byte equivalent in the API
+  representation. Temporal's default namespace returned no running workflows
+  before and after. See the guarded script and receipt under
+  `docs/pending-review/2026-09-12-handler-schema-reconcile/queue-*`.
+- Root applied the additive handler schema transaction: six tables, six
+  primary keys, 18 foreign keys, seven unique constraints. Every existing
+  context table passed a locked count/hash preservation check: 43 tables,
+  208 rows. No rebuild, truncation, or source mutation was performed.
+- New retry regression tests pass (2): unsupported historical workflows are
+  rejected before child creation or source I/O. Ruff check/format pass for
+  that bounded change. The older full retry test file stalled after the two
+  new cases and was interrupted; it is not claimed as a full-suite pass.
+- Three executable frontend label tests pass. Ingest views translate the old
+  wire stage name for display without rewriting historical receipts and no
+  longer invoke the evidence-chain verification panel.
+- Engine recovery tests prove an immutable logged failure followed by a
+  recorded operator choice of retry or compatible decoder. Free-form
+  template/schema editing and re-entering repair are not implemented; only
+  the actual supported recovery options may be advertised.
+- New live source submissions remain frozen until the corrected application
+  deployment and route verification succeed.
+
+Initial inspection (historical checkpoint):
+
+- The task's configured `E:\AI_Workspace\casebible` directory no longer exists.
+  Shell execution works with the explicit surviving worktree path and
+  `login:false`; the retired dynamic app-tool alias fails, while the current
+  `mcp__codex_app__` terminal, task-list, and task-message tools were verified.
+  This is execution recovery, not a change to the app's saved task directory.
+- Preserved edits remain in the dedicated worktree. No reset, cleanup, source
+  deletion, or host restart was performed. Lost subagents were replaced with
+  bounded engine, Workbench, and additive-schema lanes.
+- The legacy New Run caller still reaches Python `/v1/ingest` through
+  `/api/runs`. Its reported `smsbackuprestore-xml` failure is not fixed merely
+  by deploying an unrelated Go worker. The caller must enter Go Proffer.
+- D-149 selects exactly one signature-registered handler in the engine. The
+  UI must not choose the handler. A declared-format decoder lookup before
+  signature selection and an operator handler-selection hold were identified
+  as additional defects in the preserved implementation.
+- Read-only live catalog check: `platform` contains 10 source versions and
+  50 activity receipts, but no `context.handler_*` tables. The existing preview
+  receipt CHECK still admits the historical `custody` label. Coordination
+  explicitly authorizes additive reconciliation only, preserving existing
+  rows and failed receipts; no database rebuild or truncation is authorized.
+- Local `upload://` acquisition references are not automatically readable by
+  PostgreSQL-hosted DuckDB. Cloud staged sources must retain their server-owned
+  R2 identity; an upload bridge must prove a shared readable locator rather
+  than manufacture one or copy cloud bytes through the workstation.
+- New ingest receipts and surfaces use raw-source verification and context
+  fingerprints. Custody sealing remains promotion-only. Historical receipts
+  must not be rewritten to make prior failures look successful.
 
 The canonical schema snapshot now defines `context.forbid_mutation()` before the trigger-creating helper that references it, and grants execution to `context_import_writer` and `platform_app`. The omission had blocked raw-generation persistence in the observed ChatGPT test run even though the function was already restored on the live database during incident response.
 
@@ -15,6 +73,7 @@ This file records the observed 2026-09-12 test checkpoint. It does not supersede
 - DuckDB is the primary extraction path for every registered signature it can process. A Go decoder is registered only for signatures DuckDB cannot process, or is selected after a logged DuckDB failure. Exactly one selected handler lands a source; a source must never land raw through both paths.
 - DuckDB output must enter the same raw contract and then traverse the same normalize, lineage, digest, verification, preview, and publication gates as parser output.
 - The repaired structured-ELT path now supports content-confirmed SMS Backup & Restore XML, official ChatGPT conversation JSON, iMessage transcript text, CSV, and newline-delimited JSON. Each DuckDB template emits the standard immutable parser-bundle contract; none inserts directly into a canonical raw table. SMS XML loads and verifies Webbed on the same leased PostgreSQL session used for `read_xml`.
+- Content inspection also classifies PDF, DOCX, archive, ordinary JSON, CSV, NDJSON, XML, UTF-8 text, Calls Backup & Restore XML, and opaque binary without using filenames as evidence. Sources outside the DuckDB-compatible signatures receive the established decoder route instead of failing handler recommendation. A DuckDB-compatible source retains its immutable operator-declared format while the separately persisted detected format and compatibility record control execution.
 - Under the current governed stage graph, DuckDB replaces only `execute_parser_activity` and must emit the same durable raw-bundle reference and successful stage receipt. `persist_raw_generation_activity` remains the sole canonical writer of `context.raw_generation` and its raw-record identities. Direct DuckDB creation of a canonical raw generation would bypass the persistence receipt required by downstream hashing/reconciliation and by the preview publication contract.
 
 Source anchors:
@@ -85,13 +144,19 @@ The Workbench preview does **not** read `working.message`, a downstream evidence
 
 Therefore, the supported way to make normalized test messages appear in the live preview is to complete the governed raw-to-normalized gates and let `publish_preview_activity` materialize the `context.proffer_preview_*` projection. Direct ad-hoc insertion into `working.message` or the preview tables is outside this contract.
 
+## Frontend stack and grid compatibility boundary
+
+The owner-set convergence stack is TanStack for application routing/state, Storybook for component proof, Glide Data Grid for the eventual data-heavy grid surface, and Tauri for desktop targets. This branch does not introduce a competing table framework: the temporary `@tanstack/react-table` dependency was removed and Source Explorer uses the application's semantic native table for this bounded delivery.
+
+Glide's latest stable npm release observed during this pass was `6.0.3`, whose peer range ends at React 18. The Workbench is currently on React `19.2.3`. A later owner-directed isolated compatibility run proved exact-pinned Glide `6.0.4-alpha24` against React `19.2.3` in the browser build and Storybook. Native Tauri packaging remains unproven because that isolated Windows environment could not resolve `kernel32.lib`. React 18 is therefore not an automatic downgrade requirement. Any product adoption of alpha24 remains bounded, exact-pinned, regression-tested, reversible, and subject to an explicit release/adoption gate.
+
 ## Validation boundary
 
 - Snapshot source repair: applied locally to `sql/bootstrap/schema_snapshot_20260907.sql`, the repository's owner-ruled current database image. This repository has no active migration chain; `sql/bootstrap/README.md` requires final-form snapshot edits followed by a controlled rebuild.
 - SQL static validation: `git diff --check` passed; focused inspection proved exactly one `context.forbid_mutation()` definition positioned before its first trigger reference, all six handler-selection tables with primary/unique/foreign-key constraints, the six-checkpoint receipt constraint, and expected writer/reader/application grants. No isolated snapshot rebuild was performed in this pass, so this is not PostgreSQL execution proof.
-- Engine verification: `go test ./...` and `go vet ./...` passed. Focused live, read-only Webbed rehearsal loaded the extension twice on one leased PostgreSQL session and counted 225 SMS plus 6 MMS elements (231 total) from the bounded real R2 source without copying source bytes through the workstation.
-- Workbench API verification: 270 tests passed using the repository virtual environment. The suite includes required mode propagation, TEST/REAL separation, source-root scope, preview-handle binding, and exact handler recommendation/decision tuple validation.
-- Workbench web verification: lint completed with zero errors and 12 pre-existing Fast Refresh warnings; the production build passed; all 36 smoke/contract tests passed, including two headless browser matter flows and the same-origin `/evidence/preview` route contract. `@tanstack/react-table` is the only added runtime package.
+- Engine verification: `go test ./...`, `go vet ./...`, and `go build ./...` passed. Focused live, read-only Webbed rehearsal loaded the extension twice on one leased PostgreSQL session and counted 225 SMS plus 6 MMS elements (231 total) from the bounded real R2 source without copying source bytes through the workstation. A separate local DuckDB `1.5.5` + community Webbed execution against the committed four-record SMS/MMS fixture exposed and then verified a compatibility repair: current Webbed emits plain attribute keys (`address`, `date`, `type`, `body`, `parts.part[].text`) rather than only the historical `@`-prefixed shape. The query now accepts both shapes, projects `date` epoch milliseconds into an RFC 3339 UTC `occurred_at`, and emitted all four fixture messages with their correct bodies, participants, directions, and timestamps.
+- Workbench API verification: 308 tests passed using the repository virtual environment. The suite includes required mode propagation across every Matter-scoped route, TEST/REAL separation, exact Matter and court-case scope, source-root scope, preview-handle binding, and exact handler recommendation/decision tuple validation. REAL remains unconfigured by default and fails closed; fixed-mode Matter creation returns a truthful `409` without calling the upstream spine.
+- Workbench web verification: lint completed with zero errors and 12 existing Fast Refresh warnings; the production build passed; all 43 smoke/contract tests passed, including two headless browser Matter flows, direct REAL preview deep-link hydration, same-origin `/evidence/preview` routing, and the native source-browser table contract. No table/grid runtime package was added in this branch.
 - n8n verification: all 20 parser-activity workflow contract tests passed; both edited workflow documents also parsed as valid JSON. The workflows accept either the legacy three-reference result or that base set plus exactly the six governed handler-selection references, and reject arbitrary extras.
 - Synthetic fixtures: the three committed regression inputs are tiny synthetic samples only (`698`, `328`, and `955` bytes). They are not the real R2 sources and are not ingest receipts.
 - Commit/push: pending at the time this receipt text was updated.

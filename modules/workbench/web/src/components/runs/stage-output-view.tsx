@@ -3,7 +3,7 @@
 
 /**
  * Typed rendering of a stage's `output`, keyed by stage `name` per the
- * spine contract in the build brief (custody/parse/store/knowledge). An
+ * historical ingest contract (source verification/parse/store/knowledge). An
  * unrecognized stage name (or a shape that doesn't match) falls back to a
  * pretty-printed JSON blob instead of erroring — the spine is a parallel
  * build, so the exact field set was not independently verified.
@@ -13,7 +13,7 @@ import { Copy, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type {
-  CustodyOutput,
+  RawSourceVerificationOutput,
   KnowledgeOutput,
   ParseOutput,
   StoreOutput,
@@ -61,11 +61,11 @@ function RawJson({ value }: { value: unknown }) {
   );
 }
 
-function CustodyView({ output }: { output: CustodyOutput }) {
+function RawSourceVerificationView({ output }: { output: RawSourceVerificationOutput }) {
   return (
     <div className="space-y-1">
       {output.sha256 && (
-        <Field label="sha256">
+        <Field label="Source fingerprint (SHA-256)">
           <span className="flex items-center gap-1 font-mono text-xs">
             {output.sha256}
             <CopyButton text={output.sha256} />
@@ -167,7 +167,8 @@ export function StageOutputView({ stageName, output }: { stageName: string; outp
   }
   switch (stageName.toLowerCase()) {
     case "custody":
-      return <CustodyView output={output as CustodyOutput} />;
+    case "raw_source_verification":
+      return <RawSourceVerificationView output={output as RawSourceVerificationOutput} />;
     case "parse":
       return <ParseView output={output as ParseOutput} />;
     case "store":

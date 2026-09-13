@@ -99,9 +99,12 @@ func (r *StructuredELTRepository) OpenStructuredELTRows(
 
 	var sourceKey, workflowID, sourceStatus, declaredFormat string
 	if err := session.QueryRow(ctx, `
-		SELECT source.source_key, version.workflow_id, version.status, version.declared_format
+		SELECT CASE WHEN object.object_uri LIKE 'r2://%' OR object.object_uri LIKE 's3://%'
+		            THEN object.object_uri ELSE source.source_key END,
+		       version.workflow_id, version.status, version.declared_format
 		FROM context.source_version version
 		JOIN context.source source ON source.id = version.source_id
+		JOIN context.retained_object object ON object.id = version.original_object_id
 		WHERE version.id = $1::uuid AND version.original_object_id = $2::uuid`,
 		sourceID, originalID,
 	).Scan(&sourceKey, &workflowID, &sourceStatus, &declaredFormat); err != nil {
@@ -262,29 +265,51 @@ func structuredELTQuery(format activities.StructuredELTFormat, sourceURL string)
 				FROM read_xml('%[1]s', record_element := 'mms', all_varchar := true) AS row_value
 			), projected AS (
 				SELECT *,
-					json_extract_string(source_row, '$."@address"') AS address,
-					json_extract_string(source_row, '$."@type"') AS message_type,
-					json_extract_string(source_row, '$."@date"') AS date_ms,
 					coalesce(
+						json_extract_string(source_row, '$.address'),
+						json_extract_string(source_row, '$."@address"')
+					) AS address,
+					coalesce(
+						json_extract_string(source_row, '$.type'),
+						json_extract_string(source_row, '$."@type"')
+					) AS message_type,
+					coalesce(
+						json_extract_string(source_row, '$.date'),
+						json_extract_string(source_row, '$."@date"')
+					) AS date_ms,
+					coalesce(
+						nullif(json_extract_string(source_row, '$.body'), 'null'),
 						nullif(json_extract_string(source_row, '$."@body"'), 'null'),
+						json_extract_string(source_row, '$.parts.part[0].text'),
 						json_extract_string(source_row, '$.parts.part[0]."@text"'),
+						json_extract_string(source_row, '$.parts.part.text'),
 						json_extract_string(source_row, '$.parts.part."@text"'),
 						''
 					) AS body
 				FROM source_rows
+			), timestamped AS (
+				SELECT *, CASE
+					WHEN try_cast(date_ms AS BIGINT) IS NULL THEN NULL
+					ELSE strftime(
+						epoch_ms(try_cast(date_ms AS BIGINT)),
+						'%%Y-%%m-%%dT%%H:%%M:%%S.%%fZ'
+					)
+				END AS occurred_at
+				FROM projected
 			)
 			SELECT source_row::VARCHAR AS stored_bytes,
 				json_object(
 					'record_kind', 'message', 'body', body,
 					'sender', CASE WHEN message_type = '2' THEN 'self' ELSE address END,
 					'recipients', CASE WHEN message_type = '2' THEN json_array(address) ELSE json_array('self') END,
-					'participants', json_array('self', address)
+					'participants', json_array('self', address),
+					'occurred_at', occurred_at
 				)::VARCHAR AS native_fields,
 				json_object(
 					'duckdb_template', 'sms_xml_v1', 'source_kind', source_kind,
 					'date_ms', date_ms, 'source_row', source_row
 				)::VARCHAR AS native_metadata
-			FROM projected
+			FROM timestamped
 			ORDER BY try_cast(date_ms AS BIGINT), source_kind`, url), nil
 	case activities.StructuredELTFormatChatGPTJSON:
 		return fmt.Sprintf(`

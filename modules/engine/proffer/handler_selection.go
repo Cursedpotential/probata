@@ -15,7 +15,17 @@ const HandlerSelectionDecisionSignalName = "handler_selection_decision"
 const (
 	RecommendHandlerActivityName         = "recommend_handler_activity"
 	ValidateHandlerSelectionActivityName = "validate_handler_selection_activity"
+	RecoverHandlerActivityName           = "recover_handler_activity"
+	OperatorHandlerSelectionOptions      = "operator-handler-selection/v1"
 )
+
+// HandlerRecoveryRequest is issued only after the selected Activity failed.
+// AttemptIdentity names a fresh workflow recovery cycle, not an overwritten run.
+type HandlerRecoveryRequest struct {
+	Request         StageRequest `json:"request"`
+	AttemptIdentity string       `json:"attempt_identity"`
+	FailureReason   string       `json:"failure_reason"`
+}
 
 // HandlerExecutionPath identifies the one paired select/execute
 // implementation that may run after validation. It is bounded control data,
@@ -45,6 +55,8 @@ type HandlerCandidate struct {
 // populate these fields by itself. DetectedFormatRef and SignatureRef make the
 // content-backed determination durable and independently reviewable.
 type HandlerRecommendationResult struct {
+	FailureReceiptRef Ref                `json:"failure_receipt_ref,omitempty"`
+	EngineDecisionRef Ref                `json:"engine_decision_ref,omitempty"`
 	RecommendationRef Ref                `json:"recommendation_ref"`
 	ReceiptRef        Ref                `json:"receipt_ref"`
 	DetectedFormat    string             `json:"detected_format"`

@@ -1,14 +1,5 @@
 "use client";
 
-import {
-  type ColumnDef,
-  type ExpandedState,
-  type Row,
-  flexRender,
-  getCoreRowModel,
-  getExpandedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
 import { ChevronDown, ChevronLeft, ChevronRight, FileText, FolderOpen, Loader2, Search, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -30,6 +21,10 @@ function parentPrefix(prefix: string) {
 function breadcrumbParts(prefix: string) {
   const parts = prefix.split("/").filter(Boolean);
   return parts.map((label, index) => ({ label, prefix: `${parts.slice(0, index + 1).join("/")}/` }));
+}
+
+function rowKey(row: SourceRow) {
+  return row.kind === "prefix" ? `prefix:${row.prefix}` : `object:${row.source_ref}`;
 }
 
 export function SourceExplorer({
@@ -61,81 +56,20 @@ export function SourceExplorer({
   onSelect: (source: ProfferSourceObject) => void;
   onLoadMore: () => void;
 }) {
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [expandedSourceRefs, setExpandedSourceRefs] = useState<ReadonlySet<string>>(() => new Set());
   const rows = useMemo<SourceRow[]>(() => [...(response?.prefixes ?? []), ...(response?.objects ?? [])], [response]);
   const activeRoot = rootId || response?.active_root_id || "";
   const activeRootRecord = response?.available_roots.find((root) => root.root_id === activeRoot) ?? null;
   const availableFileTypes = response?.available_file_types ?? [];
   const parts = breadcrumbParts(prefix);
-
-  const columns = useMemo<ColumnDef<SourceRow>[]>(() => [
-    {
-      id: "expand",
-      header: "Details",
-      cell: ({ row }) => row.original.kind === "object" ? (
-        <button
-          type="button"
-          className="grid h-8 w-8 place-items-center border text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={`${row.getIsExpanded() ? "Hide" : "Show"} details for ${row.original.name}`}
-          aria-expanded={row.getIsExpanded()}
-          onClick={row.getToggleExpandedHandler()}
-        >
-          {row.getIsExpanded() ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </button>
-      ) : null,
-    },
-    {
-      id: "name",
-      header: "Name",
-      cell: ({ row }) => (
-        <button
-          type="button"
-          className="flex min-w-0 items-center gap-2 text-left font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => row.original.kind === "prefix" ? onPrefixChange(row.original.prefix) : onSelect(row.original)}
-        >
-          {row.original.kind === "prefix" ? <FolderOpen className="h-4 w-4 shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />}
-          <span className="break-words">{row.original.name}</span>
-        </button>
-      ),
-    },
-    {
-      id: "kind",
-      header: "Type",
-      cell: ({ row }) => row.original.kind === "prefix" ? "Folder" : row.original.file_kind || row.original.extension || "File",
-    },
-    {
-      id: "location",
-      header: "Location",
-      cell: ({ row }) => row.original.kind === "prefix" ? row.original.prefix : row.original.relative_parent || "/",
-    },
-    {
-      id: "size",
-      header: "Size",
-      cell: ({ row }) => row.original.kind === "object" ? bytes(row.original.byte_length) : "—",
-    },
-    {
-      id: "modified",
-      header: "Modified",
-      cell: ({ row }) => row.original.kind === "object" && row.original.last_modified
-        ? new Date(row.original.last_modified).toLocaleString()
-        : "—",
-    },
-  ], [onPrefixChange, onSelect]);
-
-  // TanStack Table intentionally owns its imperative row model; React Compiler
-  // skips memoizing this component while the table remains deterministic.
-  // eslint-disable-next-line react-hooks/incompatible-library
-  const table = useReactTable({
-    data: rows,
-    columns,
-    state: { expanded },
-    onExpandedChange: setExpanded,
-    getRowId: (row) => row.kind === "prefix" ? `prefix:${row.prefix}` : `object:${row.source_ref}`,
-    getRowCanExpand: (row) => row.original.kind === "object",
-    getCoreRowModel: getCoreRowModel(),
-    getExpandedRowModel: getExpandedRowModel(),
-    manualFiltering: true,
-  });
+  const toggleDetails = (sourceRef: string) => {
+    setExpandedSourceRefs((current) => {
+      const next = new Set(current);
+      if (next.has(sourceRef)) next.delete(sourceRef);
+      else next.add(sourceRef);
+      return next;
+    });
+  };
 
   return (
     <section className="platform-panel mx-auto max-w-[1180px] overflow-hidden" aria-labelledby="source-explorer-title">
@@ -241,15 +175,25 @@ export function SourceExplorer({
         ) : (
           <table className="w-full min-w-[860px] border-collapse text-left text-xs" aria-label="Source directory tree and files">
             <thead className="border-b bg-muted/40 text-muted-foreground">
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => <th key={header.id} scope="col" className="px-3 py-2 font-semibold">{flexRender(header.column.columnDef.header, header.getContext())}</th>)}
-                </tr>
-              ))}
+              <tr>
+                <th scope="col" className="w-16 px-3 py-2 font-semibold">Details</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Name</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Type</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Location</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Size</th>
+                <th scope="col" className="px-3 py-2 font-semibold">Modified</th>
+              </tr>
             </thead>
             <tbody className="divide-y">
-              {table.getRowModel().rows.map((row) => (
-                <FragmentRow key={row.id} row={row} columnCount={columns.length} onSelect={onSelect} />
+              {rows.map((row) => (
+                <SourceRowView
+                  key={rowKey(row)}
+                  row={row}
+                  expanded={row.kind === "object" && expandedSourceRefs.has(row.source_ref)}
+                  onToggleDetails={toggleDetails}
+                  onPrefixChange={onPrefixChange}
+                  onSelect={onSelect}
+                />
               ))}
             </tbody>
           </table>
@@ -267,16 +211,55 @@ export function SourceExplorer({
   );
 }
 
-function FragmentRow({ row, columnCount, onSelect }: { row: Row<SourceRow>; columnCount: number; onSelect: (source: ProfferSourceObject) => void }) {
-  const source = row.original.kind === "object" ? row.original : null;
+function SourceRowView({
+  row,
+  expanded,
+  onToggleDetails,
+  onPrefixChange,
+  onSelect,
+}: {
+  row: SourceRow;
+  expanded: boolean;
+  onToggleDetails: (sourceRef: string) => void;
+  onPrefixChange: (prefix: string) => void;
+  onSelect: (source: ProfferSourceObject) => void;
+}) {
+  const source = row.kind === "object" ? row : null;
+
   return (
     <>
       <tr className="align-top hover:bg-accent/30">
-        {row.getVisibleCells().map((cell) => <td key={cell.id} className="max-w-[22rem] px-3 py-3 text-xs">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}
+        <td className="px-3 py-3">
+          {source && (
+            <button
+              type="button"
+              className="grid h-8 w-8 place-items-center border text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={`${expanded ? "Hide" : "Show"} details for ${source.name}`}
+              aria-expanded={expanded}
+              onClick={() => onToggleDetails(source.source_ref)}
+            >
+              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </button>
+          )}
+        </td>
+        <td className="max-w-[22rem] px-3 py-3">
+          <button
+            type="button"
+            className="flex min-w-0 items-center gap-2 text-left font-medium hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => row.kind === "prefix" ? onPrefixChange(row.prefix) : onSelect(row)}
+          >
+            {row.kind === "prefix" ? <FolderOpen className="h-4 w-4 shrink-0" /> : <FileText className="h-4 w-4 shrink-0" />}
+            <span className="break-words">{row.name}</span>
+          </button>
+        </td>
+        <td className="px-3 py-3">{row.kind === "prefix" ? "Folder" : row.file_kind || row.extension || "File"}</td>
+        <td className="max-w-[22rem] px-3 py-3">{row.kind === "prefix" ? row.prefix : row.relative_parent || "/"}</td>
+        <td className="px-3 py-3">{row.kind === "object" ? bytes(row.byte_length) : "—"}</td>
+        <td className="px-3 py-3">{row.kind === "object" && row.last_modified ? new Date(row.last_modified).toLocaleString() : "—"}</td>
       </tr>
-      {row.getIsExpanded() && source && (
+      {expanded && source && (
         <tr>
-          <td colSpan={columnCount} className="border-t bg-muted/20 px-5 py-4">
+          <td colSpan={6} className="border-t bg-muted/20 px-5 py-4">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Detail label="R2 source reference" value={source.source_ref} />
               <Detail label="Bucket" value={source.bucket} />

@@ -21,6 +21,26 @@ from fastapi.testclient import TestClient
 import server.api.run_routes as run_routes
 
 
+@pytest.mark.parametrize("body", [None, {"from_stage": "knowledge"}])
+def test_unknown_retry_workflow_rejected_before_child_or_source_io(monkeypatch, body):
+    """The exact orphan-producing workflow cannot commit or schedule a child."""
+    historical = {"run_id": "failed-context", "status": "failed", "workflow": "framework-neutral-ingest"}
+    monkeypatch.setattr(run_routes, "get_run", lambda _: historical.copy())
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("unsupported retry attempted a mutation or source access")
+
+    for name in ("create_run", "seed_stages", "record_review_action", "blob_root"):
+        monkeypatch.setattr(run_routes, name, forbidden)
+    app = FastAPI()
+    run_routes.register_run_routes(app, knowledge=None)
+    with TestClient(app) as client:
+        response = client.post("/v1/runs/failed-context/retry", json=body)
+    assert response.status_code == 410
+    assert "Go Proffer" in response.json()["detail"]
+    assert historical["status"] == "failed"
+
+
 class _FakeWeaviateClient:
     """Mimics the v4-client call chain the existence check uses:
     client.collections.get(name).query.fetch_objects(limit=, filters=).objects"""

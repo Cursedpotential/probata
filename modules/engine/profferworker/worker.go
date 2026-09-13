@@ -15,7 +15,9 @@ import (
 
 	"github.com/Cursedpotential/probata/engine/acquisition"
 	"github.com/Cursedpotential/probata/engine/activities"
+	sbvadapter "github.com/Cursedpotential/probata/engine/adapters/sbv"
 	"github.com/Cursedpotential/probata/engine/normalize"
+	"github.com/Cursedpotential/probata/engine/parser"
 	platformpostgres "github.com/Cursedpotential/probata/engine/postgres"
 	"github.com/Cursedpotential/probata/engine/proffer"
 	"github.com/Cursedpotential/probata/engine/runtimeapi"
@@ -48,6 +50,7 @@ type Registrations struct {
 // orchestration. Both must be supplied together before new-version workflows
 // are enabled in a deployed worker.
 type HandlerSelectionActivities struct {
+	Recover   func(context.Context, proffer.HandlerRecoveryRequest) (proffer.HandlerRecommendationResult, error)
 	Recommend func(context.Context, proffer.StageRequest) (proffer.HandlerRecommendationResult, error)
 	Validate  func(context.Context, proffer.StageRequest) (proffer.HandlerSelectionValidationResult, error)
 }
@@ -73,6 +76,9 @@ func RegisterAll(registrar interface {
 		}
 		registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Recommend, activity.RegisterOptions{Name: proffer.RecommendHandlerActivityName})
 		registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Validate, activity.RegisterOptions{Name: proffer.ValidateHandlerSelectionActivityName})
+		if registrations.HandlerSelection.Recover != nil {
+			registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Recover, activity.RegisterOptions{Name: proffer.RecoverHandlerActivityName})
+		}
 	}
 	activities.RegisterRawPipelineActivities(registrar, registrations.Raw)
 	activities.RegisterNormalizedPipelineActivities(registrar, registrations.Normalized)
@@ -211,7 +217,15 @@ func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
 	if err != nil {
 		return Registrations{}, err
 	}
-	handlerSelectionStore, err := platformpostgres.NewHandlerSelectionStore(pool, openObject)
+	decoderAdapters, err := sbvadapter.NewAll(openObject)
+	if err != nil {
+		return Registrations{}, fmt.Errorf("build handler recommendation decoder capabilities: %w", err)
+	}
+	decoderRegistry, err := parser.NewRegistry(decoderAdapters...)
+	if err != nil {
+		return Registrations{}, fmt.Errorf("build handler recommendation decoder registry: %w", err)
+	}
+	handlerSelectionStore, err := platformpostgres.NewHandlerSelectionStoreWithRegistry(pool, openObject, decoderRegistry)
 	if err != nil {
 		return Registrations{}, err
 	}
@@ -264,8 +278,9 @@ func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
 		EmbeddedObservation:   activities.NewSourceObservationActivities(embeddedExtractor, nil, observationRepo),
 		N8N:                   platformtemporal.N8NActivities{Client: n8nClient},
 		Hash:                  activities.NewHashActivities(hashRepo),
-		StructuredELT:         activities.NewStructuredELTActivities(structuredELTRepo, parserStore),
+		StructuredELT:         activities.NewStructuredELTActivities(structuredELTRepo, parserStore, handlerSelectionStore),
 		HandlerSelection: HandlerSelectionActivities{
+			Recover: handlerSelectionStore.RecoverHandler,
 			Recommend: func(ctx context.Context, req proffer.StageRequest) (proffer.HandlerRecommendationResult, error) {
 				attempt := activity.GetInfo(ctx).Attempt
 				if attempt < 1 {

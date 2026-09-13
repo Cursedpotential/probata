@@ -1386,6 +1386,9 @@ CREATE FUNCTION context.guard_raw_generation_transition() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'pg_catalog', 'context'
     AS $$
+DECLARE
+    context_template text;
+    context_rows_valid boolean := false;
 BEGIN
     IF OLD.status <> 'open' OR NEW.status <> 'sealed' THEN
         RAISE EXCEPTION 'raw generation lifecycle only permits open -> sealed';
@@ -1440,6 +1443,51 @@ BEGIN
        ) THEN
         RAISE EXCEPTION 'raw generation % lacks required context fingerprint receipts', NEW.id;
     END IF;
+    -- D-149 context-only exception: offsets unavailable is not full byte coverage.
+    -- Reload the exact durable validation and inspect every row template; a
+    -- caller-authored observed JSON assertion alone cannot permit this transition.
+    SELECT verification.observed->>'duckdb_template' INTO context_template
+    FROM context.reconciliation_receipt verification
+    JOIN context.handler_selection_validation validation
+      ON validation.id::text=verification.observed->>'handler_validation_ref'
+    JOIN context.activity_receipt receipt ON receipt.id=validation.activity_receipt_id AND receipt.status='success'
+    JOIN context.activity_execution execution ON execution.id=receipt.activity_execution_id
+    JOIN context.source_version source ON source.id=NEW.source_version_id
+    JOIN context.handler_selection_decision decision ON decision.id=validation.decision_id
+    JOIN context.handler_recommendation recommendation ON recommendation.id=validation.recommendation_id
+    JOIN context.handler_detected_format detected ON detected.id=recommendation.detected_format_id
+    JOIN context.handler_content_signature signature ON signature.id=recommendation.content_signature_id
+    JOIN context.handler_compatibility compatibility ON compatibility.id=validation.compatibility_id
+    WHERE verification.raw_generation_id=NEW.id AND verification.reconciliation_kind='raw_source_verification'
+      AND verification.status='success'
+      AND verification.observed->>'coverage_mode'='duckdb_context_rows_without_source_offsets'
+      AND verification.observed->>'byte_coverage_proven'='false'
+      AND verification.observed->>'accounting_status'='success'
+      AND verification.observed->>'coverage_status'='not_applicable'
+      AND NEW.parser_id='duckdb_structured_elt' AND NEW.parser_version='1.0.0'
+      AND NEW.extraction_bundle_object_id IS NOT NULL
+      AND validation.source_version_id=NEW.source_version_id AND validation.created_at<=NEW.created_at
+      AND execution.source_version_id=NEW.source_version_id AND execution.workflow_id=source.workflow_id
+      AND decision.source_version_id=NEW.source_version_id AND decision.recommendation_id=recommendation.id
+      AND decision.compatibility_id=compatibility.id
+      AND recommendation.source_version_id=NEW.source_version_id AND recommendation.original_object_id=source.original_object_id
+      AND detected.source_version_id=NEW.source_version_id AND signature.source_version_id=NEW.source_version_id
+      AND signature.original_object_id=source.original_object_id
+      AND compatibility.detected_format_id=detected.id AND compatibility.handler_id=NEW.parser_id
+      AND compatibility.handler_version=NEW.parser_version AND compatibility.execution_path='duckdb'
+      AND verification.observed->>'duckdb_template'=CASE detected.format_id
+          WHEN 'smsbackuprestore_xml' THEN 'sms_xml_v1' WHEN 'csv' THEN 'csv_v1'
+          WHEN 'ndjson' THEN 'ndjson_v1' WHEN 'chatgpt_official_json' THEN 'chatgpt_json_array_v1'
+          WHEN 'messages_transcript' THEN 'imessage_text_v1' ELSE NULL END
+    LIMIT 1;
+    IF context_template IS NOT NULL THEN
+        EXECUTE format('SELECT count(*)>0 AND bool_and(raw.stored_bytes IS NOT NULL
+            AND raw.locator_object_id IS NULL AND raw.record_status=''parsed''
+            AND COALESCE(subtype.native_metadata->>''duckdb_template'','''')=$2)
+            FROM context.raw_record_identity raw LEFT JOIN %I.%I subtype ON subtype.raw_record_id=raw.id
+            WHERE raw.raw_generation_id=$1', 'context', 'raw_' || NEW.format_id)
+            INTO context_rows_valid USING NEW.id, context_template;
+    END IF;
     IF EXISTS (
         SELECT 1
         FROM (VALUES ('record_accounting'), ('byte_coverage'), ('raw_source_verification')) required(kind)
@@ -1447,7 +1495,8 @@ BEGIN
             SELECT 1 FROM context.reconciliation_receipt r
             WHERE r.raw_generation_id = NEW.id
               AND r.reconciliation_kind = required.kind
-              AND r.status = 'success'
+              AND (r.status = 'success' OR (required.kind='byte_coverage'
+                  AND r.status='not_applicable' AND context_rows_valid))
         )
     ) THEN
         RAISE EXCEPTION 'raw generation % lacks required successful reconciliation receipts', NEW.id;
@@ -8132,7 +8181,7 @@ CREATE TABLE context.handler_detected_format (
     content_signature_id uuid NOT NULL,
     format_id text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT handler_detected_format_format_id_check CHECK ((format_id = ANY (ARRAY['smsbackuprestore_xml'::text, 'chatgpt_official_json'::text, 'messages_transcript'::text])))
+    CONSTRAINT handler_detected_format_format_id_check CHECK ((format_id = ANY (ARRAY['smsbackuprestore_xml'::text, 'chatgpt_official_json'::text, 'messages_transcript'::text, 'pdf'::text, 'docx'::text, 'archive'::text, 'callsbackuprestore_xml'::text, 'xml'::text, 'ndjson'::text, 'json'::text, 'csv'::text, 'text'::text, 'binary'::text])))
 );
 
 
@@ -15171,10 +15220,6 @@ ALTER TABLE ONLY context.handler_recommendation
 
 ALTER TABLE ONLY context.handler_recommendation
     ADD CONSTRAINT handler_recommendation_activity_receipt_key UNIQUE (activity_receipt_id);
-
-
-ALTER TABLE ONLY context.handler_recommendation
-    ADD CONSTRAINT handler_recommendation_signature_key UNIQUE (content_signature_id);
 
 
 ALTER TABLE ONLY context.handler_selection_decision

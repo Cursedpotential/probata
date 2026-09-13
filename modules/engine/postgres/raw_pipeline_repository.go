@@ -1432,6 +1432,21 @@ func (r *RawPipelineRepository) VerifyRawCoverageAgainstSource(ctx context.Conte
 		"context_raw_generation_fingerprint": recomputedGenerationFingerprint, "verification_mode": "retained_bytes_recomputation",
 		"context_source_fingerprint": recomputedSourceFingerprint, "accounting_status": accountingStatus, "coverage_status": coverageStatus,
 	}
+	contextCoverage := false
+	if coverageStatus == "not_applicable" && accountingStatus == "success" &&
+		storedGenerationFingerprint == recomputedGenerationFingerprint && sourceFingerprint == recomputedSourceFingerprint {
+		proof, proofErr := loadDuckDBContextCoverageProof(ctx, tx, rawGenerationID, sourceID, spec.RequestID)
+		if proofErr != nil {
+			return activities.ReconciliationOutcome{}, proofErr
+		}
+		if proof != nil {
+			contextCoverage = true
+			for key, value := range proof {
+				observed[key] = value
+				expected[key] = value
+			}
+		}
+	}
 
 	var discrepancies []discrepancy
 	if recomputedGenerationFingerprint != storedGenerationFingerprint {
@@ -1452,7 +1467,7 @@ func (r *RawPipelineRepository) VerifyRawCoverageAgainstSource(ctx context.Conte
 			Explanation: "record accounting reconciliation did not succeed",
 		})
 	}
-	if coverageStatus != "success" {
+	if coverageStatus != "success" && !contextCoverage {
 		discrepancies = append(discrepancies, discrepancy{
 			Field: "coverage_status", Expected: "success", Observed: coverageStatus,
 			Explanation: "byte coverage reconciliation did not prove complete source coverage",
@@ -1488,6 +1503,70 @@ func (r *RawPipelineRepository) VerifyRawCoverageAgainstSource(ctx context.Conte
 	}
 	rollback = false
 	return outcome, nil
+}
+
+// D-149: DuckDB read_xml does not expose source offsets. Context verification
+// may instead prove source SHA, exact inserted row fingerprints and accounting.
+// This is not a byte-coverage or promotion assertion. Durable source-bound
+// handler validation and every row's pinned template are checked independently.
+func loadDuckDBContextCoverageProof(ctx context.Context, tx pgx.Tx, generationID, sourceID uuid.UUID, requestID string) (map[string]any, error) {
+	var declared, detected, validationID string
+	err := tx.QueryRow(ctx, `SELECT generation.format_id, format.format_id, validation.id::text
+		FROM context.raw_generation generation
+		JOIN context.source_version source ON source.id=generation.source_version_id
+		JOIN context.handler_selection_validation validation ON validation.source_version_id=source.id
+		JOIN context.activity_receipt receipt ON receipt.id=validation.activity_receipt_id AND receipt.status='success'
+		JOIN context.activity_execution execution ON execution.id=receipt.activity_execution_id
+		JOIN context.handler_selection_decision decision ON decision.id=validation.decision_id
+		JOIN context.handler_recommendation recommendation ON recommendation.id=validation.recommendation_id
+		JOIN context.handler_detected_format format ON format.id=recommendation.detected_format_id
+		JOIN context.handler_content_signature signature ON signature.id=recommendation.content_signature_id
+		JOIN context.handler_compatibility compatibility ON compatibility.id=validation.compatibility_id
+		WHERE generation.id=$1 AND generation.source_version_id=$2 AND source.workflow_id=$3
+		  AND generation.parser_id=$4 AND generation.parser_version=$5 AND generation.extraction_bundle_object_id IS NOT NULL
+		  AND validation.created_at<=generation.created_at
+		  AND execution.source_version_id=$2 AND execution.workflow_id=$3
+		  AND decision.source_version_id=$2 AND decision.recommendation_id=recommendation.id AND decision.compatibility_id=compatibility.id
+		  AND recommendation.source_version_id=$2 AND recommendation.original_object_id=source.original_object_id
+		  AND format.source_version_id=$2 AND signature.source_version_id=$2 AND signature.original_object_id=source.original_object_id
+		  AND compatibility.detected_format_id=format.id AND compatibility.handler_id=generation.parser_id
+		  AND compatibility.handler_version=generation.parser_version AND compatibility.execution_path='duckdb'
+		ORDER BY validation.created_at DESC LIMIT 1`, generationID, sourceID, requestID,
+		activities.StructuredELTParserID, activities.StructuredELTParserVersion).Scan(&declared, &detected, &validationID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("resolve source-bound DuckDB context verification: %w", err)
+	}
+	format, err := activities.StructuredELTFormatForDeclaredFormat(detected)
+	if err != nil {
+		return nil, nil
+	}
+	template, err := activities.StructuredELTTemplateForFormat(format)
+	if err != nil {
+		return nil, nil
+	}
+	if err = parser.FormatID(declared).Validate(); err != nil {
+		return nil, err
+	}
+	table := pgx.Identifier{"context", "raw_" + declared}.Sanitize()
+	var valid bool
+	err = tx.QueryRow(ctx, fmt.Sprintf(`SELECT count(*)>0 AND bool_and(raw.stored_bytes IS NOT NULL
+		AND raw.locator_object_id IS NULL AND raw.record_status='parsed'
+		AND COALESCE(subtype.native_metadata->>'duckdb_template','')=$2)
+		FROM context.raw_record_identity raw LEFT JOIN %s subtype ON subtype.raw_record_id=raw.id
+		WHERE raw.raw_generation_id=$1`, table), generationID, template).Scan(&valid)
+	if err != nil {
+		return nil, fmt.Errorf("verify every DuckDB raw-row template: %w", err)
+	}
+	if !valid {
+		return nil, nil
+	}
+	return map[string]any{"coverage_mode": "duckdb_context_rows_without_source_offsets",
+		"byte_coverage_proven": false, "coverage_reason": "DuckDB extraction supplies no source offsets; source fingerprint, inserted-row fingerprints and record accounting were independently verified; promotion reparses original bytes",
+		"handler_validation_ref": validationID, "duckdb_template": template, "handler_id": activities.StructuredELTParserID,
+		"handler_version": activities.StructuredELTParserVersion}, nil
 }
 
 // sealRawGeneration performs the sole legitimate raw-generation lifecycle

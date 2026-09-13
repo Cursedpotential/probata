@@ -229,6 +229,15 @@ func validateOutboundRequest(route stageRoute, req proffer.StageRequest) error {
 			return fmt.Errorf("temporal: StageRequest.Refs missing required non-empty %q", name)
 		}
 	}
+	allowedHandlerRefs := 0
+	for _, name := range route.allowRefs {
+		if _, ok := req.Refs[name]; ok {
+			allowedHandlerRefs++
+		}
+	}
+	if allowedHandlerRefs != 0 && allowedHandlerRefs != len(route.allowRefs) {
+		return fmt.Errorf("temporal: StageRequest.Refs must contain all handler decision refs %v or none", route.allowRefs)
+	}
 	allowed := make(map[string]struct{}, len(route.requireRefs)+len(route.allowRefs))
 	for _, name := range append(append([]string(nil), route.requireRefs...), route.allowRefs...) {
 		allowed[name] = struct{}{}

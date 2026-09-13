@@ -31,7 +31,7 @@ test("source inspection exposes the Source preview, Metadata, and Parser tabs", 
 });
 
 test("local intake selects supported document extensions and declares them truthfully", () => {
-  assert.match(intake, /const LOCAL_FILE_ACCEPT = "\.xml,\.json,\.txt,\.csv,\.md,\.html,\.htm,\.pdf,\.docx,\.zip,\.tar,\.tgz,\.gz,\.7z,\.rar";/);
+  assert.match(intake, /const LOCAL_FILE_ACCEPT = "\.xml,\.json,\.txt,\.csv,\.md,\.html,\.htm,\.pdf,\.docx,\.zip,\.tar,\.tgz,\.gz,\.7z,\.rar,\.png,\.jpg,\.jpeg,\.gif,\.tif,\.tiff,\.bmp";/);
   assert.match(intake, /<input accept=\{LOCAL_FILE_ACCEPT\} className="sr-only" type="file"/);
   assert.match(intake, /md: "markdown"/);
   assert.match(intake, /json: "message_export_json"/);

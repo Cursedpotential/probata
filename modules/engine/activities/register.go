@@ -33,10 +33,11 @@ func NewHashActivities(repository HashRepository) HashActivities {
 // NewParserActivities binds the persisted parser-selection/execution bodies
 // to Temporal attempt numbers. Registry and Store remain explicit runtime
 // dependencies so the UI and workflow history never become parser state.
-func NewParserActivities(registry *parser.Registry, store ParserActivityStore) ParserActivities {
+func NewParserActivities(registry *parser.Registry, store ParserActivityStore, authorization HandlerExecutionAuthorizationStore) ParserActivities {
 	return ParserActivities{
-		Registry: registry,
-		Store:    store,
+		Registry:      registry,
+		Store:         store,
+		Authorization: authorization,
 		Attempt: func(ctx context.Context) int32 {
 			return activity.GetInfo(ctx).Attempt
 		},
@@ -210,10 +211,11 @@ func RegisterNormalizedPipelineActivities(registrar ActivityRegistrar, activitie
 // NewStructuredELTActivities binds the pg_duckdb row stream and the canonical
 // parser bundle/receipt store to the current Temporal attempt. DuckDB replaces
 // only ExecuteParser; PersistRawGeneration and all downstream gates are shared.
-func NewStructuredELTActivities(rows StructuredELTRowRepository, store ParserActivityStore) StructuredELTActivities {
+func NewStructuredELTActivities(rows StructuredELTRowRepository, store ParserActivityStore, authorization HandlerExecutionAuthorizationStore) StructuredELTActivities {
 	return StructuredELTActivities{
-		Rows:  rows,
-		Store: store,
+		Rows:          rows,
+		Store:         store,
+		Authorization: authorization,
 		Attempt: func(ctx context.Context) int32 {
 			return activity.GetInfo(ctx).Attempt
 		},

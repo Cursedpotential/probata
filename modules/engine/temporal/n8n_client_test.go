@@ -266,6 +266,9 @@ func TestCallStageRejectsMissingRequiredRefs(t *testing.T) {
 func TestOutboundRequestAllowsOnlyBoundedHandlerDecisionRefs(t *testing.T) {
 	route := stageRoutes(Config{})[stagegraph.SelectParser]
 	req := selectRequest()
+	if err := validateOutboundRequest(route, req); err != nil {
+		t.Fatalf("validateOutboundRequest() rejected legacy refs: %v", err)
+	}
 	for _, name := range handlerDecisionRefNames() {
 		req.Refs[name] = proffer.Ref(name + "-ref")
 	}
@@ -275,6 +278,21 @@ func TestOutboundRequestAllowsOnlyBoundedHandlerDecisionRefs(t *testing.T) {
 	req.Refs["browser_handler_hint"] = "untrusted"
 	if err := validateOutboundRequest(route, req); err == nil || !strings.Contains(err.Error(), "unsupported") {
 		t.Fatalf("validateOutboundRequest() error = %v, want unsupported extra ref", err)
+	}
+}
+
+func TestOutboundRequestRequiresHandlerDecisionRefsAllOrNone(t *testing.T) {
+	route := stageRoutes(Config{})[stagegraph.ExecuteParser]
+	for _, omitted := range handlerDecisionRefNames() {
+		req := executeRequest()
+		for _, name := range handlerDecisionRefNames() {
+			if name != omitted {
+				req.Refs[name] = proffer.Ref(name + "-ref")
+			}
+		}
+		if err := validateOutboundRequest(route, req); err == nil || !strings.Contains(err.Error(), "all handler decision refs") {
+			t.Fatalf("validateOutboundRequest() with %q omitted error = %v, want all-or-none rejection", omitted, err)
+		}
 	}
 }
 

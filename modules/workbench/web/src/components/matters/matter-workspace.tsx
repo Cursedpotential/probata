@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AppLink as Link, useAppNavigate, useBrowserSearchParams } from "@/lib/router-compat";
+import { AppLink as Link, useBrowserSearchParams } from "@/lib/router-compat";
 import { AlertTriangle, BriefcaseBusiness, Loader2, Scale } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +21,7 @@ import type { EvidenceItem, Matter, MatterDetail } from "@/lib/shared/types";
 import { EvidenceDetailDialog } from "./evidence-detail-dialog";
 import { CourtReadinessDialog } from "./court-readiness-dialog";
 import { EvidenceReviewDialog, EvidenceReviewHistoryDialog } from "./evidence-review-dialog";
-import { CreateCourtCaseDialog, CreateMatterDialog } from "./matter-creation-dialogs";
+import { CreateCourtCaseDialog } from "./matter-creation-dialogs";
 
 function errorText(error: unknown) {
   return error instanceof ApiError ? error.message : "Unable to load the Matter workspace";
@@ -33,7 +33,6 @@ export function MatterWorkspace() {
 }
 
 function ModeScopedMatterWorkspace({ mode }: { mode: "TEST" | "REAL" }) {
-  const router = useAppNavigate();
   const searchParams = useBrowserSearchParams();
   const matterId = searchParams.get("matter_id")?.trim() || null;
   const [matters, setMatters] = useState<Matter[]>([]);
@@ -51,7 +50,7 @@ function ModeScopedMatterWorkspace({ mode }: { mode: "TEST" | "REAL" }) {
           detail,
           capability,
           items: capability.advanced_evidence_available
-            ? (await listEvidenceItems(matterId)).data
+            ? (await listEvidenceItems(matterId, mode)).data
             : [],
           matters: [] as Matter[],
         }))
@@ -115,7 +114,6 @@ function ModeScopedMatterWorkspace({ mode }: { mode: "TEST" | "REAL" }) {
               Choose an enduring Matter workspace. Court proceedings remain separate within it.
             </p>
           </div>
-          <CreateMatterDialog onCreated={(created) => router.push(`/matter?matter_id=${encodeURIComponent(created.id)}`)} />
         </div>
         {matters.length === 0 ? (
           <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">No Matter workspace is available.</CardContent></Card>

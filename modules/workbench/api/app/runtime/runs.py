@@ -36,8 +36,6 @@ from app.service.runs import (
     get_run,
     get_run_report,
     list_runs,
-    parse_dryrun,
-    retry_run,
     start_run,
 )
 from app.types.runs import RunCreateRequest, RunReviewActionRequest
@@ -124,13 +122,7 @@ async def _start_from_json(request: Request) -> dict:
 
 @router.post("/runs")
 async def create_run_endpoint(request: Request):
-    content_type = request.headers.get("content-type", "")
-    try:
-        if content_type.startswith("multipart/form-data"):
-            return await _start_from_multipart(request)
-        return await _start_from_json(request)
-    except RunsError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail) from None
+    raise HTTPException(status_code=410, detail="Legacy run creation is retired. Open New context import to use the Proffer engine flow; existing run receipts remain inspectable.")
 
 
 @router.get("/runs")
@@ -185,53 +177,9 @@ async def abort_run_endpoint(run_id: str):
 
 @router.post("/runs/{run_id}/retry")
 async def retry_run_endpoint(run_id: str, request: Request):
-    """Start a fresh run from a terminal-failed one. 409 if not failed.
-
-    Optional JSON body ``{"from_stage": "knowledge"}`` (C2.6) — forwarded
-    verbatim to the spine's retry endpoint; see app/service/runs.py's
-    `retry_run` docstring. No body (or a body without `from_stage`) keeps
-    the pre-C2.6 full-rerun behavior."""
-    from_stage: str | None = None
-    body_bytes = await request.body()
-    if body_bytes:
-        try:
-            payload = json.loads(body_bytes)
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=422, detail="retry body is not valid JSON") from None
-        if payload is not None:
-            if not isinstance(payload, dict):
-                raise HTTPException(status_code=422, detail="retry body must be a JSON object")
-            from_stage = payload.get("from_stage")
-    try:
-        return await retry_run(run_id, from_stage=from_stage)
-    except RunsError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail) from None
+    raise HTTPException(status_code=410, detail="Legacy retry is retired. Start a new context import from the original source through Proffer; this failed run remains unchanged.")
 
 
 @router.post("/runs/parse-dryrun")
 async def parse_dryrun_endpoint(request: Request):
-    """Dry-run parse a staged file (by sha256) or a fresh upload — no run
-    is created (C3, requirements addendum 1). Accepts JSON `{"sha256": "..."}`
-    or multipart (`file`). See service/runs.py::parse_dryrun's docstring for
-    the {id}="new" sentinel this forwards to the spine with."""
-    content_type = request.headers.get("content-type", "")
-    try:
-        if content_type.startswith("multipart/form-data"):
-            form = await request.form()
-            upload = form.get("file")
-            if upload is None or not hasattr(upload, "read"):
-                raise HTTPException(status_code=400, detail="file is required for a multipart dry-run request")
-            file_bytes = await upload.read()
-            return await parse_dryrun(file_bytes=file_bytes, filename=upload.filename)
-
-        body_bytes = await request.body()
-        try:
-            body = json.loads(body_bytes) if body_bytes else {}
-        except (TypeError, ValueError):
-            raise HTTPException(status_code=422, detail="dry-run body is not valid JSON") from None
-        sha256 = body.get("sha256") if isinstance(body, dict) else None
-        if not sha256:
-            raise HTTPException(status_code=400, detail="sha256 is required in the JSON body")
-        return await parse_dryrun(sha256=sha256)
-    except RunsError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail) from None
+    raise HTTPException(status_code=410, detail="Legacy Python parse preview is retired. Use New context import for the engine source preview and registered handler selection.")
