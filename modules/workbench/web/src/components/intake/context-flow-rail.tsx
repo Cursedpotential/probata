@@ -28,7 +28,7 @@ export function ContextFlowRail({
     <section className="border-b bg-card px-6 py-4" aria-labelledby="context-flow-heading">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="context-flow-heading" className="text-sm font-semibold">Context processing</h2>
-        <p className="text-xs text-muted-foreground">Full preview unlocks after all six checkpoints complete.</p>
+        <p className="text-xs text-muted-foreground">All Review views unlock after the six processing checkpoints complete.</p>
       </div>
       <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6" aria-label="Context processing checkpoints">
         {PROFFER_CONTEXT_CHECKPOINTS.map((checkpoint, index) => {

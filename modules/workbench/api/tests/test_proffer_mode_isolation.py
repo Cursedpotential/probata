@@ -420,6 +420,8 @@ def test_mode_is_required_on_every_scoped_http_operation() -> None:
         ("/api/proffer/previews/{preview_handle}", "get"),
         ("/api/proffer/previews/{preview_handle}/messages", "get"),
         ("/api/proffer/previews/{preview_handle}/content", "get"),
+        ("/api/proffer/previews/{preview_handle}/potential-promotion-flags", "get"),
+        ("/api/proffer/previews/{preview_handle}/potential-promotion-flags", "post"),
         ("/api/proffer/previews/{preview_handle}/events", "get"),
         ("/api/proffer/previews/{preview_handle}/decision", "post"),
         ("/api/proffer/previews/{preview_handle}/repair-decision", "post"),

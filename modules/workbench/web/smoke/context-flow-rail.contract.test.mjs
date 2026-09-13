@@ -34,12 +34,12 @@ test("the import source surface has one ordered six-checkpoint context rail", ()
   assert.doesNotMatch(intake, /aria-label="Intake progress"/);
 });
 
-test("checkpoint copy is literal and the full preview remains gated", () => {
+test("checkpoint copy is literal and Review remains gated", () => {
   assert.match(checkpoints, /Waiting for this checkpoint\./);
-  assert.match(checkpoints, /Stopped here\. The full preview remains locked\./);
+  assert.match(checkpoints, /Stopped here\. The Review workspace remains locked\./);
   assert.match(intake, /profferContextFlowComplete\(preview\?\.receipts, preview\?\.checkpoints\)/);
   assert.match(intake, /phase === "review" && run && contextFlowComplete/);
-  assert.match(intake, /Full preview locked/);
+  assert.match(intake, /Review locked/);
   assert.match(checkpoints, /durableReceiptComplete && liveCheckpointComplete/);
 });
 
@@ -49,7 +49,8 @@ test("the UI receipt contract uses raw source verification and never labels it c
   assert.match(operatorPreview, /checkpointLabel\(receipt\.receipt_type\)/);
   assert.doesNotMatch(checkpoints, /custody/i);
   assert.doesNotMatch(rail, /custody/i);
-  assert.match(operatorPreview, /Context intake does not establish custody|Custody state/);
+  assert.doesNotMatch(operatorPreview, />[^<{]*custody[^<{]*</i);
+  assert.match(operatorPreview, /Context acceptance state/);
 });
 
 test("live checkpoint status consumes partial snapshots and the event stream refreshes them", () => {

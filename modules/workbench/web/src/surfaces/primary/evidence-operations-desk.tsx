@@ -26,10 +26,12 @@ interface DeskSnapshot {
 }
 
 const workflowSteps = [
-  { label: "Stage source", detail: "Upload or select original source bytes for context intake." },
-  { label: "Inspect preview", detail: "Read parser identity, structure, and message boundaries." },
-  { label: "Confirm decision", detail: "Accept or reject the exact previewed material." },
-  { label: "Follow receipt", detail: "Track the durable workflow without guessing completion." },
+  { label: "Stage source", detail: "Upload or select retained source bytes for context intake.", status: "available" },
+  { label: "Review records and chunks", detail: "Open Review from Intake to inspect parser identity, hashes, lineage, normalized records, and exact sealed chunks.", status: "available" },
+  { label: "Mark for later review", detail: "Add reversible, attempt-bound reasons to records or chunks without changing or publishing the source.", status: "available" },
+  { label: "Override and rerun", detail: "Parser, profile, template/options override, rerun, and side-by-side attempt diff still require authoritative engine commands.", status: "contract gap" },
+  { label: "Approve exact attempt", detail: "Approval is bounded to the displayed records, locators, chunks, and completed context receipts.", status: "partial" },
+  { label: "Follow projection receipt", detail: "Destination IDs, write receipts, index status, and flag carriage remain a backend projection gap.", status: "contract gap" },
 ] as const;
 
 function statusTone(status: RunSummary["status"]) {
@@ -63,20 +65,20 @@ export function EvidenceOperationsDesk() {
     <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-6 px-5 py-6 lg:px-8 lg:py-8">
       <section className="grid gap-6 border-b border-border pb-7 xl:grid-cols-[minmax(0,1fr)_390px]">
         <div className="max-w-4xl">
-          <p className="platform-kicker">Primary surface · browser preview</p>
+          <p className="platform-kicker">Primary surface · Context operations</p>
           <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-[-0.035em] text-foreground md:text-5xl">
-            Evidence Operations Desk
+            Context Intake Desk
           </h1>
           <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
-            Bring source material into the governed pipeline, inspect what the parser actually produced,
-            and follow the durable receipt. This desk does not silently promote or rewrite evidence.
+            Bring source material into the governed pipeline, inspect what the extractor actually produced,
+            and control the exact Context attempt before anything is published.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button asChild size="lg" className="rounded-sm">
               <AppLink href="/intake">Open intake <ArrowRight className="h-4 w-4" /></AppLink>
             </Button>
             <Button asChild size="lg" variant="outline" className="rounded-sm bg-card">
-              <AppLink href="/evidence/preview">Inspect pipeline preview</AppLink>
+              <AppLink href="/review">Open Review workspace</AppLink>
             </Button>
           </div>
         </div>
@@ -109,8 +111,8 @@ export function EvidenceOperationsDesk() {
         <article className="border border-border bg-card">
           <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4">
             <div>
-              <p className="platform-rule-title">Governed intake path</p>
-              <h2 className="mt-1 text-lg font-semibold">One visible chain from source to receipt</h2>
+              <p className="platform-rule-title">Governed intake and context path</p>
+              <h2 className="mt-1 text-lg font-semibold">Available controls and contract gaps in one visible chain</h2>
             </div>
             <ScanSearch className="h-5 w-5 text-primary" />
           </header>
@@ -122,7 +124,7 @@ export function EvidenceOperationsDesk() {
                     {String(index + 1).padStart(2, "0")}
                   </span>
                   <div>
-                    <h3 className="font-semibold">{step.label}</h3>
+                    <div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold">{step.label}</h3><Badge variant="outline">{step.status}</Badge></div>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">{step.detail}</p>
                   </div>
                 </div>
@@ -170,8 +172,8 @@ export function EvidenceOperationsDesk() {
       </section>
 
       <section className="grid gap-4 border-t border-border pt-5 md:grid-cols-3" aria-label="Primary desk capabilities">
-        <div className="flex gap-3"><Inbox className="mt-0.5 h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold">Intake</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Stage sources without treating upload as evidence promotion.</p></div></div>
-        <div className="flex gap-3"><FileSearch className="mt-0.5 h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold">Preview</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Inspect parser identity, messages, and provenance before deciding.</p></div></div>
+        <div className="flex gap-3"><Inbox className="mt-0.5 h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold">Intake</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Stage sources and choose processing settings.</p></div></div>
+        <div className="flex gap-3"><FileSearch className="mt-0.5 h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold">Review</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Inspect sources, records, chunks, files, lineage, warnings, and attempts before deciding.</p></div></div>
         <div className="flex gap-3"><ReceiptText className="mt-0.5 h-4 w-4 text-primary" /><div><h2 className="text-sm font-semibold">Receipt</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Follow durable state instead of inferring completion from the screen.</p></div></div>
       </section>
     </div>

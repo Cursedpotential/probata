@@ -49,7 +49,7 @@ test("status source service and reopened handle survive refresh in the URL", () 
   assert.match(table, /searchParams\.get\("preview_handle"\)/);
   assert.match(table, /navigate\.replace\(`\/intake\$\{query/);
   assert.match(table, /Reopen/);
-  assert.match(table, /Reopened by preview handle/);
+  assert.match(table, /Reopened attempt resource/);
   assert.match(table, /getProfferOperation\(selectedHandle/);
 });
 

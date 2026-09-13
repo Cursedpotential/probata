@@ -495,7 +495,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
       }
       setPhase(phaseForPreview(state));
       if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
-      if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
+      if (state.phase === "failed") setError(state.reason || "The Context import stopped before Review was ready.");
     } catch (requestError) {
       if (generation !== intakeGenerationRef.current) return;
       setError(errorText(requestError));
@@ -529,7 +529,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
       }
       setPhase(phaseForPreview(state));
       if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
-      if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
+      if (state.phase === "failed") setError(state.reason || "The Context import stopped before Review was ready.");
     } catch (requestError) {
       if (generation !== intakeGenerationRef.current) return;
       setError(errorText(requestError));
@@ -562,7 +562,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
       setPreview(state);
       setPhase(phaseForPreview(state));
       if (state.phase === "awaiting_handler_selection") setPreviewTab("parser");
-      if (state.phase === "failed") setError(state.reason || "The context import stopped before the full preview was ready.");
+      if (state.phase === "failed") setError(state.reason || "The Context import stopped before Review was ready.");
     } catch (requestError) {
       if (generation !== intakeGenerationRef.current) return;
       setError(errorText(requestError));
@@ -654,7 +654,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
                 <div>
                   <p className="platform-kicker mb-1">Repair review required</p>
                   <h2 className="text-xl font-semibold">Choose how this source continues</h2>
-                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">The durable workflow paused before parsing. The source preview remains available below. Nothing is repaired or replaced until you confirm an allowed choice.</p>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">The durable workflow paused before parsing. The source viewer remains available below. Nothing is repaired or replaced until you confirm an allowed choice.</p>
                 </div>
                 <span className="border border-[#c58214] bg-[#fff4dd] px-2 py-1 text-[10px] font-semibold uppercase text-[#684b18] dark:bg-[#43351f] dark:text-[#ffe0a6]">Review required</span>
               </header>
@@ -677,7 +677,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
 
                 {repairChoice === "original" && (
                   <div className="flex flex-wrap items-center justify-between gap-4 border-l-4 border-l-primary bg-accent/40 p-4">
-                    <div><strong className="block text-sm">Confirm use of the original</strong><p className="mt-1 text-xs leading-5 text-muted-foreground">This records a typed decision against the same opaque preview handle and resumes its durable workflow.</p></div>
+                    <div><strong className="block text-sm">Confirm use of the original</strong><p className="mt-1 text-xs leading-5 text-muted-foreground">This records a typed decision against the same attempt resource and resumes its durable workflow.</p></div>
                     <Button onClick={() => void confirmRepairDecision()} disabled={repairSubmitting}>{repairSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Confirm and continue</Button>
                   </div>
                 )}
@@ -730,35 +730,35 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
                     onClick={() => setPreviewTab(tab)}
                     className={`border-b-2 px-1 text-xs font-semibold capitalize ${previewTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
                   >
-                    {tab === "source" ? "Source preview" : tab}
+                    {tab === "source" ? "Source viewer" : tab}
                   </button>
                 ))}
               </div>
 
               <div className="min-h-[330px] border-b px-5 py-4">
                 {previewTab === "source" && (
-                  <section aria-label="Source preview">
-                    <p className="platform-rule-title mb-3">Source preview</p>
+                  <section aria-label="Source viewer">
+                    <p className="platform-rule-title mb-3">Source viewer</p>
                     {remote && inspectionLoading ? (
                       <div className="flex min-h-[270px] items-center justify-center gap-2 border bg-background text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Reading and hashing {bytes(remote.byte_length)}</div>
                     ) : remote && inspectionError ? (
-                      <div className="border border-[#a84039] bg-[#fff0ee] px-5 py-8 text-sm text-[#8f302a] dark:bg-[#3a2422] dark:text-[#ffb5ae]"><strong className="block">Preview could not be opened</strong><p className="mt-2">{inspectionError}</p><Button className="mt-4" variant="outline" onClick={() => void selectRemote(remote)}>Try inspection again</Button></div>
+                      <div className="border border-[#a84039] bg-[#fff0ee] px-5 py-8 text-sm text-[#8f302a] dark:bg-[#3a2422] dark:text-[#ffb5ae]"><strong className="block">Source viewer could not be opened</strong><p className="mt-2">{inspectionError}</p><Button className="mt-4" variant="outline" onClick={() => void selectRemote(remote)}>Try inspection again</Button></div>
                     ) : remote && inspection?.preview_kind === "pdf" && inspection.preview_url ? (
-                      <iframe className="h-[560px] w-full border bg-white" src={inspection.preview_url} title={`Read-only preview of ${inspection.name}`} />
+                      <iframe className="h-[560px] w-full border bg-white" src={inspection.preview_url} title={`Read-only view of ${inspection.name}`} />
                     ) : remote && inspection?.preview_kind === "image" && inspection.preview_url ? (
-                      <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={inspection.preview_url} alt={`Read-only preview of ${inspection.name}`} /></div>
+                      <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={inspection.preview_url} alt={`Read-only view of ${inspection.name}`} /></div>
                     ) : file && localImagePreviewUrl ? (
                       localImagePreviewError ? (
                         <div className="border bg-background px-4 py-12 text-center text-sm text-muted-foreground">This browser could not render the selected image format inline. The original file remains selected, hashed, and available to the governed workflow.</div>
                       ) : (
-                        <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={localImagePreviewUrl} alt={`Local preview of ${file.name}`} onError={() => setLocalImagePreviewError(true)} /></div>
+                        <div className="grid min-h-[270px] place-items-center border bg-background p-3"><img className="max-h-[520px] max-w-full object-contain" src={localImagePreviewUrl} alt={`Local view of ${file.name}`} onError={() => setLocalImagePreviewError(true)} /></div>
                       )
                     ) : lines.length ? (
                       <div className="max-h-[270px] overflow-auto border bg-background font-mono text-[11px] leading-5" role="region" aria-label="Selected source content" tabIndex={0}>
                         {lines.map((line, index) => <div key={`${index}-${line.slice(0, 24)}`} className="grid grid-cols-[42px_1fr] border-b px-3 py-2 last:border-b-0"><span className="text-muted-foreground">{String(index + 1).padStart(2, "0")}</span><span className="break-words">{line}</span></div>)}
                       </div>
                     ) : (
-                      <div className="border bg-background px-4 py-12 text-center text-sm text-muted-foreground">This format does not have an inline renderer. Its preview checksum and source metadata are still available.</div>
+                      <div className="border bg-background px-4 py-12 text-center text-sm text-muted-foreground">This format does not have an inline renderer. Its read-only checksum and source metadata are still available.</div>
                     )}
                   </section>
                 )}
@@ -773,7 +773,7 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
                       <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Declared size</dt><dd className="mt-1 text-sm">{bytes(selectedSize)}</dd></div>
                       {remote && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">File kind</dt><dd className="mt-1 text-sm">{remote.file_kind}{remote.archive_format ? ` · ${remote.archive_format}` : ""}</dd></div>}
                       {remote && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Media type</dt><dd className="mt-1 text-sm">{remote.media_type || "Not reported"}</dd></div>}
-                      <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Preview checksum</dt><dd className="mt-1 break-all font-mono text-[11px]">{inspectionLoading ? "Reading and hashing now" : upload?.sha256 || digest || "Computing preview"}</dd><p className="mt-2 text-[11px] leading-5 text-muted-foreground">Read-only preview identity. The context workflow verifies the source bytes independently before processing.</p></div>
+                      <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Read-only checksum</dt><dd className="mt-1 break-all font-mono text-[11px]">{inspectionLoading ? "Reading and hashing now" : upload?.sha256 || digest || "Computing checksum"}</dd><p className="mt-2 text-[11px] leading-5 text-muted-foreground">Read-only source identity. The Context workflow verifies the source bytes independently before processing.</p></div>
                       {remote?.last_modified && <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Object modified</dt><dd className="mt-1 text-sm">{new Date(remote.last_modified).toLocaleString()}</dd></div>}
                       {selectedSourceRef && <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Acquisition reference</dt><dd className="mt-1 break-all font-mono text-[11px]">{selectedSourceRef}</dd></div>}
                     </dl>
@@ -856,11 +856,11 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
                   <><div className="flex-1 text-xs leading-5 text-muted-foreground">The durable workflow is waiting for the confirmed parser decision. Review and record it in the Parser tab.</div><Button type="button" onClick={() => setPreviewTab("parser")}>Open parser decision</Button></>
                 ) : phase === "review" && run && contextFlowComplete ? (
                   <>
-                    <div className="flex-1 text-xs leading-5 text-muted-foreground">Review the normalized messages, provenance locators, and required receipts before deciding. Decisions are available only in the correlated pipeline preview.</div>
-                    <Button asChild><Link data-testid="open-proffer-preview" href={`/evidence/preview?mode=${mode}&preview_handle=${encodeURIComponent(run.preview_handle)}`}>Review messages and decide <ChevronRight className="h-4 w-4" /></Link></Button>
+                    <div className="flex-1 text-xs leading-5 text-muted-foreground">Review the normalized records, provenance locators, and required receipts before deciding. Decisions are available only in the correlated Review workspace.</div>
+                    <Button asChild><Link data-testid="open-proffer-preview" href={`/review?mode=${mode}&resource=${encodeURIComponent(run.preview_handle)}`}>Open Review and decide <ChevronRight className="h-4 w-4" /></Link></Button>
                   </>
                 ) : phase === "review" && run ? (
-                  <><div className="flex-1 text-xs leading-5 text-muted-foreground" role="status">The full preview is locked until all six context-processing checkpoints are complete.</div><Button disabled>Full preview locked</Button></>
+                  <><div className="flex-1 text-xs leading-5 text-muted-foreground" role="status">Review is locked until all six Context processing checkpoints are complete.</div><Button disabled>Review locked</Button></>
                 ) : phase === "complete" ? (
                   <><div className="flex-1 text-sm"><strong className="capitalize">{preview?.phase ?? "Decision signaled"}</strong><p className="text-xs text-muted-foreground">The result below was read back from the durable workflow.</p></div><Button variant="outline" onClick={reset}>Start another intake</Button></>
                 ) : (
@@ -871,19 +871,19 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
               {phase === "complete" && run && (
                 <section className="border-l-4 border-l-[#2f9d67] bg-card p-5" aria-label="Intake execution receipt">
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><p className="platform-kicker mb-1">Execution receipt</p><h2 className="text-lg font-semibold capitalize">{preview?.phase.replaceAll("_", " ") ?? "Decision recorded"}</h2><p className="mt-1 text-xs text-muted-foreground">Server-returned preview identity and latest durable workflow phase.</p></div>
+                    <div><p className="platform-kicker mb-1">Execution receipt</p><h2 className="text-lg font-semibold capitalize">{preview?.phase.replaceAll("_", " ") ?? "Decision recorded"}</h2><p className="mt-1 text-xs text-muted-foreground">Server-returned attempt identity and latest durable workflow phase.</p></div>
                     <span className="border border-[#2f9d67] bg-[#e2f3e9] px-2 py-1 text-[10px] font-semibold uppercase text-[#17794b] dark:bg-[#203d31] dark:text-[#72d9a1]">Live workflow read-back</span>
                   </div>
                   <dl className="mt-5 grid gap-px border bg-border sm:grid-cols-2">
-                    <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Preview handle</dt><dd className="mt-1 break-all font-mono text-[11px]">{run.preview_handle}</dd></div>
+                    <div className="bg-card p-4 sm:col-span-2"><dt className="text-[10px] uppercase text-muted-foreground">Attempt resource</dt><dd className="mt-1 break-all font-mono text-[11px]">{run.preview_handle}</dd></div>
                     <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Source</dt><dd className="mt-1 break-words text-xs">{selectedSource?.name}</dd></div>
-                    <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Authority boundary</dt><dd className="mt-1 text-xs">Context only; not evidence</dd></div>
+                    <div className="bg-card p-4"><dt className="text-[10px] uppercase text-muted-foreground">Workflow scope</dt><dd className="mt-1 text-xs">Context intake and review</dd></div>
                   </dl>
                   {contextFlowComplete ? (
                     <Button asChild variant="outline" className="mt-4">
-                      <Link href={`/evidence/preview?mode=${mode}&preview_handle=${encodeURIComponent(run.preview_handle)}`}>Open pipeline preview</Link>
+                      <Link href={`/review?mode=${mode}&resource=${encodeURIComponent(run.preview_handle)}`}>Open Review workspace</Link>
                     </Button>
-                  ) : <p className="mt-4 text-xs text-muted-foreground" role="status">The full preview remains locked until all six context-processing checkpoints are complete.</p>}
+                  ) : <p className="mt-4 text-xs text-muted-foreground" role="status">Review remains locked until all six Context processing checkpoints are complete.</p>}
                 </section>
               )}
             </div>
@@ -903,9 +903,9 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
           </section>
 
           <section className="border-b py-5">
-            <p className="platform-rule-title mb-3">Integrity preview</p>
+            <p className="platform-rule-title mb-3">Source integrity</p>
             <dl className="space-y-3 text-xs">
-              <div><dt className="text-muted-foreground">Preview SHA-256</dt><dd className="mt-1 break-all font-mono text-[10px]">{inspectionLoading ? "Hashing now" : upload?.sha256 || digest || "Choose a source"}</dd></div>
+              <div><dt className="text-muted-foreground">Source SHA-256</dt><dd className="mt-1 break-all font-mono text-[10px]">{inspectionLoading ? "Hashing now" : upload?.sha256 || digest || "Choose a source"}</dd></div>
               <div className="grid grid-cols-2 gap-3"><div><dt className="text-muted-foreground">Source size</dt><dd>{file ? bytes(file.size) : remote ? bytes(remote.byte_length) : staged ? bytes(staged.byte_length) : "—"}</dd></div><div><dt className="text-muted-foreground">Inspected size</dt><dd>{inspection ? bytes(inspection.byte_length) : upload ? bytes(upload.byte_length) : inspectionLoading ? "Reading" : "—"}</dd></div></div>
               {upload && <div><dt className="text-muted-foreground">Acquisition reference</dt><dd className="mt-1 break-all font-mono text-[10px]">{upload.acquisition_ref}</dd></div>}
             </dl>
@@ -913,13 +913,13 @@ function UnifiedIntakeMode({ mode, stagedSource }: { mode: "TEST" | "REAL"; stag
 
           <section className="border-b py-5">
             <p className="platform-rule-title mb-3">Workflow receipt</p>
-            {run ? <dl className="space-y-3 text-xs"><div><dt className="text-muted-foreground">Preview handle</dt><dd className="break-all font-mono text-[10px]">{run.preview_handle}</dd></div><div><dt className="text-muted-foreground">Phase</dt><dd className="capitalize">{preview?.phase.replaceAll("_", " ") ?? phase}</dd></div>{repairDecisionRef && <div><dt className="text-muted-foreground">Repair decision</dt><dd className="break-all font-mono text-[10px]">{repairDecisionRef}</dd></div>}</dl> : <p className="text-xs leading-5 text-muted-foreground">A receipt appears after the server accepts the context import and starts its durable workflow.</p>}
+            {run ? <dl className="space-y-3 text-xs"><div><dt className="text-muted-foreground">Attempt resource</dt><dd className="break-all font-mono text-[10px]">{run.preview_handle}</dd></div><div><dt className="text-muted-foreground">Phase</dt><dd className="capitalize">{preview?.phase.replaceAll("_", " ") ?? phase}</dd></div>{repairDecisionRef && <div><dt className="text-muted-foreground">Repair decision</dt><dd className="break-all font-mono text-[10px]">{repairDecisionRef}</dd></div>}</dl> : <p className="text-xs leading-5 text-muted-foreground">A receipt appears after the server accepts the Context import and starts its durable workflow.</p>}
           </section>
 
           <section className="pt-5">
             <div className="flex gap-2 border border-[#c58214] bg-[#fff4dd] p-3 text-[#684b18] dark:border-[#d9aa52] dark:bg-[#2f281d] dark:text-[#ffe0a6]">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div><strong className="block text-xs">This preview is not evidence.</strong><p className="mt-1 text-[11px] leading-5">Approval resumes the governed workflow. It does not independently establish a fact or alter an approved evidence record.</p></div>
+              <div><strong className="block text-xs">This source view is read-only.</strong><p className="mt-1 text-[11px] leading-5">Approval records the Context decision for this exact attempt. It does not alter the retained source.</p></div>
             </div>
           </section>
         </aside>

@@ -1149,6 +1149,41 @@ export interface ProfferOperationListResponse {
   next_cursor?: string | null;
 }
 
+export interface ProfferProposalResource {
+  preview_handle: string;
+  request_id: string;
+  source_ref: string;
+  created_at: string;
+  lifecycle: ProfferOperationLifecycle;
+  current_stage?: string | null;
+  wait?: ProfferOperationWait | null;
+  terminal: boolean;
+  reason: string;
+  source_version_ref?: string | null;
+  completed_stage_count: number;
+  representation_state: "committed_readback" | "precommit_proposal";
+  representation_detail: string;
+  content_status: "available" | "pending" | "unavailable";
+  content_reason: string;
+  record_preview_available: boolean;
+  chunk_preview_available: boolean;
+  chunk_count?: number | null;
+  open_path: string;
+  content_path: string;
+  operator_path: string;
+}
+
+export interface ProfferProposalResourceCatalog {
+  scope: "context_review_resources";
+  matter_mode: MatterMode;
+  matter_id: string;
+  court_case_id: string;
+  approval_destination: "neo4j";
+  later_manual_projection: "surrealdb";
+  items: ProfferProposalResource[];
+  next_cursor?: string | null;
+}
+
 export interface ProfferOperatorAvailability {
   status: "available" | "pending" | "unavailable";
   reason: string;
@@ -1421,6 +1456,34 @@ export interface ProfferContentResponse {
   chunks: ProfferContentChunk[];
   next_record_cursor?: string | null;
   next_chunk_cursor?: string | null;
+}
+
+export type ProfferPotentialPromotionScope = "record" | "chunk" | "entity";
+
+export interface ProfferPotentialPromotionFlagRequest {
+  scope: ProfferPotentialPromotionScope;
+  target_id: string;
+  attempt_id: string;
+  reason: string;
+}
+
+export interface ProfferPotentialPromotionFlag {
+  flag_id: string;
+  classification: "potential_promotion";
+  preview_handle: string;
+  matter_mode: MatterMode;
+  scope: ProfferPotentialPromotionScope;
+  target_id: string;
+  attempt_id: string;
+  reason: string;
+  actor_subject_uid: string;
+  actor_username: string;
+  flagged_at: string;
+  status: string;
+}
+
+export interface ProfferPotentialPromotionFlagList {
+  flags: ProfferPotentialPromotionFlag[];
 }
 
 export interface ProfferPreviewEvent {

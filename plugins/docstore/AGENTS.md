@@ -16,10 +16,12 @@ Plugin packaging does not merge runtimes, credentials, locks or target ownership
 
 Apply this scope in both claude/ and control/. Do not modify installed host caches as an incidental source documentation update.
 
-The canonical Claude marketplace identity is `probata-docstore@probata`; the
-canonical Codex MCP identity is `probata-docstore`. The old `docstore@probata`
-package remains disabled until the owner chooses to quarantine it. ContextForge
-uses the control server's explicit stateless Streamable HTTP mode and must set
-transport `STREAMABLEHTTP`.
+The canonical source plugin identity is `propria-docstore@propria`; the
+deployed Codex MCP server may retain its separately configured
+`probata-docstore` runtime identity while clients migrate. The old
+`docstore@probata` and `probata-docstore@probata` packages remain disabled until
+the owner chooses to quarantine them. ContextForge uses the control server's
+explicit stateless Streamable HTTP mode and must set transport
+`STREAMABLEHTTP`.
 
 See [shared boundaries](../../../../SYSTEM-BOUNDARIES.md). Runtime availability is reported separately in verification receipts.

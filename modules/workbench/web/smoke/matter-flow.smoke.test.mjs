@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtemp, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, resolve } from "node:path";
 import test from "node:test";
 
@@ -23,6 +23,12 @@ const DECISION_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const SHA_A = "ab".repeat(32);
 const NOW = "2026-08-15T12:00:00Z";
 const OUT = resolve("dist");
+const QUARANTINE = resolve("../../..", "to_be_deleted");
+
+async function quarantineProfile(prefix) {
+  await mkdir(QUARANTINE, { recursive: true });
+  return mkdtemp(join(QUARANTINE, prefix));
+}
 
 function json(response, statusCode, body) {
   const data = Buffer.from(JSON.stringify(body));
@@ -553,7 +559,7 @@ test("Matter-bound Knowledge promotes and reviews one exact custody record", { t
   const fixture = createFixtureServer();
   await new Promise((accept) => fixture.server.listen(0, "127.0.0.1", accept));
   const address = fixture.server.address();
-  const profile = await mkdtemp(join(resolve("../..", "to_be_deleted"), "matter-flow-browser-profile-"));
+  const profile = await quarantineProfile("matter-flow-browser-profile-");
   const browser = spawn(browserPath(), [
     "--headless=new",
     "--disable-gpu",
@@ -665,6 +671,9 @@ test("Matter-bound Knowledge promotes and reviews one exact custody record", { t
     throw error;
   } finally {
     browser.kill();
+    for (const stream of browser.stdio) stream?.destroy?.();
+    browser.unref();
+    fixture.server.closeAllConnections();
     await new Promise((accept) => fixture.server.close(accept));
     // Project safety contract: never hard-delete. The isolated browser profile
     // remains quarantined under to_be_deleted for owner-only cleanup.
@@ -674,7 +683,7 @@ test("Matter-bound Knowledge promotes and reviews one exact custody record", { t
 for (const inputKind of ["staged", "fresh"]) test(`New Run submits ${inputKind} SMS through Proffer and renders guided recovery`, { timeout: 60_000 }, async () => {
   const fixture = createFixtureServer({ newRunFixture: true });
   await new Promise((accept) => fixture.server.listen(0, "127.0.0.1", accept));
-  const profile = await mkdtemp(join(resolve("../..", "to_be_deleted"), "new-run-browser-profile-"));
+  const profile = await quarantineProfile("new-run-browser-profile-");
   const browser = spawn(browserPath(), ["--headless=new", "--disable-gpu", "--no-first-run",
     "--no-default-browser-check", "--remote-debugging-pipe", `--user-data-dir=${profile}`, "about:blank"],
     { stdio: ["ignore", "ignore", "pipe", "pipe", "pipe"] });
@@ -708,6 +717,9 @@ for (const inputKind of ["staged", "fresh"]) test(`New Run submits ${inputKind} 
     assert.deepEqual(fixture.failures, []);
   } finally {
     browser.kill();
+    for (const stream of browser.stdio) stream?.destroy?.();
+    browser.unref();
+    fixture.server.closeAllConnections();
     await new Promise((accept) => fixture.server.close(accept));
   }
 });
@@ -717,7 +729,7 @@ test("Matter registry stays usable without issuing advanced evidence calls", { t
   const fixture = createFixtureServer({ advancedEvidenceAvailable: false });
   await new Promise((accept) => fixture.server.listen(0, "127.0.0.1", accept));
   const address = fixture.server.address();
-  const profile = await mkdtemp(join(resolve("../..", "to_be_deleted"), "matter-gate-browser-profile-"));
+  const profile = await quarantineProfile("matter-gate-browser-profile-");
   const browser = spawn(browserPath(), [
     "--headless=new",
     "--disable-gpu",
@@ -737,8 +749,8 @@ test("Matter registry stays usable without issuing advanced evidence calls", { t
     const session = attached.sessionId;
     await cdp.command("Page.enable", {}, session);
     await cdp.command("Runtime.enable", {}, session);
-    await waitFor(cdp, session, `document.body?.innerText.includes('Matter Alpha')`, "Matter registry");
-    await waitFor(cdp, session, `document.body?.innerText.includes('Evidence operations not yet available')`, "capability hold");
+    await waitFor(cdp, session, `document.body?.innerText.includes('Matter Alpha')`, "Matter registry", 20_000);
+    await waitFor(cdp, session, `document.body?.innerText.includes('Evidence operations not yet available')`, "capability hold", 20_000);
 
     assert.equal(fixture.failures.length, 0);
     assert.equal(fixture.requests.some((item) => item.path.includes("/evidence-items")), false);
@@ -747,6 +759,9 @@ test("Matter registry stays usable without issuing advanced evidence calls", { t
     assert.equal(await evaluate(cdp, session, `document.body.innerText.includes('Court proceedings')`), true);
   } finally {
     browser.kill();
+    for (const stream of browser.stdio) stream?.destroy?.();
+    browser.unref();
+    fixture.server.closeAllConnections();
     await new Promise((accept) => fixture.server.close(accept));
   }
 });

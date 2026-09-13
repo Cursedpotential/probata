@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     proffer_real_matter_id: str = ""
     proffer_test_court_case_id: str = "cafebabe-cafe-babe-cafe-babecafebabe"
     proffer_real_court_case_id: str = ""
+    # Optional absolute root containing immutable per-attempt proposal bundles.
+    # The adapter discovers only canonical ``bundle-manifest.json`` envelopes
+    # and opens their DuckDB databases read-only after complete digest checks.
+    proffer_proposal_root: str = ""
     # Non-secret location only. Read once per outbound request for rotation.
     proffer_service_token_file: str = "/run/secrets/proffer-service-token"
     # Separate runtime-read operator capability. Only the Workbench receives

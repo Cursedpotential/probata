@@ -13,7 +13,7 @@ export type ProfferContextCheckpointType = (typeof PROFFER_CONTEXT_CHECKPOINTS)[
 export type ProfferContextCheckpointStatus = "waiting" | "running" | "completed" | "failed";
 
 export const PROFFER_CHECKPOINT_WAITING_COPY = "Waiting for this checkpoint.";
-export const PROFFER_CHECKPOINT_FAILED_COPY = "Stopped here. The full preview remains locked.";
+export const PROFFER_CHECKPOINT_FAILED_COPY = "Stopped here. The Review workspace remains locked.";
 
 export function checkpointLabel(type: ProfferContextCheckpointType) {
   return PROFFER_CONTEXT_CHECKPOINTS.find((checkpoint) => checkpoint.type === type)?.label ?? type;

@@ -52,7 +52,7 @@ export function AppSidebar() {
           <div className="flex items-center gap-2 font-semibold uppercase tracking-wide text-[#dce1e3]">
             <ShieldCheck className="h-4 w-4" /> Focused release
           </div>
-          <p>Only the complete intake path is exposed. Timeline and legal work appear after live proof.</p>
+          <p>Intake and Review expose available controls, missing projections, and recovery paths in one Context workflow.</p>
         </div>
       </SidebarFooter>
     </Sidebar>

@@ -73,7 +73,7 @@ function lifecycleClass(lifecycle: ProfferOperationLifecycle) {
 
 function operationWork(operation: ProfferOperationSummary) {
   if (operation.wait === "repair_decision") return "Waiting for repair decision";
-  if (operation.wait === "preview_decision") return "Waiting for preview decision";
+  if (operation.wait === "preview_decision") return "Waiting for Review decision";
   if (operation.current_stage) return operation.current_stage.replaceAll("_", " ");
   if (operation.terminal) return `${operation.completed_stage_count} stages completed`;
   return operation.active_stages.length
@@ -295,7 +295,7 @@ export function ProfferOperationsTable() {
         <section className="border-b bg-card" aria-label="Reopened Proffer operation" aria-live="polite">
           <header className="flex items-center justify-between gap-4 border-b px-5 py-3">
             <div>
-              <p className="platform-rule-title">Reopened by preview handle</p>
+              <p className="platform-rule-title">Reopened attempt resource</p>
               <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{selectedHandle}</p>
             </div>
             <Button variant="ghost" size="icon" aria-label="Close reopened operation" onClick={() => replaceSearch({ preview_handle: null })}>
@@ -305,7 +305,7 @@ export function ProfferOperationsTable() {
           {selectedHandleInvalid ? (
             <div className="flex items-start gap-2 p-5 text-sm text-[#8f302a]" role="alert">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <div><strong className="block">Operation detail unavailable</strong><p className="mt-1 text-xs">The preview handle in this URL is invalid.</p></div>
+              <div><strong className="block">Operation detail unavailable</strong><p className="mt-1 text-xs">The attempt resource in this URL is invalid.</p></div>
             </div>
           ) : detailError ? (
             <div className="flex items-start gap-2 p-5 text-sm text-[#8f302a]" role="alert">
@@ -338,7 +338,7 @@ export function ProfferOperationsTable() {
                 )}
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                   <p className="max-w-xl text-[11px] leading-5 text-muted-foreground">Cancel and retry controls are not exposed here because the engine has no append-only control-receipt contract for those actions yet.</p>
-                  <Button asChild size="sm"><AppLink href={`/evidence/preview?mode=${mode}&preview_handle=${encodeURIComponent(selectedDetail.preview_handle)}`}>Open {mode} pipeline preview <ExternalLink className="h-4 w-4" /></AppLink></Button>
+                  <Button asChild size="sm"><AppLink href={`/review?mode=${mode}&resource=${encodeURIComponent(selectedDetail.preview_handle)}`}>Open {mode} Review <ExternalLink className="h-4 w-4" /></AppLink></Button>
                 </div>
               </div>
             </div>

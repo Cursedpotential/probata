@@ -55,13 +55,13 @@ export function PlatformMessageViewer({
   }
 
   return (
-    <section className="platform-panel flex min-h-[34rem] flex-col overflow-hidden rounded-md" aria-label="Message preview">
+    <section className="platform-panel flex min-h-[34rem] flex-col overflow-hidden rounded-md" aria-label="Message records">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
         <div>
           <p className="platform-kicker">SBV viewing client</p>
           <h2 className="mt-1 flex items-center gap-2 text-base font-semibold">
             <MessageSquareText className="size-4" aria-hidden="true" />
-            Platform message preview
+            Message records
           </h2>
         </div>
         <Badge variant="outline">{messages.length} platform messages</Badge>
@@ -69,7 +69,7 @@ export function PlatformMessageViewer({
 
       <div className="border-b p-3">
         <label className="relative block">
-          <span className="sr-only">Filter preview records</span>
+          <span className="sr-only">Filter message records</span>
           <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
@@ -92,7 +92,7 @@ export function PlatformMessageViewer({
         {!loading && !error && visibleMessages.length === 0 && (
           <div className="mx-auto max-w-md py-16 text-center">
             <MessageSquareText className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
-            <p className="mt-3 text-sm font-medium">No messages are available for this preview yet.</p>
+            <p className="mt-3 text-sm font-medium">No message records are available for this attempt yet.</p>
             <p className="mt-1 text-xs text-muted-foreground">
               The client reads normalized platform records; it does not open an SBV SQLite database.
             </p>
@@ -148,7 +148,7 @@ export function PlatformMessageViewer({
       )}
 
       <footer className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-        Preview {previewHandle} · read-only platform projection · PostgreSQL remains canonical
+        Attempt {previewHandle} · read-only platform projection · PostgreSQL remains canonical
       </footer>
     </section>
   );

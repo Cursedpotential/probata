@@ -51,7 +51,7 @@ test("all import and preview boundaries carry and verify the active mode", () =>
 });
 
 test("a URL preview handle is accepted only for its matching mode", () => {
-  assert.match(preview, /query\.get\("mode"\) === mode/);
+  assert.match(preview, /query\.get\("mode"\) !== mode\) return ""/);
   assert.match(preview, /url\.searchParams\.set\("mode", mode\)/);
 });
 

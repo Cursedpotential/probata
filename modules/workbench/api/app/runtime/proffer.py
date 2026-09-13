@@ -25,6 +25,7 @@ from app.service.proffer import (
     start,
     validated_preview_events,
 )
+from app.service.proffer_flags import create_potential_promotion_flag, list_potential_promotion_flags
 from app.service.proffer_operations import list_operations, operation
 from app.service.proffer_operator import operator_snapshot
 from app.types.proffer import (
@@ -43,6 +44,11 @@ from app.types.proffer import (
     ProfferStartRequest,
     ProfferStartResponse,
     ProfferUploadResponse,
+)
+from app.types.proffer_flags import (
+    ProfferPotentialPromotionFlag,
+    ProfferPotentialPromotionFlagList,
+    ProfferPotentialPromotionFlagRequest,
 )
 from app.types.proffer_operations import (
     ProfferOperationDetail,
@@ -248,6 +254,67 @@ async def preview_content_endpoint(
             chunk_cursor=chunk_cursor,
             limit=limit,
         )
+    except ProfferError as error:
+        raise _translate(error) from None
+
+
+def _content_attempt_id(content: ProfferContentResponse) -> str:
+    return content.attempt.attempt_ref or content.attempt.projection_ref
+
+
+@router.get(
+    "/previews/{preview_handle}/potential-promotion-flags",
+    response_model=ProfferPotentialPromotionFlagList,
+)
+async def potential_promotion_flags_endpoint(
+    preview_handle: PreviewHandle,
+    mode: Annotated[MatterMode, Query()],
+):
+    try:
+        await preview_content(
+            preview_handle,
+            mode=mode,
+            record_cursor=None,
+            chunk_cursor=None,
+            limit=1,
+        )
+        return ProfferPotentialPromotionFlagList(
+            flags=list_potential_promotion_flags(preview_handle, mode)
+        )
+    except ProfferError as error:
+        raise _translate(error) from None
+
+
+@router.post(
+    "/previews/{preview_handle}/potential-promotion-flags",
+    response_model=ProfferPotentialPromotionFlag,
+    status_code=201,
+)
+async def create_potential_promotion_flag_endpoint(
+    preview_handle: PreviewHandle,
+    body: ProfferPotentialPromotionFlagRequest,
+    request: Request,
+    mode: Annotated[MatterMode, Query()],
+):
+    actor = _decision_actor(request)
+    try:
+        content = await preview_content(
+            preview_handle,
+            mode=mode,
+            record_cursor=None,
+            chunk_cursor=None,
+            limit=250,
+        )
+        if body.attempt_id != _content_attempt_id(content):
+            raise HTTPException(status_code=409, detail="flag attempt does not match the displayed preview attempt")
+        visible_ids = {
+            "record": {item.record_id for item in content.records},
+            "chunk": {item.chunk_ref for item in content.chunks},
+            "entity": set(),
+        }
+        if body.target_id not in visible_ids[body.scope]:
+            raise HTTPException(status_code=409, detail="flag target is not present in the displayed preview page")
+        return create_potential_promotion_flag(preview_handle, mode, body, actor)
     except ProfferError as error:
         raise _translate(error) from None
 

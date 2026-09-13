@@ -82,6 +82,7 @@ import type {
   ProfferOperationDetail,
   ProfferOperationLifecycle,
   ProfferOperationListResponse,
+  ProfferProposalResourceCatalog,
   ProfferOperatorSnapshot,
   ProfferDecisionResponse,
   ProfferPreviewResponse,
@@ -89,6 +90,9 @@ import type {
   ProfferRepairDecisionResponse,
   ProfferPreviewMessagesResponse,
   ProfferContentResponse,
+  ProfferPotentialPromotionFlag,
+  ProfferPotentialPromotionFlagList,
+  ProfferPotentialPromotionFlagRequest,
   ProfferStartRequest,
   ProfferStartResponse,
   ProfferUploadResponse,
@@ -834,6 +838,61 @@ export function getProfferPreviewContent(
   ).then((response) => {
     if (response.preview_handle !== previewHandle || response.matter_mode !== mode) {
       throw new ApiError("The preview content crossed its preview or TEST/REAL boundary", 502);
+    }
+    return response;
+  });
+}
+
+export function listProfferProposalResources(
+  mode: MatterMode,
+  params: { status?: ProfferOperationLifecycle; cursor?: string; limit?: number } = {},
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ mode });
+  if (params.status) query.set("status", params.status);
+  if (params.cursor) query.set("cursor", params.cursor);
+  if (params.limit) query.set("limit", String(params.limit));
+  return apiFetch<ProfferProposalResourceCatalog>(`/api/proffer/proposal-resources?${query.toString()}`, { signal }).then((response) => {
+    if (response.scope !== "context_review_resources" || response.matter_mode !== mode) {
+      throw new ApiError("The Review catalog crossed its Context scope or TEST/REAL boundary", 502);
+    }
+    return response;
+  });
+}
+
+export function listProfferPotentialPromotionFlags(
+  previewHandle: string,
+  mode: MatterMode,
+  signal?: AbortSignal,
+) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferPotentialPromotionFlagList>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/potential-promotion-flags?${query.toString()}`,
+    { signal },
+  ).then((response) => {
+    if (response.flags.some((flag) => flag.preview_handle !== previewHandle || flag.matter_mode !== mode)) {
+      throw new ApiError("A potential-promotion flag crossed its preview or TEST/REAL boundary", 502);
+    }
+    return response;
+  });
+}
+
+export function createProfferPotentialPromotionFlag(
+  previewHandle: string,
+  mode: MatterMode,
+  payload: ProfferPotentialPromotionFlagRequest,
+) {
+  const query = new URLSearchParams({ mode });
+  return apiFetch<ProfferPotentialPromotionFlag>(
+    `/api/proffer/previews/${encodeURIComponent(previewHandle)}/potential-promotion-flags?${query.toString()}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    },
+  ).then((response) => {
+    if (response.preview_handle !== previewHandle || response.matter_mode !== mode) {
+      throw new ApiError("The potential-promotion flag crossed its preview or TEST/REAL boundary", 502);
     }
     return response;
   });
