@@ -334,14 +334,14 @@ async def test_governed_run_tools_use_live_job_api(config):
         await client.call_tool("docstore_attribution_verify", {})
     assert requests[0].method == "POST" and requests[0].url.path == "/runs"
     assert json.loads(requests[0].content) == {"scope": "selected", "paths": ["docs/note.md"],
-                                               "full_reprocess": False}
+                                               "full_reprocess": False, "index_kind": "docs"}
     assert requests[1].method == "GET" and requests[1].url.path == "/runs/" + "a" * 32
     assert requests[2].method == "DELETE" and requests[2].url.path == "/runs/" + "a" * 32
     assert requests[3].url.path == "/pipeline"
     assert requests[4].method == "POST" and json.loads(requests[4].content) == {
-        "scope": "full", "paths": [], "full_reprocess": False}
+        "scope": "full", "paths": [], "full_reprocess": False, "index_kind": "docs"}
     assert requests[5].method == "POST" and json.loads(requests[5].content) == {
-        "scope": "selected", "paths": ["docs/note.md"], "full_reprocess": False}
+        "scope": "selected", "paths": ["docs/note.md"], "full_reprocess": False, "index_kind": "docs"}
     assert requests[6].url.path == "/runs/current"
     assert requests[7].url.path == "/runs/" + "b" * 32
     assert requests[8].url.path == "/runs" and requests[8].url.params["limit"] == "7"
@@ -364,6 +364,7 @@ async def test_bounded_graph_management_tools_are_first_class(config):
     assert requests[1].url.path == "/graph-query" and requests[1].url.params["preview"] == "true"
     assert requests[2].url.path == "/graph-query" and requests[2].url.params["preview"] == "false"
     assert requests[2].url.params["relations"] == "cites"
+    assert requests[2].url.params["index_kind"] == "docs"
 
 
 @pytest.mark.parametrize("paths", [["../outside.md"], ["missing.md"], ["wrong.txt"], [], ["a.md"] * 21])

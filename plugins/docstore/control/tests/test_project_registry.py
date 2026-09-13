@@ -61,7 +61,7 @@ def test_registry_loads_stable_owned_sources_without_reading_documents(tmp_path)
     assert all(project["source_exists"] for project in result["projects"])
 
 
-@pytest.mark.parametrize("mutation", ["duplicate", "escape", "missing", "absolute-prefix"])
+@pytest.mark.parametrize("mutation", ["duplicate", "escape", "missing", "absolute-prefix", "code-class"])
 def test_registry_rejects_ambiguous_or_unsafe_sources(tmp_path, mutation):
     path = write_registry(tmp_path)
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -71,8 +71,10 @@ def test_registry_rejects_ambiguous_or_unsafe_sources(tmp_path, mutation):
         payload["projects"][0]["source_root"] = "../outside"
     elif mutation == "missing":
         payload["projects"][0]["source_root"] = "missing"
-    else:
+    elif mutation == "absolute-prefix":
         payload["projects"][0]["canonical_prefix"] = "/absolute"
+    else:
+        payload["projects"][0]["included_patterns"] = ["**/*.ts"]
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises((ValueError, ToolError)):
         load_registry(path)

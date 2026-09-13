@@ -1,7 +1,7 @@
 # Docstore operational run repair receipt — 2026-09-13
 
 Scope: Probata-hosted Propria Docstore worker, API, control MCP, and deployment
-contract. This receipt records source and test proof. It does not claim deployment.
+contract.
 
 ## Result
 
@@ -29,10 +29,25 @@ The MCP capabilities now report indexing, write-run registration, live status, a
 CDC attribution as implemented. Source-registry mutation remains governed by the
 Propria monorepo manifest; the service does not edit that authority file.
 
+First-class MCP operations are registered for pipeline identity; full and admitted
+selected-source runs; current/exact/history status; cancellation; fresh attribution;
+and graph schema, preview, query, and inline JSON, CSV node/edge, GraphML, or Mermaid
+export. Graph queries are depth-one, relation-allowlisted, parameter-bound, and
+bounded to 200 results per relation/direction. Arbitrary SurrealQL and mutations are
+not exposed.
+
+Every operational/graph request is fenced to `index_kind=docs`. Responses identify
+`ProbataDocStore@probata-docstore`, the docs index kind, allowed documentation roots
+and Markdown file class, and rejected source-code/configuration/test classes. The
+separate codebase index is managed locally by CocoIndex Code (`ccc`); no stable
+internal CocoIndex app/environment identity for it is declared in repository or
+deployment configuration, so this receipt does not invent one or claim it is live.
+
 ## Verification
 
-- Existing control suite plus new contract tests: 287 passed, 3 skipped.
-- Worker HTTP API tests under the system FastAPI environment: 2 passed.
+- Existing control suite before the final tool additions: 287 passed, 3 skipped.
+- Focused final contracts: 51 MCP server tests, 35 worker/CLI tests, and 8 worker HTTP
+  API tests passed.
 - Python compilation passed for worker API, worker, run primitives, CDC verifier,
   MCP server, and receipt reader.
 - Static source snapshot completed over 504 currently eligible Probata Markdown
@@ -41,6 +56,19 @@ Propria monorepo manifest; the service does not edit that authority file.
   documents, 11,761 chunks, 11,761 chunk edges, and a ready vector index. Its OpenAPI
   exposed only the historical read routes, confirming the operational job API was not
   deployed at the time of this receipt.
+
+Deployment `u2qudf0q5yhk1xwmsa1qetxn` installed commit `154d395162348ca4184b15f5060a307ba70e89b4`.
+Deployments `eh3avdgm97w5qrtapqapmv0v` and `sz7tlka1zhe1yxniu2v9i9y4` installed follow-up
+commit `2d1e334ca69f5c52702d0825b0a701d82893210d`. Live OpenAPI then exposed all run,
+attribution, graph-schema, and graph-query routes; pipeline identity verified true.
+Fresh graph-schema proof counted 513 documents, 116 `links_to`, 1,146 `cites`, and 48
+`supersedes` records.
+
+The first ordinary run correctly failed closed: 488 declared documents, 508 managed
+documents, zero missing, 20 unexpected, and 17 normalized-content hash mismatches.
+Explicit full reprocess run `6fe6fd6e7f644ac7bf67df57ff546f3d` was then admitted
+with the same 488-document stable source digest. Its terminal attribution is recorded
+in the final section when available; a running receipt is not CDC proof.
 
 ## Deployment boundary
 

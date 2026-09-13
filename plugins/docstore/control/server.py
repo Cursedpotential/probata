@@ -117,6 +117,12 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 "source_root": str(config.source_root), "api": config.api_url,
                 "ambient_COCOINDEX_DB_consumed": False,
                 "pipeline_app": "ProbataDocStore", "pipeline_environment": "probata-docstore",
+                "index_kind": "docs", "allowed_source_roots": ["docs/"],
+                "allowed_file_classes": ["markdown"],
+                "rejected_file_classes": ["source_code", "configuration", "test"],
+                "codebase_index": {"manager": "cocoindex-code (ccc)", "deployment": "local per repository",
+                                   "app": None, "environment": None,
+                                   "identity_status": "not declared in repository or deploy configuration"},
                 "pipeline_identity_verification_available": True,
                 "pipeline_identity_live_tool": "docstore_pipeline_identity",
                 "index_execution_available": True,
@@ -259,13 +265,13 @@ def build_server(config: Config, transport=None) -> FastMCP:
         return await get("/graph/" + quote(record_id, safe=""), {"limit": 25, "format": "json"})
 
     @mcp.tool(annotations={**READ, "title": "Inspect Docstore graph schema"})
-    async def docstore_graph_schema() -> dict:
+    async def docstore_graph_schema(index_kind: Literal["docs"] = "docs") -> dict:
         """Read fixed graph node/relation types, bounds, export formats, and live counts."""
-        return await get("/graph-schema")
+        return await get("/graph-schema", {"index_kind": index_kind})
 
     async def graph_query_call(subject: str, relation_types: list[str], direction: str, limit: int,
                                source_prefix: str, observed_from: str, observed_to: str,
-                               export_format: str, preview: bool) -> dict:
+                               export_format: str, preview: bool, index_kind: str) -> dict:
         if not subject.strip():
             raise ToolError("Graph subject must contain text")
         if len(set(relation_types)) != len(relation_types):
@@ -274,7 +280,7 @@ def build_server(config: Config, transport=None) -> FastMCP:
             "ref": subject, "relations": ",".join(relation_types), "direction": direction,
             "limit": limit, "source_prefix": source_prefix, "observed_from": observed_from,
             "observed_to": observed_to, "depth": 1, "format": export_format,
-            "preview": str(preview).lower()})
+            "preview": str(preview).lower(), "index_kind": index_kind})
 
     @mcp.tool(annotations={**READ, "title": "Preview bounded Docstore graph query"})
     async def docstore_graph_query_preview(
@@ -286,10 +292,11 @@ def build_server(config: Config, transport=None) -> FastMCP:
         observed_from: Annotated[str, Field(max_length=48)] = "",
         observed_to: Annotated[str, Field(max_length=48)] = "",
         export_format: Literal["json", "csv", "graphml", "mermaid"] = "json",
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Validate and preview a depth-one graph query, including its maximum result count."""
         return await graph_query_call(subject, relation_types, direction, limit, source_prefix,
-                                      observed_from, observed_to, export_format, True)
+                                      observed_from, observed_to, export_format, True, index_kind)
 
     @mcp.tool(annotations={**READ, "title": "Query and export bounded Docstore graph"})
     async def docstore_graph_query(
@@ -301,10 +308,11 @@ def build_server(config: Config, transport=None) -> FastMCP:
         observed_from: Annotated[str, Field(max_length=48)] = "",
         observed_to: Annotated[str, Field(max_length=48)] = "",
         export_format: Literal["json", "csv", "graphml", "mermaid"] = "json",
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Run a depth-one, allowlisted, parameter-bound graph query and return JSON or an inline export."""
         return await graph_query_call(subject, relation_types, direction, limit, source_prefix,
-                                      observed_from, observed_to, export_format, False)
+                                      observed_from, observed_to, export_format, False, index_kind)
 
     @mcp.tool(annotations={**READ, "title": "Plan documentation indexing", "openWorldHint": False})
     def docstore_index_plan(paths: Annotated[list[str], Field(min_length=1, max_length=20)]) -> dict:
@@ -341,9 +349,9 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 "execution_mode": "full-source reconciliation; selected paths are verification targets"}
 
     @mcp.tool(annotations={**READ, "title": "Verify live Docstore pipeline identity"})
-    async def docstore_pipeline_identity() -> dict:
+    async def docstore_pipeline_identity(index_kind: Literal["docs"] = "docs") -> dict:
         """Verify the deployed worker app/environment identity from its durable latest run."""
-        return await get("/pipeline")
+        return await get("/pipeline", {"index_kind": index_kind})
 
     WRITE_RUN = {"readOnlyHint": False, "destructiveHint": False,
                  "idempotentHint": False, "openWorldHint": True}
@@ -352,6 +360,7 @@ def build_server(config: Config, transport=None) -> FastMCP:
     async def docstore_index_execute(
         paths: Annotated[list[str] | None, Field(min_length=1, max_length=20)] = None,
         full_reprocess: bool = False,
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Start full-source CocoIndex reconciliation; selected docs are exact verification targets."""
         selected = paths or []
@@ -367,64 +376,73 @@ def build_server(config: Config, transport=None) -> FastMCP:
             api_paths.append("docs/" + relative.as_posix())
         return await request("POST", "/runs", payload={
             "scope": "selected" if api_paths else "full", "paths": api_paths,
-            "full_reprocess": full_reprocess})
+            "full_reprocess": full_reprocess, "index_kind": index_kind})
 
     @mcp.tool(annotations={**WRITE_RUN, "title": "Start full-source Docstore indexing"})
-    async def docstore_index_full(full_reprocess: bool = False) -> dict:
+    async def docstore_index_full(full_reprocess: bool = False,
+                                  index_kind: Literal["docs"] = "docs") -> dict:
         """Start one governed full-source CocoIndex reconciliation."""
         return await request("POST", "/runs", payload={
-            "scope": "full", "paths": [], "full_reprocess": full_reprocess})
+            "scope": "full", "paths": [], "full_reprocess": full_reprocess,
+            "index_kind": index_kind})
 
     @mcp.tool(annotations={**WRITE_RUN, "title": "Start admitted selected-source Docstore indexing"})
     async def docstore_index_selected(
         paths: Annotated[list[str], Field(min_length=1, max_length=20)],
         full_reprocess: bool = False,
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Admit selected Markdown paths as verification targets while reconciling the complete source."""
-        return await docstore_index_execute(paths=paths, full_reprocess=full_reprocess)
+        return await docstore_index_execute(paths=paths, full_reprocess=full_reprocess,
+                                            index_kind=index_kind)
 
     @mcp.tool(annotations={**READ, "title": "Read live Docstore worker run"})
     async def docstore_run_status(
         run_id: Annotated[str | None, Field(pattern=r"^[a-f0-9]{32}$")] = None,
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Read the current run or one exact run ID from the deployed worker API."""
-        return await get("/runs/" + (run_id or "current"))
+        return await get("/runs/" + (run_id or "current"), {"index_kind": index_kind})
 
     @mcp.tool(annotations={**READ, "title": "Read current Docstore run"})
-    async def docstore_run_current() -> dict:
+    async def docstore_run_current(index_kind: Literal["docs"] = "docs") -> dict:
         """Read the durable current worker run status."""
-        return await get("/runs/current")
+        return await get("/runs/current", {"index_kind": index_kind})
 
     @mcp.tool(annotations={**READ, "title": "Get exact Docstore run"})
     async def docstore_run_get(
         run_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")],
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Read one durable run by exact ID."""
-        return await get("/runs/" + run_id)
+        return await get("/runs/" + run_id, {"index_kind": index_kind})
 
     @mcp.tool(annotations={**READ, "title": "List Docstore run history"})
-    async def docstore_run_list(limit: Annotated[int, Field(ge=1, le=100)] = 20) -> dict:
+    async def docstore_run_list(limit: Annotated[int, Field(ge=1, le=100)] = 20,
+                                index_kind: Literal["docs"] = "docs") -> dict:
         """List the newest durable Docstore runs, with one terminal/current record per run."""
-        return await get("/runs", {"limit": limit})
+        return await get("/runs", {"limit": limit, "index_kind": index_kind})
 
     @mcp.tool(annotations={**WRITE_RUN, "title": "Cancel active Docstore indexing"})
     async def docstore_cancel_run(
         run_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")],
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Request cancellation of the exact run launched by this API process."""
-        return await request("DELETE", "/runs/" + run_id)
+        return await request("DELETE", "/runs/" + run_id, params={"index_kind": index_kind})
 
     @mcp.tool(annotations={**WRITE_RUN, "title": "Cancel exact Docstore run"})
     async def docstore_run_cancel(
         run_id: Annotated[str, Field(pattern=r"^[a-f0-9]{32}$")],
+        index_kind: Literal["docs"] = "docs",
     ) -> dict:
         """Request cancellation of the exact active run launched by this worker API."""
-        return await docstore_cancel_run(run_id=run_id)
+        return await docstore_cancel_run(run_id=run_id, index_kind=index_kind)
 
     @mcp.tool(annotations={**READ, "title": "Verify source-to-store attribution"})
-    async def docstore_attribution_verify() -> dict:
+    async def docstore_attribution_verify(index_kind: Literal["docs"] = "docs") -> dict:
         """Run a fresh read-only exact path and normalized-content-hash comparison."""
-        return await get("/attribution")
+        return await get("/attribution", {"index_kind": index_kind})
 
     @mcp.resource("docstore://capabilities")
     def capability_resource() -> dict:

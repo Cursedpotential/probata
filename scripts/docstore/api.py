@@ -54,6 +54,18 @@ _jobs: dict[str, subprocess.Popen] = {}
 _jobs_lock = threading.Lock()
 app = FastAPI(title="probata docstore API", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "DELETE"], allow_headers=["*"])
+INDEX_IDENTITY = {"app": "ProbataDocStore", "environment": "probata-docstore", "index_kind": "docs",
+                  "allowed_source_roots": ["docs/"], "allowed_file_classes": ["markdown"],
+                  "rejected_file_classes": ["source_code", "configuration", "test"]}
+
+
+def _docs_index(index_kind: str) -> None:
+    if index_kind != "docs":
+        raise HTTPException(status_code=400, detail="this endpoint owns only the docs index")
+
+
+def _identified(value: dict) -> dict:
+    return {**INDEX_IDENTITY, **value}
 
 
 def _auth(authorization: str | None) -> None:
@@ -94,7 +106,10 @@ def _read_run(run_id: str) -> dict:
         with _jobs_lock:
             process = _jobs.get(run_id)
         if process is not None:
-            return {"run_id": run_id, "sync": "queued", "cdc_verified": False}
+            return ({"run_id": run_id, "sync": "queued", "cdc_verified": False}
+                    if process.poll() is None else
+                    {"run_id": run_id, "sync": "failed", "cdc_verified": False,
+                     "error_type": "WorkerExitedBeforeReceipt", "exit_code": process.returncode})
         raise HTTPException(status_code=404, detail="run not found")
     import json
     path = candidates[-1]
@@ -137,36 +152,40 @@ def _run_history(limit: int) -> list[dict]:
 
 
 @app.get("/pipeline")
-def pipeline(authorization: str | None = Header(default=None)) -> dict:
+def pipeline(index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     status = _sync_status()
     verified = (status.get("app") == "ProbataDocStore"
                 and status.get("environment") == "probata-docstore"
                 and status.get("sync") in {"running", "failed", "degraded", "cancelled", "execution_finished"})
-    return {"app": "ProbataDocStore", "environment": "probata-docstore",
-            "identity_verified_live": verified, "latest_run": status}
+    return _identified({"identity_verified_live": verified, "latest_run": status})
 
 
 @app.get("/runs/current")
-def current_run(authorization: str | None = Header(default=None)) -> dict:
+def current_run(index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
-    return _public_status(read_current_status(RUN_STATUS))
+    _docs_index(index_kind)
+    return _identified(_public_status(read_current_status(RUN_STATUS)))
 
 
 @app.get("/runs")
 def run_history(limit: int = Query(20, ge=1, le=100),
+                index_kind: str = "docs",
                 authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     rows = _run_history(limit)
-    return {"runs": rows, "count": len(rows), "limit": limit}
+    return _identified({"runs": [_identified(row) for row in rows], "count": len(rows), "limit": limit})
 
 
 @app.get("/runs/{run_id}")
-def run_status(run_id: str, authorization: str | None = Header(default=None)) -> dict:
+def run_status(run_id: str, index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     if len(run_id) != 32 or any(c not in "0123456789abcdef" for c in run_id):
         raise HTTPException(status_code=400, detail="invalid run ID")
-    return _read_run(run_id)
+    return _identified(_read_run(run_id))
 
 
 @app.post("/runs", status_code=202)
@@ -175,6 +194,7 @@ def start_run(payload: dict, authorization: str | None = Header(default=None)) -
     scope = payload.get("scope", "full")
     paths = payload.get("paths", [])
     full_reprocess = payload.get("full_reprocess", False)
+    _docs_index(payload.get("index_kind", "docs"))
     if scope not in {"full", "selected"} or not isinstance(paths, list) or type(full_reprocess) is not bool:
         raise HTTPException(status_code=400, detail="scope must be full or selected")
     if scope == "full" and paths:
@@ -195,39 +215,41 @@ def start_run(payload: dict, authorization: str | None = Header(default=None)) -
             raise HTTPException(status_code=409, detail="a run is already active")
         process = subprocess.Popen([sys.executable, str(pathlib.Path(__file__).with_name("worker_sync.py"))], env=env)
         _jobs[run_id] = process
-    return {"run_id": run_id, "sync": "queued", "requested_scope": scope,
+    return _identified({"run_id": run_id, "sync": "queued", "requested_scope": scope,
             "requested_paths": paths, "full_source_reconciliation": True,
             "full_reprocess": full_reprocess,
-            "selected_paths_are_verification_targets": bool(paths)}
+            "selected_paths_are_verification_targets": bool(paths)})
 
 
 @app.delete("/runs/{run_id}", status_code=202)
-def cancel_run(run_id: str, authorization: str | None = Header(default=None)) -> dict:
+def cancel_run(run_id: str, index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     with _jobs_lock:
         process = _jobs.get(run_id)
     if process is None or process.poll() is not None:
         raise HTTPException(status_code=409, detail="run is not active")
     process.terminate()
-    return {"run_id": run_id, "cancellation_requested": True}
+    return _identified({"run_id": run_id, "cancellation_requested": True})
 
 
 @app.get("/attribution")
-async def attribution(authorization: str | None = Header(default=None)) -> dict:
+async def attribution(index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     """Run a fresh, read-only exact reconciliation of declared sources and SurrealDB."""
     _auth(authorization)
+    _docs_index(index_kind)
     try:
         source, digest = snapshot_sources()
         result = await verify_projection(source)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"attribution unavailable: {type(exc).__name__}") from None
-    return {"app": "ProbataDocStore", "environment": "probata-docstore",
-            "source_digest": digest, "source_count": len(source),
-            "cdc_verified": result.get("status") == "verified", "cdc_attribution": result}
+    return _identified({"source_digest": digest, "source_count": len(source),
+                        "cdc_verified": result.get("status") == "verified", "cdc_attribution": result})
 
 
 @app.get("/health")
-async def health() -> dict:
+async def health(index_kind: str = "docs") -> dict:
+    _docs_index(index_kind)
     sync = _sync_status()
     try:
         db = await sq.connect("docs", "probata", "docs")
@@ -236,18 +258,19 @@ async def health() -> dict:
         store = "up"
     except Exception as e:  # noqa: BLE001
         store = f"down: {type(e).__name__}"
-    return {
+    return _identified({
         "ok": store == "up" and sync["sync"] not in {"failed", "degraded", "invalid"},
         "api": "up",
         "store": store,
         "startup_or_latest_sync": sync,
         "execution_receipt_is_not_cdc_proof": True,
-    }
+    })
 
 
 @app.get("/stats")
-async def stats(authorization: str | None = Header(default=None)) -> dict:
+async def stats(index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     db = await sq.connect("docs", "probata", "docs")
     try:
         out = {}
@@ -256,7 +279,7 @@ async def stats(authorization: str | None = Header(default=None)) -> dict:
             out[table] = r[0]["n"] if r and isinstance(r[0], dict) else 0
         idx = _rows(await db.query("INFO FOR INDEX chunk_embedding ON chunk;"))
         out["vector_index"] = (idx[0] if idx else {}).get("building", {})
-        return sq.norm(out, False)
+        return _identified(sq.norm(out, False))
     finally:
         await db.close()
 
@@ -264,17 +287,20 @@ async def stats(authorization: str | None = Header(default=None)) -> dict:
 @app.get("/recall")
 async def recall(q: str = Query(..., min_length=2), kind: str = "doc", k: int = Query(8, ge=1, le=50),
                  status: str = "active", domain: str | None = None, rerank: bool = True,
+                 index_kind: str = "docs",
                  authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     if kind not in recall_mod.KINDS:
         raise HTTPException(status_code=400, detail=f"kind must be one of {sorted(recall_mod.KINDS)}")
     results, st = await recall_mod.recall(q, kind, status, k, domain, rerank)
-    return {"query": q, "kind": kind, "results": results, "stats": st}
+    return _identified({"query": q, "kind": kind, "results": results, "stats": st})
 
 
 @app.get("/doc/{record_id}")
-async def doc(record_id: str, authorization: str | None = Header(default=None)) -> dict:
+async def doc(record_id: str, index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     rid = record_id if record_id.startswith("document:") else f"document:{record_id}"
     db = await sq.connect("docs", "probata", "docs")
     try:
@@ -286,25 +312,28 @@ async def doc(record_id: str, authorization: str | None = Header(default=None)) 
     if not r:
         raise HTTPException(status_code=404, detail=f"{rid} not found")
     row = sq.norm(r[0], True)
-    return row
+    return _identified(row)
 
 
 @app.get("/graph/{ref:path}")
 async def graph(ref: str, limit: int = Query(25, ge=1, le=200), format: str = "json",
+                index_kind: str = "docs",
                 authorization: str | None = Header(default=None)):
     _auth(authorization)
+    _docs_index(index_kind)
     d, edges, totals = await graph_query.neighborhood(ref, limit)
     if d is None:
         raise HTTPException(status_code=404, detail=f"no document matches {ref!r}")
     if format == "mermaid":
         return PlainTextResponse(graph_query.mermaid(d, edges))
-    return {"document": sq.norm(d, False), "totals": totals, "edges": sq.norm(edges, False)}
+    return _identified({"document": sq.norm(d, False), "totals": totals, "edges": sq.norm(edges, False)})
 
 
 @app.get("/graph-schema")
-async def graph_schema(authorization: str | None = Header(default=None)) -> dict:
+async def graph_schema(index_kind: str = "docs", authorization: str | None = Header(default=None)) -> dict:
     """Describe the fixed read-only graph contract and live bounded table counts."""
     _auth(authorization)
+    _docs_index(index_kind)
     db = await sq.connect("docs", "probata", "docs")
     try:
         counts = {}
@@ -313,10 +342,10 @@ async def graph_schema(authorization: str | None = Header(default=None)) -> dict
             counts[table] = rows[0]["n"] if rows and isinstance(rows[0], dict) else 0
     finally:
         await db.close()
-    return {"node_table": "document", "relation_tables": ["links_to", "cites", "supersedes"],
+    return _identified({"node_table": "document", "relation_tables": ["links_to", "cites", "supersedes"],
             "directions": ["in", "out", "both"], "max_depth": 1, "max_limit_per_relation_direction": 200,
             "export_formats": ["json", "csv", "graphml", "mermaid"], "counts": counts,
-            "arbitrary_surrealql_available": False}
+            "arbitrary_surrealql_available": False})
 
 
 def _graph_spec(ref: str, relations: str, direction: str, limit: int, source_prefix: str,
@@ -345,11 +374,13 @@ async def graph_query_endpoint(ref: str, relations: str = "links_to,cites,supers
                                direction: str = "both", limit: int = Query(25, ge=1, le=200),
                                source_prefix: str = "", observed_from: str = "", observed_to: str = "",
                                depth: int = Query(1, ge=1, le=1), format: str = "json", preview: bool = False,
+                               index_kind: str = "docs",
                                authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
+    _docs_index(index_kind)
     spec = _graph_spec(ref, relations, direction, limit, source_prefix, observed_from, observed_to, depth, format)
     if preview:
-        return {"preview": spec, "executed": False}
+        return _identified({"preview": spec, "executed": False})
     try:
         doc, edges, totals = await graph_query.structured_neighborhood(
             ref, spec["relation_types"], direction, limit, source_prefix, observed_from, observed_to)
@@ -357,4 +388,4 @@ async def graph_query_endpoint(ref: str, relations: str = "links_to,cites,supers
         raise HTTPException(status_code=400, detail=str(exc)) from None
     if doc is None:
         raise HTTPException(status_code=404, detail="no document matches subject")
-    return {"query": spec, "totals": totals, **graph_query.export_graph(doc, edges, format)}
+    return _identified({"query": spec, "totals": totals, **graph_query.export_graph(doc, edges, format)})

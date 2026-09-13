@@ -107,12 +107,15 @@ def load_sources(
             raise ValueError(f"{project_id}: invalid ingestion status")
         if ingestion == "excluded":
             continue
+        included = _strings(entry.get("included_patterns"), "included_patterns")
+        if any(not pattern.lower().endswith(".md") for pattern in included):
+            raise ValueError(f"{project_id}: docs index permits only Markdown source patterns")
         all_sources.append(SourceSpec(
             project_id=project_id,
             root=source_root,
             canonical_prefix=prefix,
             domains=_strings(entry.get("domains"), "domains"),
-            included_patterns=_strings(entry.get("included_patterns"), "included_patterns"),
+            included_patterns=included,
             excluded_patterns=_strings(entry.get("excluded_patterns", []), "excluded_patterns", empty=True),
             ingestion_status=ingestion,
         ))
