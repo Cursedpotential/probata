@@ -1,7 +1,7 @@
 # DuckDB live-test repair receipt
 
 > Byline: Codex · GPT-5 · 2026-09-12
-> Status: IN PROGRESS on `codex/duckdb-live-test-20260912`; post-crash caller and handler defects are being repaired. Earlier local checks are historical checkpoints, not completion. Deployment and end-to-end proof remain pending.
+> Status: CODE AND LOCAL VALIDATION COMPLETE on `codex/duckdb-live-test-20260912`; the reconciled branch is pushed. Deployment and end-to-end production proof remain pending.
 > Scope: observed synthetic failures plus the verified real-source rehearsal manifest below. Nothing in this receipt is an evidence promotion or an approval to promote.
 
 ## Result
@@ -159,7 +159,7 @@ Glide's latest stable npm release observed during this pass was `6.0.3`, whose p
 - Workbench web verification: lint completed with zero errors and 12 existing Fast Refresh warnings; the production build passed; all 43 smoke/contract tests passed, including two headless browser Matter flows, direct REAL preview deep-link hydration, same-origin `/evidence/preview` routing, and the native source-browser table contract. No table/grid runtime package was added in this branch.
 - n8n verification: all 20 parser-activity workflow contract tests passed; both edited workflow documents also parsed as valid JSON. The workflows accept either the legacy three-reference result or that base set plus exactly the six governed handler-selection references, and reject arbitrary extras.
 - Synthetic fixtures: the three committed regression inputs are tiny synthetic samples only (`698`, `328`, and `955` bytes). They are not the real R2 sources and are not ingest receipts.
-- Commit/push: pending at the time this receipt text was updated.
+- Commit/push: the reconciled branch was rebased without conflict onto the then-current `origin/main` (`9014020`), producing `859239c` (`feat(intake): add governed DuckDB preview flow`) and `971c768` (`fix(intake): complete governed DuckDB ingest repair`). Commit `971c768ae70c700761504996f7cca734fdb41cab` was verified equal to `origin/codex/duckdb-live-test-20260912` after a non-force push. This receipt update is a later documentation-only commit on the same branch.
 - Coolify deployment: pending.
 - Live workflow replay and visible Workbench preview proof: pending.
 
