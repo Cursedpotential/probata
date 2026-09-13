@@ -45,6 +45,17 @@ def test_selected_request_runs_complete_source_and_can_cancel(tmp_path,monkeypat
     assert process.terminated is True
 
 
+def test_worker_exit_before_first_receipt_never_stays_queued(tmp_path,monkeypatch):
+    api._jobs.clear()
+    monkeypatch.setattr(api,'RUN_RECEIPTS',tmp_path/'runs')
+    process=Process(); process.returncode=2
+    api._jobs['a'*32]=process
+    value=TestClient(api.app).get('/runs/'+'a'*32).json()
+    assert value['sync']=='failed'
+    assert value['error_type']=='WorkerExitedBeforeReceipt'
+    assert value['cdc_verified'] is False
+
+
 def test_explicit_drift_repair_enables_cocoindex_full_reprocess(tmp_path,monkeypatch):
     api._jobs.clear()
     monkeypatch.setattr(api,'RUN_RECEIPTS',tmp_path/'runs')
@@ -64,6 +75,9 @@ def test_unsafe_selected_requests_fail_before_launch(monkeypatch):
     for paths in ([],['../secret.md'],['docs/a.md','docs/a.md']):
         response=client.post('/runs',json={'scope':'selected','paths':paths})
         assert response.status_code==400
+    assert client.post('/runs',json={'scope':'full','index_kind':'codebase'}).status_code==400
+    assert client.get('/pipeline?index_kind=codebase').status_code==400
+    assert client.get('/attribution?index_kind=codebase').status_code==400
 
 
 def test_run_history_returns_latest_valid_receipt_per_run(tmp_path,monkeypatch):
@@ -100,6 +114,7 @@ def test_graph_preview_is_bounded_and_does_not_query_store():
     assert value['preview']['read_only'] is True
     assert client.get('/graph-query',params={'ref':'x','relations':'delete','preview':'true'}).status_code==400
     assert client.get('/graph-query',params={'ref':'x','depth':2,'preview':'true'}).status_code==422
+    assert client.get('/graph-query',params={'ref':'x','index_kind':'codebase','preview':'true'}).status_code==400
 
 
 def test_graph_inline_exports_cover_json_csv_graphml_and_mermaid():

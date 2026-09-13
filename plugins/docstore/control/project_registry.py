@@ -49,6 +49,8 @@ class ProjectSource:
             "registration_status": self.registration_status,
             "ingestion_status": self.ingestion_status,
             "required": self.required,
+            "index_kind": "docs",
+            "allowed_file_classes": ["markdown"],
             "source_exists": self.root.is_dir(),
         }
 
@@ -153,6 +155,9 @@ def load_registry(path: Path) -> ProjectRegistry:
         title = entry.get("title")
         if not isinstance(title, str) or not title.strip() or len(title) > 200:
             raise ValueError(f"{project_id}: title must be 1-200 characters")
+        included = _strings(entry.get("included_patterns"), "included_patterns")
+        if any(not pattern.lower().endswith(".md") for pattern in included):
+            raise ValueError(f"{project_id}: docs index permits only Markdown source patterns")
         projects.append(ProjectSource(
             project_id=project_id,
             title=title.strip(),
@@ -160,7 +165,7 @@ def load_registry(path: Path) -> ProjectRegistry:
             root_relative=root_relative,
             canonical_prefix=prefix,
             domains=_strings(entry.get("domains"), "domains"),
-            included_patterns=_strings(entry.get("included_patterns"), "included_patterns"),
+            included_patterns=included,
             excluded_patterns=_strings(
                 entry.get("excluded_patterns", []), "excluded_patterns", allow_empty=True
             ),

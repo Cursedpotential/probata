@@ -73,3 +73,12 @@ def test_registry_activation_declares_complete_source_set(tmp_path):
 def test_multi_root_activation_requires_explicit_registry(tmp_path):
     with pytest.raises(ValueError, match="requires DOCSTORE_PROJECT_REGISTRY"):
         load_sources(None, tmp_path, multi_root_enabled=True)
+
+
+def test_docs_registry_rejects_code_file_classes(tmp_path):
+    path, current = registry(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["projects"][0]["included_patterns"] = ["**/*.py"]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="only Markdown"):
+        load_sources(path, current, multi_root_enabled=False)
