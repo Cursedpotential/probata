@@ -43,7 +43,16 @@ Consequence guards are part of the implementation: the orchestrator cannot hide 
 - The acceptance reconciliation `20260913T044215Z-601725e7` queried Codex memory, Claude memory, CNF, remember, and memsearch, preserved per-store provenance, and wrote JSON and Markdown packets in `plugins/search/receipts`.
 - CCC uses the project identity `E:\AI_Workspace\.cocoindex_code\settings.yml` plus `target_sqlite.db` and the remote `nvidia_nim/nvidia/nemotron-3-embed-1b` embedding model. The configuration excludes documentation roots and documentation file classes. The contaminated 4,998,172,672-byte database and its tracking state were moved to `E:\AI_Workspace\to_be_deleted\ccc-code-only-20260913`; no files were deleted.
 
-The clean CCC rebuild and a live semantic query must be recorded below after the running index job finishes. Until then, code-index freshness is **in progress**, not complete.
+Direct SQLite inspection of the rebuilt CCC auxiliary table found zero chunks and zero distinct files in `docs`, `doc`, `documentation`, `knowledge`, `memory`, `.remember`, `.memories`, `to_be_deleted`, `_worktrees`, or `probata-worktrees`, and zero `.md`, `.mdx`, `.rst`, `.txt`, `.html`, or `.htm` file classes. CCC doctor passed both 2048-dimension indexing and query model checks after loading the registry-backed credential into the process without printing its value.
+
+The runtime-location correction and quarantine evidence are recorded in
+`RUNTIME-RECONCILIATION-2026-09-13.md`. Smart Explore generated state now lives
+only under the ignored Propria `.runtime/search/smart-explore` root; the engine
+remains solely in `plugins/search`.
+
+The clean CCC rebuild and a live semantic query must be recorded after the
+running index job finishes. Until then, code-index freshness is **in progress**,
+not complete.
 
 ## Product-surface acceptance boundary
 

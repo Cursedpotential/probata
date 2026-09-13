@@ -25,10 +25,10 @@ Subcommands:
 Every subcommand accepts --json for machine-readable output and --db to
 target an explicit index file.
 
-Index location: central store ~/.agents/smart-explore/indexes/<slug>-<hash>.duckdb,
-shared by every agent/CLI tool that indexes the same project path. Override the
-store root with SMART_EXPLORE_HOME, or a single index with --db. A pre-existing
-legacy <path-root>/.smart-explore/index.duckdb is still honored.
+Index location: the Propria runtime store
+E:/AI_Workspace/Projects/Propria/.runtime/search/smart-explore/indexes/
+<slug>-<hash>.duckdb, shared by every agent/CLI tool that indexes the same
+project path. Override a single index with --db for isolated diagnostics.
 
 > Byline: Claude Code · Opus 4.8 · 2026-06-21
 > Byline: Claude Code · Fable 5 · 2026-07-28 (cross-tool: central index store, moved to ~/.agents/skills)
@@ -534,16 +534,25 @@ def cmd_unfold(args):
         print()
 
 
+PROPRIA_SMART_EXPLORE_RUNTIME = Path(
+    r"E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore"
+)
+
+
 def central_store() -> Path:
-    return Path(os.environ.get("SMART_EXPLORE_HOME", str(Path.home() / ".agents" / "smart-explore"))) / "indexes"
+    """Return the one machine-local runtime store used by Propria Search."""
+    configured = Path(os.environ.get("PROPRIA_SEARCH_RUNTIME", str(PROPRIA_SMART_EXPLORE_RUNTIME)))
+    if str(configured.resolve()).casefold() != str(PROPRIA_SMART_EXPLORE_RUNTIME.resolve()).casefold():
+        raise RuntimeError(
+            "PROPRIA_SEARCH_RUNTIME must resolve to "
+            f"{PROPRIA_SMART_EXPLORE_RUNTIME}; alternate shared runtime roots are unsupported"
+        )
+    return configured / "indexes"
 
 
 def db_for(root: Path, override: str | None) -> Path:
     if override:
         return Path(override).resolve()
-    legacy = root / ".smart-explore" / "index.duckdb"
-    if legacy.exists():
-        return legacy
     slug = re.sub(r"[^A-Za-z0-9]+", "-", root.name).strip("-") or "root"
     digest = hashlib.sha256(str(root).lower().encode()).hexdigest()[:12]
     return central_store() / f"{slug}-{digest}.duckdb"
