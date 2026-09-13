@@ -177,7 +177,17 @@ SKIP_DIRS = {
 
 def connect(db_path: Path) -> duckdb.DuckDBPyConnection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    con = duckdb.connect(str(db_path))
+    deadline = time.monotonic() + float(os.environ.get("SMART_EXPLORE_LOCK_TIMEOUT", "60"))
+    while True:
+        try:
+            con = duckdb.connect(str(db_path))
+            break
+        except duckdb.IOException as exc:
+            message = str(exc).lower()
+            if time.monotonic() >= deadline or not any(
+                    marker in message for marker in ("used by another process", "conflicting lock", "could not set lock")):
+                raise
+            time.sleep(0.25)
     con.execute("INSTALL fts; LOAD fts;")
     con.execute(
         """

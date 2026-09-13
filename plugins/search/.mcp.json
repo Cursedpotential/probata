@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "propria-search": {
-      "command": "C:\\Users\\matts\\.agents\\skills\\smart-explore\\.venv\\Scripts\\python.exe",
-      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
+      "command": "C:\\Users\\matts\\.local\\bin\\uv.exe",
+      "args": ["run", "--project", "${CLAUDE_PLUGIN_ROOT}", "--locked", "python", "${CLAUDE_PLUGIN_ROOT}/mcp_server.py"],
       "env": {"PROPRIA_SEARCH_PLUGIN_ROOT": "${CLAUDE_PLUGIN_ROOT}"}
     }
   }

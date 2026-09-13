@@ -1,0 +1,11 @@
+[project]
+name = "propria-search-runtime"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb",
+  "tree-sitter-language-pack",
+]
+
+[tool.uv]
+package = false
