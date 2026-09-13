@@ -170,7 +170,10 @@ def persist_packet(packet:dict, output_dir:str|None=None)->dict:
     for store in STORE_NAMES:nodes.append({"id":f"store:{store}","type":"store","label":store})
     nodes.extend([{"id":"governance:decision","type":"classification","label":"governing decisions"},{"id":"governance:contract","type":"classification","label":"final contracts"},{"id":"governance:supersession","type":"classification","label":"supersession"}])
     packet["graph"]={"nodes":nodes,"edges":edges}
-    packet["actionable_backlog"]=[{"priority":"critical","item":"Resolve each provenance conflict before relying on completion claims"}] if packet["conflicts"] else []
+    backlog=[]
+    if packet["conflicts"]: backlog.append({"priority":"critical","item":"Resolve each provenance conflict before relying on completion claims"})
+    backlog.extend({"priority":"critical" if not packet["attribution_clean"] else "normal","item":item} for item in packet.get("next_actions",[]))
+    packet["actionable_backlog"]=backlog
     jp=root/f"{run_id}.json"; mp=root/f"{run_id}.md"; jp.write_text(json.dumps(packet,indent=2,default=str),encoding="utf-8")
     mp.write_text(f"# Reconciliation packet {run_id}\n\nQuery: {packet['query']}\n\nAttribution clean: **{packet['attribution_clean']}**\n\nStores: {', '.join(x['store'] for x in packet['store_runs'] if x['queried'])}\n\nConflicts: {len(packet['conflicts'])}\nDecisions: {len(packet['decisions'])}\nContracts: {len(packet['contracts'])}\n",encoding="utf-8")
     packet["packet_path"]=str(jp); packet["packet_markdown_path"]=str(mp); jp.write_text(json.dumps(packet,indent=2,default=str),encoding="utf-8")

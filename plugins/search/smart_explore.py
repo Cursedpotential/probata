@@ -1089,6 +1089,31 @@ def cmd_export(args):
         print(text)
 
 
+def _packet_graph(packet_path):
+    packet = Path(packet_path).resolve()
+    payload = json.loads(packet.read_text(encoding="utf-8"))
+    return packet, payload, payload.get("graph", {"nodes": [], "edges": []})
+
+
+def cmd_graph_query(args):
+    packet, payload, graph = _packet_graph(args.packet)
+    nodes = graph.get("nodes", [])
+    if args.node_type: nodes = [n for n in nodes if n.get("type") == args.node_type]
+    if args.store: nodes = [n for n in nodes if n.get("store") == args.store or n.get("id") == f"store:{args.store}"]
+    if args.text:
+        needle = args.text.lower()
+        nodes = [n for n in nodes if needle in json.dumps(n, default=str).lower()]
+    nodes = nodes[:args.limit]; ids = {n.get("id") for n in nodes}
+    edges = [e for e in graph.get("edges", []) if e.get("from") in ids or e.get("to") in ids]
+    print(json.dumps({"operation":"reconcile_graph_query","packet":str(packet),"run_id":payload.get("run_id"),"nodes":nodes,"edges":edges,"next_actions":payload.get("next_actions",[])}, indent=1))
+
+
+def cmd_graph_preview(args):
+    packet, payload, graph = _packet_graph(args.packet)
+    nodes=graph.get("nodes",[]); edges=graph.get("edges",[])
+    print(json.dumps({"operation":"reconcile_graph_preview","packet":str(packet),"run_id":payload.get("run_id"),"attribution_clean":payload.get("attribution_clean"),"counts":{"nodes":len(nodes),"edges":len(edges),"conflicts":len(payload.get("conflicts",[])),"decisions":len(payload.get("decisions",[])),"contracts":len(payload.get("contracts",[]))},"nodes":nodes[:args.limit],"edges":edges[:args.limit],"actionable_backlog":payload.get("actionable_backlog",[]),"next_actions":payload.get("next_actions",[])}, indent=1))
+
+
 def main():
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--db", help="explicit path to the index .duckdb file")
@@ -1184,6 +1209,12 @@ def main():
     repair = rp.add_parser("repair"); add_recall_options(repair); repair.add_argument("--output-dir")
     status = rp.add_parser("status"); status.add_argument("packet")
     p.set_defaults(func=cmd_reconcile)
+
+    p = sub.add_parser("graph-query", parents=[common], help="query nodes and incident edges in a reconciliation graph")
+    p.add_argument("packet"); p.add_argument("--node-type"); p.add_argument("--store"); p.add_argument("--text"); p.add_argument("--limit",type=int,default=50); p.set_defaults(func=cmd_graph_query)
+
+    p = sub.add_parser("graph-preview", parents=[common], help="preview graph counts, samples, and valid next actions")
+    p.add_argument("packet"); p.add_argument("--limit",type=int,default=10); p.set_defaults(func=cmd_graph_preview)
 
     p = sub.add_parser("export", parents=[common], help="export a persisted reconciliation packet")
     p.add_argument("packet"); p.add_argument("--format", choices=["json", "md"], default="md")

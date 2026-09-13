@@ -25,6 +25,8 @@ TOOLS=[
  tool("reconcile_run","Persist a provenance-rich adjudication packet and agent repair loop.",{"query":STR,"path":STR,"mode":{"type":"string","enum":["auto","all","selected"]},"stores":STORES,"limit":INT,"output_dir":STR},["query","path"]),
  tool("reconcile_repair","Trigger a bounded agent repair packet when attribution or conflicts are dirty.",{"query":STR,"path":STR,"mode":{"type":"string","enum":["auto","all","selected"]},"stores":STORES,"limit":INT,"output_dir":STR},["query","path"]),
  tool("reconcile_status","Read a persisted reconciliation packet status.",{"packet":STR},["packet"]),
+ tool("reconcile_graph_query","Query packet graph nodes and incident edges by type, store, or text.",{"packet":STR,"node_type":STR,"store":STR,"text":STR,"limit":INT},["packet"]),
+ tool("reconcile_graph_preview","Preview packet graph counts, representative nodes, edges, and next actions.",{"packet":STR,"limit":INT},["packet"]),
  tool("reconcile_export","Export a packet as JSON or Markdown.",{"packet":STR,"format":{"type":"string","enum":["json","md"]},"output":STR},["packet"]),
  tool("store_inventory","Report requested/available adapter identity for every selectable store.",{"path":STR},["path"]),
 ]
@@ -66,6 +68,12 @@ def call(name,a):
   if a.get("output_dir"):args += ["--output-dir",a["output_dir"]]
   return run_cli(args,path)
  if name=="reconcile_status": return run_cli(["reconcile","status",a["packet"]])
+ if name=="reconcile_graph_query":
+  args=["graph-query",a["packet"],"--limit",str(a.get("limit",50))]
+  for key,flag in (("node_type","--node-type"),("store","--store"),("text","--text")):
+   if a.get(key):args += [flag,a[key]]
+  return run_cli(args)
+ if name=="reconcile_graph_preview": return run_cli(["graph-preview",a["packet"],"--limit",str(a.get("limit",10))])
  if name=="reconcile_export":
   args=["export",a["packet"],"--format",a.get("format","md")]
   if a.get("output"):args += ["--output",a["output"]]

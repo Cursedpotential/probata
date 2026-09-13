@@ -30,6 +30,11 @@ class ReconciliationTests(unittest.TestCase):
    self.assertTrue(out['decisions']); self.assertTrue(out['contracts'])
    self.assertEqual(out['results'][0]['store'],'codex_memory')
    self.assertTrue(out['next_actions'])
+   packet=rec.persist_packet(out,td)
+   self.assertTrue(packet['actionable_backlog'])
+   args=type('Args',(),{'packet':packet['packet_path'],'limit':5})()
+   with patch('builtins.print') as output: smart_explore.cmd_graph_preview(args)
+   preview=json.loads(output.call_args.args[0]); self.assertGreater(preview['counts']['nodes'],0)
 
  def test_conflict_detection(self):
   rows=[{'title':'Final Contract','store':'ccc','content_hash':'a'}, {'title':'final-contract','store':'docstore','content_hash':'b'}]
@@ -37,7 +42,7 @@ class ReconciliationTests(unittest.TestCase):
 
  def test_mcp_catalog(self):
   names={x['name'] for x in mcp_server.TOOLS}
-  expected={'structural_search','semantic_code_search','code_index_refresh','code_index_status','code_index_doctor','structural_grep','selected_store_recall','conflict_discovery','decisions_final_contracts','reconcile_run','reconcile_repair','reconcile_status','reconcile_export','store_inventory'}
+  expected={'structural_search','semantic_code_search','code_index_refresh','code_index_status','code_index_doctor','structural_grep','selected_store_recall','conflict_discovery','decisions_final_contracts','reconcile_run','reconcile_repair','reconcile_status','reconcile_graph_query','reconcile_graph_preview','reconcile_export','store_inventory'}
   self.assertEqual(names,expected)
 
  def test_unavailable_selected_store_has_recovery_action(self):
