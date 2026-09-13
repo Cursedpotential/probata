@@ -1,14 +1,14 @@
 # Byline: Claude Code · Sonnet (agent) · 2026-07-19
 # Byline: Codex · GPT-5.6-Sol · 2026-08-30 (fixed source/staging buckets and runtime credentials)
-"""S3-compatible object store repo layer for fixed Platform-owned R2 buckets.
+"""S3-compatible object store repo layer for allowlisted Platform-owned R2 roots.
 
 Adapted from the donor kit's b2_client.py. All boto3 usage is confined to this
 module (enforced by tests/test_structure.py::test_boto3_only_in_repo). B2-specific
 naming (user-agent string, "B2" identifiers) has been stripped in favor of the
 The runtime credential document configures the account endpoint and credentials;
-browser input and environment variables cannot select a bucket. Case Bible source
-browsing is read-only against ``casebible-sorted`` and Workbench staging writes to
-``nexus``.
+Browser input can select only a named root from :data:`SOURCE_ROOTS`; it can
+never supply an arbitrary provider, endpoint, or bucket.  Every Case Bible root
+is read-only. Workbench staging writes remain fixed to ``nexus``.
 """
 
 from __future__ import annotations
@@ -36,6 +36,30 @@ CASEBIBLE_SORTED_PREFIX = ""
 STAGING_BUCKET = "nexus"
 MAX_SOURCE_KEY_LENGTH = 1024
 _SAFE_SOURCE_KEY = re.compile(r"^[^\x00\r\n\\]+$")
+
+
+@dataclass(frozen=True)
+class SourceRoot:
+    root_id: str
+    label: str
+    bucket: str
+    root_ref: str
+    temporary: bool = True
+
+
+SOURCE_ROOTS: dict[str, SourceRoot] = {
+    "r2-raw": SourceRoot("r2-raw", "R2 / Case Bible Raw", "casebible-raw", "r2://casebible-raw/"),
+    "r2-sorted": SourceRoot(
+        "r2-sorted", "R2 / Case Bible Sorted", CASEBIBLE_SORTED_BUCKET, "r2://casebible-sorted/"
+    ),
+    "r2-quarantine": SourceRoot(
+        "r2-quarantine",
+        "R2 / Case Bible Quarantine",
+        "casebible-quarantine",
+        "r2://casebible-quarantine/",
+    ),
+}
+DEFAULT_SOURCE_ROOT_ID = "r2-sorted"
 
 
 @dataclass(frozen=True)
@@ -87,27 +111,19 @@ def get_casebible_sorted_client():
     return get_r2_client()
 
 
-def list_casebible_sorted_objects(
-    *, prefix: str = "", continuation_token: str | None = None, max_keys: int = 100
-) -> dict:
-    """List one delimiter-bounded page from the fixed Case Bible Sorted bucket."""
-    request: dict[str, object] = {
-        "Bucket": CASEBIBLE_SORTED_BUCKET,
-        "Prefix": prefix,
-        "Delimiter": "/",
-        "MaxKeys": max_keys,
-    }
-    if continuation_token:
-        request["ContinuationToken"] = continuation_token
+def get_source_root(root_id: str) -> SourceRoot:
+    """Resolve a browser root through the code-owned allowlist."""
     try:
-        return get_casebible_sorted_client().list_objects_v2(**request)
-    except ClientError as error:
-        raise RuntimeError("Case Bible Sorted source listing failed") from error
+        return SOURCE_ROOTS[root_id]
+    except KeyError:
+        raise ValueError("unknown or unavailable source root") from None
 
 
-def validate_casebible_sorted_key(key: str) -> str:
-    """Validate one browser-supplied coordinate inside the fixed source bucket."""
+def validate_source_key(key: str, *, allow_empty: bool = False) -> str:
+    """Validate a relative object key without allowing a root escape."""
     normalized = key.strip()
+    if allow_empty and not normalized:
+        return ""
     if (
         not normalized
         or len(normalized) > MAX_SOURCE_KEY_LENGTH
@@ -115,20 +131,92 @@ def validate_casebible_sorted_key(key: str) -> str:
         or not _SAFE_SOURCE_KEY.fullmatch(normalized)
         or ".." in normalized.split("/")
     ):
-        raise ValueError("invalid Case Bible Sorted object key")
+        raise ValueError("invalid source object key")
     return normalized
+
+
+def list_source_objects(
+    *,
+    root_id: str,
+    prefix: str = "",
+    continuation_token: str | None = None,
+    start_after: str | None = None,
+    max_keys: int = 100,
+    delimiter: str | None = "/",
+) -> dict:
+    """List one page from an allowlisted read-only source root."""
+    root = get_source_root(root_id)
+    validated_prefix = validate_source_key(prefix, allow_empty=True)
+    if validated_prefix and prefix.endswith("/") and not validated_prefix.endswith("/"):
+        validated_prefix += "/"
+    request: dict[str, object] = {
+        "Bucket": root.bucket,
+        "Prefix": validated_prefix,
+        "MaxKeys": max_keys,
+    }
+    if delimiter is not None:
+        request["Delimiter"] = delimiter
+    if continuation_token:
+        request["ContinuationToken"] = continuation_token
+    if start_after:
+        request["StartAfter"] = validate_source_key(start_after)
+    try:
+        return get_r2_client().list_objects_v2(**request)
+    except ClientError as error:
+        raise RuntimeError(f"{root.label} source listing failed") from error
+
+
+def head_source_object(root_id: str, key: str) -> dict:
+    root = get_source_root(root_id)
+    validated = validate_source_key(key)
+    try:
+        return get_r2_client().head_object(Bucket=root.bucket, Key=validated)
+    except ClientError as error:
+        raise RuntimeError(f"{root.label} source inspection failed") from error
+
+
+def open_source_object(
+    root_id: str,
+    key: str,
+    *,
+    if_match: str | None = None,
+    byte_range: str | None = None,
+) -> dict:
+    root = get_source_root(root_id)
+    request: dict[str, str] = {"Bucket": root.bucket, "Key": validate_source_key(key)}
+    if if_match:
+        request["IfMatch"] = if_match
+    if byte_range:
+        request["Range"] = byte_range
+    try:
+        return get_r2_client().get_object(**request)
+    except ClientError as error:
+        raise RuntimeError(f"{root.label} source read failed") from error
+
+
+def list_casebible_sorted_objects(
+    *, prefix: str = "", continuation_token: str | None = None, max_keys: int = 100
+) -> dict:
+    """List one delimiter-bounded page from the fixed Case Bible Sorted bucket."""
+    return list_source_objects(
+        root_id=DEFAULT_SOURCE_ROOT_ID,
+        prefix=prefix,
+        continuation_token=continuation_token,
+        max_keys=max_keys,
+    )
+
+
+def validate_casebible_sorted_key(key: str) -> str:
+    """Validate one browser-supplied coordinate inside the fixed source bucket."""
+    try:
+        return validate_source_key(key)
+    except ValueError:
+        raise ValueError("invalid Case Bible Sorted object key") from None
 
 
 def head_casebible_sorted_object(key: str) -> dict:
     """Read immutable-object coordinates from the fixed source bucket."""
-    validated = validate_casebible_sorted_key(key)
-    try:
-        return get_casebible_sorted_client().head_object(
-            Bucket=CASEBIBLE_SORTED_BUCKET,
-            Key=validated,
-        )
-    except ClientError as error:
-        raise RuntimeError("Case Bible Sorted source inspection failed") from error
+    return head_source_object(DEFAULT_SOURCE_ROOT_ID, validate_casebible_sorted_key(key))
 
 
 def open_casebible_sorted_object(
@@ -138,18 +226,12 @@ def open_casebible_sorted_object(
     byte_range: str | None = None,
 ) -> dict:
     """Open a source stream without allowing the caller to choose storage scope."""
-    request: dict[str, str] = {
-        "Bucket": CASEBIBLE_SORTED_BUCKET,
-        "Key": validate_casebible_sorted_key(key),
-    }
-    if if_match:
-        request["IfMatch"] = if_match
-    if byte_range:
-        request["Range"] = byte_range
-    try:
-        return get_casebible_sorted_client().get_object(**request)
-    except ClientError as error:
-        raise RuntimeError("Case Bible Sorted source read failed") from error
+    return open_source_object(
+        DEFAULT_SOURCE_ROOT_ID,
+        validate_casebible_sorted_key(key),
+        if_match=if_match,
+        byte_range=byte_range,
+    )
 
 
 def get_client():

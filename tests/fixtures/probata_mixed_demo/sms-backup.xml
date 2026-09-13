@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<smses count="4">
+  <sms address="+15550101010" contact_name="Other Parent" date="1700000000000" type="1" body="Pickup is still scheduled for six." />
+  <sms address="+15550101010" contact_name="Other Parent" date="1700000100000" type="2" body="Understood. I will be there." />
+  <mms address="+15550101010" contact_name="Other Parent" date="1700000200000" type="1">
+    <parts><part ct="text/plain" text="Here is the location photo." /><part ct="image/jpeg" cl="location.jpg" data="UHJvYmF0YSBkZW1vIGltYWdl" /></parts>
+  </mms>
+  <sms address="+15550101010" contact_name="Other Parent" date="1700000300000" type="1" body="null" />
+</smses>

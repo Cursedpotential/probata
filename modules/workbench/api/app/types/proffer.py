@@ -5,14 +5,37 @@ Byline: Codex · GPT-5 · 2026-08-28.
 
 from __future__ import annotations
 
-from datetime import datetime
 import json
+import re
+from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import unquote, urlsplit
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
+from app.types.matter_mode import MatterMode
+from app.types.proffer_content import ProfferContentResponse  # noqa: F401
+from app.types.proffer_handler import (
+    ProfferHandlerCandidate,
+    ProfferHandlerSelectionDecisionRequest,  # noqa: F401
+    ProfferHandlerSelectionDecisionResponse,  # noqa: F401
+)
+from app.types.proffer_messages import (
+    ProfferPreviewAttachment,  # noqa: F401
+    ProfferPreviewEvent,  # noqa: F401
+    ProfferPreviewMessage,  # noqa: F401
+    ProfferPreviewMessagesResponse,  # noqa: F401
+    ProfferPreviewParticipant,  # noqa: F401
+)
+from app.types.proffer_sources import (
+    ProfferSourceBrowserResponse,  # noqa: F401
+    ProfferSourceObject,  # noqa: F401
+    ProfferSourcePrefix,  # noqa: F401
+    ProfferSourceRoot,  # noqa: F401
+    SourceFileKind,  # noqa: F401
+    SourceLocation,  # noqa: F401
+)
 
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 OpaquePreviewHandle = Annotated[
@@ -27,6 +50,15 @@ BoundedActorIdentity = Annotated[
     StringConstraints(strip_whitespace=True, min_length=1, max_length=512, pattern=r"^[^\x00\r\n]+$"),
 ]
 BoundedToolID = Annotated[str, StringConstraints(strip_whitespace=True, max_length=256)]
+ProfferOperationLifecycle = Literal[
+    "running",
+    "awaiting_repair_decision",
+    "awaiting_preview_decision",
+    "completed",
+    "failed",
+    "unavailable",
+]
+ProfferOperationWait = Literal["repair_decision", "preview_decision"]
 
 
 def validate_authorized_source_ref(value: str) -> str:
@@ -42,16 +74,23 @@ def validate_authorized_source_ref(value: str) -> str:
         and not parsed.fragment
     ):
         return value
-    if parsed.scheme == "r2" and parsed.netloc == "casebible-sorted" and not parsed.query and not parsed.fragment:
+    if (
+        parsed.scheme == "r2"
+        and (
+            parsed.netloc in {"casebible-raw", "casebible-sorted", "casebible-quarantine"}
+            or (parsed.netloc == "nexus" and re.fullmatch(r"/workbench/staging/[0-9a-f]{64}/.+", unquote(parsed.path)))
+        )
+        and not parsed.query
+        and not parsed.fragment
+    ):
         key = unquote(parsed.path.removeprefix("/"))
         if key and not key.startswith("/") and "\\" not in key and ".." not in key.split("/"):
             return value
-    raise ValueError("source_ref must be an upload reference or a Case Bible Sorted object")
+    raise ValueError("source_ref must be an upload reference or an allowlisted Case Bible R2 object")
 
 
 class ProfferStartRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     request_id: NonBlank
     matter_id: UUID
     court_case_id: UUID
@@ -59,6 +98,7 @@ class ProfferStartRequest(BaseModel):
     declared_format: NonBlank
     parser_options_ref: NonBlank
     source_context_ref: UUID | None = None
+    matter_mode: MatterMode
 
     @field_validator("source_ref")
     @classmethod
@@ -66,45 +106,20 @@ class ProfferStartRequest(BaseModel):
         return validate_authorized_source_ref(value)
 
 
-class ProfferSourceObject(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["object"] = "object"
-    key: NonBlank
-    name: NonBlank
-    byte_length: int
-    last_modified: datetime | None = None
-    etag: str | None = None
-
-
-class ProfferSourcePrefix(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["prefix"] = "prefix"
-    prefix: NonBlank
-    name: NonBlank
-
-
-class ProfferSourceBrowserResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    source: Literal["casebible-sorted"] = "casebible-sorted"
-    prefix: str
-    delimiter: Literal["/"] = "/"
-    filter: str
-    filter_applied: bool
-    page_size: int
-    is_truncated: bool
-    continuation_token: str | None = None
-    prefixes: list[ProfferSourcePrefix]
-    objects: list[ProfferSourceObject]
-
-
 class ProfferStartResponse(BaseModel):
     # Go may add non-security response metadata without breaking this typed BFF.
     model_config = ConfigDict(extra="ignore")
 
     preview_handle: OpaquePreviewHandle
+    matter_mode: MatterMode
+
+
+class ProfferUploadResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    acquisition_ref: NonBlank
+    sha256: Sha256Digest
+    byte_length: Annotated[int, Field(ge=0)]
+    matter_mode: MatterMode
 
 
 class ProfferDecisionRequest(BaseModel):
@@ -119,6 +134,7 @@ class ProfferDecisionResponse(BaseModel):
 
     preview_handle: OpaquePreviewHandle
     status: NonBlank
+    matter_mode: MatterMode
 
 
 class ProfferDecisionActor(BaseModel):
@@ -165,6 +181,7 @@ class ProfferRepairDecisionResponse(BaseModel):
     preview_handle: OpaquePreviewHandle
     decision_ref: NonBlank
     status: NonBlank
+    matter_mode: MatterMode
 
 
 class ProfferParserIdentity(BaseModel):
@@ -190,7 +207,7 @@ class ProfferPreviewReceipt(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     receipt_type: Literal[
-        "custody",
+        "raw_source_verification",
         "parser_selection",
         "parser_execution",
         "normalization",
@@ -203,9 +220,26 @@ class ProfferPreviewReceipt(BaseModel):
     recorded_at: datetime
 
 
-class ProfferRepairAssessmentView(BaseModel):
+class ProfferPreviewCheckpoint(BaseModel):
+    """Live context-import progress before the normalized preview is ready."""
+
     model_config = ConfigDict(extra="ignore")
 
+    checkpoint: Literal[
+        "raw_source_verification",
+        "parser_selection",
+        "parser_execution",
+        "normalization",
+        "storage",
+        "completeness",
+    ]
+    status: Literal["pending", "running", "completed", "failed"]
+    receipt_ref: NonBlank | None = None
+    reason: BoundedReason = ""
+
+
+class ProfferRepairAssessmentView(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     assessment_ref: Annotated[NonBlank, StringConstraints(max_length=512)]
     source_version_ref: Annotated[NonBlank, StringConstraints(max_length=512)]
     review_required: bool
@@ -213,7 +247,6 @@ class ProfferRepairAssessmentView(BaseModel):
 
 class ProfferPreviewResponse(BaseModel):
     model_config = ConfigDict(extra="ignore")
-
     preview_handle: OpaquePreviewHandle
     phase: NonBlank
     correlation: ProfferPreviewCorrelation | None = None
@@ -222,78 +255,46 @@ class ProfferPreviewResponse(BaseModel):
     receipts: Annotated[list[ProfferPreviewReceipt], Field(max_length=64)] | None = None
     reason: BoundedReason = ""
     repair_assessment: ProfferRepairAssessmentView | None = None
+    checkpoints: Annotated[list[ProfferPreviewCheckpoint], Field(max_length=6)] | None = None
+    handler_recommendation_ref: NonBlank | None = None
+    handler_decision_ref: NonBlank | None = None
+    detected_format: NonBlank | None = None
+    detected_format_ref: NonBlank | None = None
+    signature_ref: NonBlank | None = None
+    recommended_handler: ProfferHandlerCandidate | None = None
+    alternative_handlers: Annotated[list[ProfferHandlerCandidate], Field(max_length=3)] | None = None
+    matter_mode: MatterMode
+    lifecycle: ProfferOperationLifecycle | None = None
+    current_stage: NonBlank | None = None
+    active_stages: Annotated[list[NonBlank], Field(max_length=64)] = Field(default_factory=list)
+    wait: ProfferOperationWait | None = None
+    terminal: bool | None = None
+    completed_stage_count: Annotated[int, Field(ge=0)] | None = None
 
     @model_validator(mode="after")
     def validate_snapshot_shape(self) -> ProfferPreviewResponse:
+        if self.checkpoints is not None:
+            names = [checkpoint.checkpoint for checkpoint in self.checkpoints]
+            if len(names) != len(set(names)):
+                raise ValueError("preview checkpoints must be unique")
+        if self.phase == "awaiting_handler_selection" and any(
+            value is None
+            for value in (
+                self.handler_recommendation_ref,
+                self.detected_format,
+                self.detected_format_ref,
+                self.signature_ref,
+                self.recommended_handler,
+            )
+        ):
+            raise ValueError("an awaiting handler selection snapshot requires a durable content recommendation")
         if self.phase == "awaiting_repair_decision":
             if self.repair_assessment is None or not self.repair_assessment.review_required:
                 raise ValueError("an awaiting repair decision snapshot requires a review assessment")
             return self
-        if self.phase == "awaiting_decision" or any(
-            value is not None for value in (self.correlation, self.preview_digest, self.receipts)
-        ):
-            if self.correlation is None or self.preview_digest is None or self.receipts is None:
-                raise ValueError("a projected preview snapshot requires correlation, preview_digest, and receipts")
+        if (
+            self.phase == "awaiting_decision"
+            or any(value is not None for value in (self.correlation, self.preview_digest, self.receipts))
+        ) and (self.correlation is None or self.preview_digest is None or self.receipts is None):
+            raise ValueError("a projected preview snapshot requires correlation, preview_digest, and receipts")
         return self
-
-
-class ProfferPreviewParticipant(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    participant_id: NonBlank
-    display_name: NonBlank
-    canonical_address: str | None = None
-
-
-class ProfferPreviewAttachment(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    attachment_id: NonBlank
-    filename: str | None = None
-    media_type: str | None = None
-    byte_length: Annotated[int, Field(ge=0)] | None = None
-    sha256: Sha256Digest | None = None
-    source_locator_ref: NonBlank
-
-
-class ProfferPreviewMessage(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    message_id: NonBlank
-    ordinal: Annotated[int, Field(ge=0)]
-    sent_at: datetime | None = None
-    sender_participant_id: str | None = None
-    body: Annotated[str, StringConstraints(max_length=1_000_000)]
-    participant_ids: Annotated[list[str], Field(max_length=64)]
-    attachments: Annotated[list[ProfferPreviewAttachment], Field(max_length=128)]
-    source_locator_ref: NonBlank
-
-
-class ProfferPreviewMessagesResponse(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    preview_handle: OpaquePreviewHandle
-    participants: Annotated[list[ProfferPreviewParticipant], Field(max_length=256)]
-    messages: Annotated[list[ProfferPreviewMessage], Field(max_length=250)]
-    next_cursor: OpaqueCursor | None = None
-
-
-class ProfferPreviewEvent(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    event_id: Annotated[int, Field(ge=0)]
-    event_type: Literal[
-        "phase_changed",
-        "receipt_recorded",
-        "messages_available",
-        "decision_requested",
-        "decision_recorded",
-        "completed",
-        "failed",
-    ]
-    occurred_at: datetime
-    preview_handle: OpaquePreviewHandle
-    phase: NonBlank
-    receipt_ref: str | None = None
-    message_count: Annotated[int, Field(ge=0)] | None = None
-    detail: BoundedReason = ""

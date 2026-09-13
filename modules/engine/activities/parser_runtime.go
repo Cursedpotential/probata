@@ -62,9 +62,10 @@ type ParserActivityStore interface {
 // Attempt is injectable for tests and defaults to one for direct callers; a
 // Temporal worker supplies activity.GetInfo(ctx).Attempt during registration.
 type ParserActivities struct {
-	Registry *parser.Registry
-	Store    ParserActivityStore
-	Attempt  Attempt
+	Registry      *parser.Registry
+	Store         ParserActivityStore
+	Authorization HandlerExecutionAuthorizationStore
+	Attempt       Attempt
 }
 
 func (a ParserActivities) validate() error {
@@ -102,7 +103,7 @@ func (a ParserActivities) SelectParser(ctx context.Context, req proffer.StageReq
 		return proffer.StageResult{}, errors.New("select parser requires request and source version references")
 	}
 	format := parser.FormatID(req.DeclaredFormat)
-	capability, err := a.Registry.SelectCapability(format)
+	capability, err := a.capabilityForSelection(ctx, req, format)
 	if err != nil {
 		return proffer.StageResult{}, fmt.Errorf("select parser for format %q: %w", req.DeclaredFormat, err)
 	}
@@ -150,6 +151,9 @@ func (a ParserActivities) ExecuteParser(ctx context.Context, req proffer.StageRe
 	if err := validatePersistedSelection(req, selection); err != nil {
 		return proffer.StageResult{}, err
 	}
+	if err := a.validateExecutionAuthorization(ctx, req, selection); err != nil {
+		return proffer.StageResult{}, err
+	}
 	input, err := a.Store.ResolveParserInput(ctx, req, selection)
 	if err != nil {
 		return proffer.StageResult{}, fmt.Errorf("resolve parser input: %w", err)
@@ -161,7 +165,16 @@ func (a ParserActivities) ExecuteParser(ctx context.Context, req proffer.StageRe
 	if err != nil {
 		return proffer.StageResult{}, fmt.Errorf("open parser bundle writer: %w", err)
 	}
-	bundleResult, err := a.Registry.ExecuteSelected(ctx, input, selection.ParserID, selection.ParserVersion, writer)
+	executionInput := input
+	if present, _ := handlerDecisionRefsPresent(req); present {
+		authorization, authorizationErr := a.loadDecoderAuthorization(ctx, req)
+		if authorizationErr != nil {
+			return proffer.StageResult{}, authorizationErr
+		}
+		executionInput.DeclaredFormat = parser.FormatID(authorization.DetectedFormat)
+		writer = declaredFormatBundleWriter{BundleWriter: writer, declared: input.DeclaredFormat}
+	}
+	bundleResult, err := a.Registry.ExecuteSelected(ctx, executionInput, selection.ParserID, selection.ParserVersion, writer)
 	if err != nil {
 		return proffer.StageResult{}, fmt.Errorf("execute persisted parser %q version %q: %w", selection.ParserID, selection.ParserVersion, err)
 	}
@@ -181,6 +194,89 @@ func (a ParserActivities) ExecuteParser(ctx context.Context, req proffer.StageRe
 		return proffer.StageResult{}, errors.New("persisted parser execution lacks result or activity receipt reference")
 	}
 	return parserStageSuccess(stagegraph.ExecuteParser, resultRef, receiptRef), nil
+}
+
+func (a ParserActivities) capabilityForSelection(ctx context.Context, req proffer.StageRequest, format parser.FormatID) (parser.Capability, error) {
+	present, err := handlerDecisionRefsPresent(req)
+	if err != nil {
+		return parser.Capability{}, err
+	}
+	if !present {
+		return a.Registry.SelectCapability(format)
+	}
+	authorization, err := a.loadDecoderAuthorization(ctx, req)
+	if err != nil {
+		return parser.Capability{}, err
+	}
+	_, capability, err := a.Registry.Lookup(authorization.HandlerID, authorization.HandlerVersion)
+	if err != nil {
+		return parser.Capability{}, err
+	}
+	if !capabilityDeclaresFormat(capability, parser.FormatID(authorization.DetectedFormat)) {
+		return parser.Capability{}, fmt.Errorf("authorized parser %q version %q does not declare format %q", capability.ParserID, capability.ParserVersion, format)
+	}
+	return capability, nil
+}
+
+// The detected signature selects decoder coverage; the original intake
+// declaration remains unchanged on persisted bundles and records.
+type declaredFormatBundleWriter struct {
+	parser.BundleWriter
+	declared parser.FormatID
+}
+
+func (w declaredFormatBundleWriter) Begin(ctx context.Context, header parser.BundleHeader) error {
+	header.FormatID = w.declared
+	return w.BundleWriter.Begin(ctx, header)
+}
+
+func (w declaredFormatBundleWriter) Emit(ctx context.Context, record parser.RawRecordEnvelope) error {
+	record.FormatID = w.declared
+	return w.BundleWriter.Emit(ctx, record)
+}
+
+func (a ParserActivities) validateExecutionAuthorization(ctx context.Context, req proffer.StageRequest, selection PersistedParserSelection) error {
+	present, err := handlerDecisionRefsPresent(req)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return nil
+	}
+	authorization, err := a.loadDecoderAuthorization(ctx, req)
+	if err != nil {
+		return err
+	}
+	if authorization.HandlerID != selection.ParserID || authorization.HandlerVersion != selection.ParserVersion {
+		return errors.New("persisted parser selection does not match the exact authorized decoder identity")
+	}
+	return nil
+}
+
+func (a ParserActivities) loadDecoderAuthorization(ctx context.Context, req proffer.StageRequest) (HandlerExecutionAuthorization, error) {
+	if a.Authorization == nil {
+		return HandlerExecutionAuthorization{}, errors.New("content-validated parser request requires a handler authorization store")
+	}
+	authorization, err := a.Authorization.LoadHandlerExecutionAuthorization(ctx, req)
+	if err != nil {
+		return HandlerExecutionAuthorization{}, fmt.Errorf("load exact decoder authorization: %w", err)
+	}
+	if authorization.ExecutionPath != proffer.HandlerPathDecoder {
+		return HandlerExecutionAuthorization{}, errors.New("validated handler authorization is not a decoder execution")
+	}
+	if strings.TrimSpace(authorization.HandlerID) == "" || strings.TrimSpace(authorization.HandlerVersion) == "" {
+		return HandlerExecutionAuthorization{}, errors.New("validated decoder authorization lacks parser identity")
+	}
+	return authorization, nil
+}
+
+func capabilityDeclaresFormat(capability parser.Capability, format parser.FormatID) bool {
+	for _, declared := range capability.DeclaredFormats {
+		if declared == format {
+			return true
+		}
+	}
+	return false
 }
 
 func parserStageSuccess(stage stagegraph.StageID, resultRef, receiptRef proffer.Ref) proffer.StageResult {

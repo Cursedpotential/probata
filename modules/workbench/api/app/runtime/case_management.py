@@ -9,8 +9,10 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import ValidationError
 
 from app.service import case_management as service
+from app.service.matter_mode import MatterModeError, configured_matter_id, require_matter, require_scope
 from app.types.case_management import (
     CaseManagementCapabilities,
     CourtCase,
@@ -25,10 +27,10 @@ from app.types.case_management import (
     KnowledgeSourceResolution,
     Matter,
     MatterCreate,
-    MatterDetail,
-    MatterList,
     OriginalSourceContent,
 )
+from app.types.case_management_mode import ModeBoundMatter, ModeBoundMatterDetail, ModeBoundMatterList
+from app.types.matter_mode import MatterMode
 from app.types.conversation_context import ConversationContext
 from app.types.evidence_detail import CourtReadiness, EvidenceDetail
 
@@ -47,35 +49,86 @@ def get_case_management_capabilities_endpoint():
         _raise_spine(error)
 
 
-@router.get("/matters", response_model=MatterList)
+def _configured_mode_matter(mode: MatterMode) -> tuple[UUID, dict]:
+    try:
+        matter_id = configured_matter_id(mode)
+    except MatterModeError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from None
+    try:
+        payload = service.get_matter(matter_id)
+    except service.SpineError as error:
+        _raise_spine(error)
+    if not isinstance(payload, dict) or str(payload.get("id")) != str(matter_id):
+        raise HTTPException(status_code=502, detail="Spine returned a different configured matter")
+    return matter_id, payload
+
+
+def _require_mode_matter(mode: MatterMode, matter_id: UUID) -> None:
+    try:
+        require_matter(mode, matter_id)
+    except MatterModeError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from None
+
+
+def _require_mode_scope(mode: MatterMode, matter_id: UUID, court_case_id: UUID) -> None:
+    try:
+        require_scope(mode, matter_id, court_case_id)
+    except MatterModeError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from None
+
+
+@router.get("/matters", response_model=ModeBoundMatterList)
 def list_matters_endpoint(
+    mode: Annotated[MatterMode, Query()],
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
+    _, payload = _configured_mode_matter(mode)
     try:
-        return service.list_matters(limit=limit, offset=offset)
-    except service.SpineError as error:
-        _raise_spine(error)
+        matter = ModeBoundMatter.model_validate({**payload, "matter_mode": mode})
+    except (ValidationError, ValueError, TypeError):
+        raise HTTPException(status_code=502, detail="Spine returned an invalid configured matter") from None
+    return ModeBoundMatterList(
+        data=[matter] if offset == 0 else [],
+        total=1,
+        limit=limit,
+        offset=offset,
+        matter_mode=mode,
+    )
 
 
 @router.post("/matters", response_model=Matter, status_code=201)
-def create_matter_endpoint(payload: MatterCreate):
+def create_matter_endpoint(payload: MatterCreate, mode: Annotated[MatterMode, Query()]):
     try:
-        return service.create_matter(payload)
-    except service.SpineError as error:
-        _raise_spine(error)
+        configured_matter_id(mode)
+    except MatterModeError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from None
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "Matter creation is disabled in fixed TEST/REAL mode; "
+            "provision the configured matter identity outside this scoped runtime"
+        ),
+    )
 
 
-@router.get("/matters/{matter_id}", response_model=MatterDetail)
-def get_matter_endpoint(matter_id: UUID):
+@router.get("/matters/{matter_id}", response_model=ModeBoundMatterDetail)
+def get_matter_endpoint(matter_id: UUID, mode: Annotated[MatterMode, Query()]):
+    _require_mode_matter(mode, matter_id)
+    _, payload = _configured_mode_matter(mode)
     try:
-        return service.get_matter(matter_id)
-    except service.SpineError as error:
-        _raise_spine(error)
+        return ModeBoundMatterDetail.model_validate({**payload, "matter_mode": mode})
+    except (ValidationError, ValueError, TypeError):
+        raise HTTPException(status_code=502, detail="Spine returned an invalid configured matter") from None
 
 
 @router.post("/matters/{matter_id}/court-cases", response_model=CourtCase, status_code=201)
-def create_court_case_endpoint(matter_id: UUID, payload: CourtCaseCreate):
+def create_court_case_endpoint(
+    matter_id: UUID,
+    payload: CourtCaseCreate,
+    mode: Annotated[MatterMode, Query()],
+):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.create_court_case(matter_id, payload)
     except service.SpineError as error:
@@ -86,7 +139,12 @@ def create_court_case_endpoint(matter_id: UUID, payload: CourtCaseCreate):
     "/matters/{matter_id}/knowledge/resolve",
     response_model=KnowledgeSourceResolution,
 )
-def resolve_knowledge_source_endpoint(matter_id: UUID, payload: KnowledgeSourceRef):
+def resolve_knowledge_source_endpoint(
+    matter_id: UUID,
+    payload: KnowledgeSourceRef,
+    mode: Annotated[MatterMode, Query()],
+):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.resolve_knowledge_source(matter_id, payload)
     except service.SpineError as error:
@@ -98,7 +156,12 @@ def resolve_knowledge_source_endpoint(matter_id: UUID, payload: KnowledgeSourceR
     response_model=EvidencePromotionResult,
     status_code=201,
 )
-def create_evidence_item_endpoint(matter_id: UUID, payload: EvidenceItemCreate):
+def create_evidence_item_endpoint(
+    matter_id: UUID,
+    payload: EvidenceItemCreate,
+    mode: Annotated[MatterMode, Query()],
+):
+    _require_mode_scope(mode, matter_id, payload.court_case_id)
     try:
         return service.create_evidence_item(matter_id, payload)
     except service.SpineError as error:
@@ -108,9 +171,11 @@ def create_evidence_item_endpoint(matter_id: UUID, payload: EvidenceItemCreate):
 @router.get("/matters/{matter_id}/evidence-items", response_model=EvidenceItemList)
 def list_evidence_items_endpoint(
     matter_id: UUID,
+    mode: Annotated[MatterMode, Query()],
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.list_evidence_items(matter_id, limit=limit, offset=offset)
     except service.SpineError as error:
@@ -121,7 +186,12 @@ def list_evidence_items_endpoint(
     "/matters/{matter_id}/evidence-items/{evidence_item_id}",
     response_model=EvidenceDetail,
 )
-def get_evidence_detail_endpoint(matter_id: UUID, evidence_item_id: UUID):
+def get_evidence_detail_endpoint(
+    matter_id: UUID,
+    evidence_item_id: UUID,
+    mode: Annotated[MatterMode, Query()],
+):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.get_evidence_detail(matter_id, evidence_item_id)
     except service.SpineError as error:
@@ -132,7 +202,12 @@ def get_evidence_detail_endpoint(matter_id: UUID, evidence_item_id: UUID):
     "/matters/{matter_id}/evidence-items/{evidence_item_id}/court-readiness",
     response_model=CourtReadiness,
 )
-def get_court_readiness_endpoint(matter_id: UUID, evidence_item_id: UUID):
+def get_court_readiness_endpoint(
+    matter_id: UUID,
+    evidence_item_id: UUID,
+    mode: Annotated[MatterMode, Query()],
+):
+    _require_mode_matter(mode, matter_id)
     try:
         readiness = CourtReadiness.model_validate(service.get_court_readiness(matter_id, evidence_item_id))
     except service.SpineError as error:
@@ -146,7 +221,12 @@ def get_court_readiness_endpoint(matter_id: UUID, evidence_item_id: UUID):
     "/matters/{matter_id}/evidence-items/{evidence_item_id}/source-content",
     response_model=OriginalSourceContent,
 )
-def get_original_source_content_endpoint(matter_id: UUID, evidence_item_id: UUID):
+def get_original_source_content_endpoint(
+    matter_id: UUID,
+    evidence_item_id: UUID,
+    mode: Annotated[MatterMode, Query()],
+):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.get_original_source_content(matter_id, evidence_item_id)
     except service.SpineError as error:
@@ -160,9 +240,11 @@ def get_original_source_content_endpoint(matter_id: UUID, evidence_item_id: UUID
 def get_conversation_context_endpoint(
     matter_id: UUID,
     evidence_item_id: UUID,
+    mode: Annotated[MatterMode, Query()],
     before: Annotated[int, Query(ge=0, le=100)] = 25,
     after: Annotated[int, Query(ge=0, le=100)] = 25,
 ):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.get_conversation_context(
             matter_id,
@@ -182,7 +264,9 @@ def review_evidence_item_endpoint(
     matter_id: UUID,
     evidence_item_id: UUID,
     payload: EvidenceReviewCreate,
+    mode: Annotated[MatterMode, Query()],
 ):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.review_evidence_item(matter_id, evidence_item_id, payload)
     except service.SpineError as error:
@@ -193,7 +277,12 @@ def review_evidence_item_endpoint(
     "/matters/{matter_id}/evidence-items/{evidence_item_id}/reviews",
     response_model=EvidenceReviewList,
 )
-def list_evidence_reviews_endpoint(matter_id: UUID, evidence_item_id: UUID):
+def list_evidence_reviews_endpoint(
+    matter_id: UUID,
+    evidence_item_id: UUID,
+    mode: Annotated[MatterMode, Query()],
+):
+    _require_mode_matter(mode, matter_id)
     try:
         return service.list_evidence_reviews(matter_id, evidence_item_id)
     except service.SpineError as error:

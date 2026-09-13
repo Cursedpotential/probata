@@ -7,13 +7,15 @@ const dialog = readFileSync(new URL("../src/components/runs/new-run-dialog.tsx",
 const drawer = readFileSync(new URL("../src/components/records/record-detail-drawer.tsx", import.meta.url), "utf8");
 const picker = readFileSync(new URL("../src/components/records/entity-picker.tsx", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/lib/api-client.ts", import.meta.url), "utf8");
+const intake = readFileSync(new URL("../src/components/intake/unified-intake.tsx", import.meta.url), "utf8");
 
 test("new-run collects both conversation source contracts", () => {
-  assert.match(dialog, /value="first_party"/);
-  assert.match(dialog, /value="acquired_third_party"/);
-  assert.match(dialog, /callerOwnsConversation/);
-  assert.match(dialog, /acquired_at/);
-  assert.match(client, /caller_owns_conversation/);
+  assert.match(dialog, /<UnifiedIntake/);
+  assert.doesNotMatch(dialog, /createRunFromFile|createRunFromStaged|custodyTier/);
+  assert.match(intake, /value="first_party"/);
+  assert.match(intake, /value="acquired_third_party"/);
+  assert.match(intake, /acquired_at/);
+  assert.match(client, /createProfferSourceContext/);
   assert.match(client, /source_principal/);
 });
 

@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: Write a session handoff into the probata SurrealDB docs store (doc_type "handoff") instead of a loose file. Use before /compact, before /clear, at the end of a work session, when the PreCompact hook fires, or when the user says "handoff", "write a handoff", "save state for next session".
-allowed-tools: mcp__plugin_docstore_docs__run mcp__plugin_docstore_docs__list Read
+allowed-tools: mcp__probata_docstore__docstore_handoff_write mcp__probata_docstore__docstore_get mcp__plugin_propria_docstore_control__docstore_handoff_write mcp__plugin_propria_docstore_control__docstore_get Read
 ---
 
 # Handoff
@@ -12,9 +12,11 @@ retired for this store (design doc §2/§8 item 8). A handoff is a
 
 ## Write it
 
-```
-run: { function: "fn::handoff_write", args: [$title, $body, $domains] }
-```
+Call `docstore_handoff_write` with `handoff: {title, body, domains}`. The
+dedicated tool invokes only `fn::handoff_write`, validates bounded typed input,
+and reads the resulting record and any superseded handoff back before returning.
+Never substitute a loose Markdown file or claim persistence without the returned
+record ID.
 
 Auto-supersedes the previous **active** handoff whose `domains` overlap
 `$domains` — same `new->supersedes->old` + status-flip semantics as
@@ -37,7 +39,7 @@ SessionStart "resumed after compaction" line as high priority.
 
 ## Definition of done
 
-`fn::handoff_write` returned an id, and if a previous active handoff in the
+`docstore_handoff_write` returned an id with `verified_readback: true`, and if a previous active handoff in the
 same domain(s) existed, its status is now `superseded` (verify with
 `fn::docs_get`).
 

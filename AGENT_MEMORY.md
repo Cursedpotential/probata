@@ -47,6 +47,15 @@ This file is a router, not an encyclopedia. Read only the branches relevant to t
 - PostgreSQL remains canonical. Timesketch, search, graph, RAG, and operator surfaces are governed
   views or projections, not replacement authority.
 
+## Repository boundary router
+
+- Canonical repository checkout: `E:/AI_Workspace/Projects/Propria/Probata/probata`.
+- Repository status: separate child Git repository pending controlled Propria monorepo import.
+- Canonical linked-worktree root: `E:/AI_Workspace/Projects/Propria/_worktrees/`.
+- Codex-managed exception: `C:/Users/matts/.codex/worktrees/`.
+- Consignatio authority: `E:/AI_Workspace/Projects/Propria/Consignatio`; read its own routers
+  before Consignatio work and do not treat this Probata repository as its authority.
+
 ## Path router
 
 | Path in scope | Read next |
@@ -58,7 +67,7 @@ This file is a router, not an encyclopedia. Read only the branches relevant to t
 | `sql/**` | `sql/AGENT_MEMORY.md` |
 | `deploy/**` | `deploy/AGENT_MEMORY.md` |
 | `deploy/docker/**` (was root `docker/`, moved 2026-09-01) | `deploy/docker/AGENT_MEMORY.md`; for n8n also `deploy/docker/n8n/AGENT_MEMORY.md` |
-| `modules/advocatio/**` (advocatio; formerly `modules/Legal-Workspace/`) and `modules/vestigia/**` (vestigia; formerly `modules/traceIQ/`) | each nested repo's own `AGENTS.md` / `AGENT_MEMORY.md` |
+| `modules/advocatio-legal_workbench/**` (advocatio) and `modules/vestigia-geodata_processor/**` (vestigia) | each nested repo's own `AGENTS.md` / `AGENT_MEMORY.md` |
 | `modules/workbench/**` (was root `workbench/`, moved 2026-09-01) | `modules/workbench/AGENT_MEMORY.md` plus the closest nested memory |
 | `tests/**` | `tests/AGENT_MEMORY.md` |
 | `knowledge/**` | `knowledge/AGENT_MEMORY.md` |

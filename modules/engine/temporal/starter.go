@@ -29,10 +29,15 @@ type WorkflowStarter interface {
 	// arriving.
 	Decide(ctx context.Context, workflowID string, decision proffer.PreviewDecision) error
 	DecideRepair(ctx context.Context, workflowID string, decision proffer.RepairDecision) error
+	DecideHandler(ctx context.Context, workflowID string, decision proffer.HandlerSelectionDecision) error
 	// Preview queries proffer.PreviewQueryName on a run. Like Decide, this goes
 	// through the Temporal server against durable workflow state, not any
 	// process-local cache.
 	Preview(ctx context.Context, workflowID string) (proffer.PreviewState, error)
+	// Operation queries the complete lifecycle registered before the first
+	// Activity starts. It is the authoritative read for current stage, human
+	// wait, and terminal state.
+	Operation(ctx context.Context, workflowID string) (proffer.OperationState, error)
 }
 
 // temporalStarter is the production WorkflowStarter, backed by a real
@@ -104,6 +109,19 @@ func (s *temporalStarter) DecideRepair(ctx context.Context, workflowID string, d
 	return nil
 }
 
+// DecideHandler transports only the durable actor-bound decision reference.
+// Handler identity, format, compatibility, and actor are deliberately reloaded
+// by the validation Activity rather than copied into Temporal history.
+func (s *temporalStarter) DecideHandler(ctx context.Context, workflowID string, decision proffer.HandlerSelectionDecision) error {
+	if strings.TrimSpace(workflowID) == "" || decision.DecisionRef == "" {
+		return errors.New("temporal: workflow_id and handler decision reference are required")
+	}
+	if err := s.client.SignalWorkflow(ctx, workflowID, "", proffer.HandlerSelectionDecisionSignalName, decision); err != nil {
+		return fmt.Errorf("temporal: signal handler selection decision: %w", err)
+	}
+	return nil
+}
+
 // Preview queries a run's current proffer.PreviewState.
 func (s *temporalStarter) Preview(ctx context.Context, workflowID string) (proffer.PreviewState, error) {
 	if strings.TrimSpace(workflowID) == "" {
@@ -116,6 +134,22 @@ func (s *temporalStarter) Preview(ctx context.Context, workflowID string) (proff
 	var state proffer.PreviewState
 	if err := value.Get(&state); err != nil {
 		return proffer.PreviewState{}, fmt.Errorf("temporal: decode preview state: %w", err)
+	}
+	return state, nil
+}
+
+// Operation queries a run's current reference-only lifecycle state.
+func (s *temporalStarter) Operation(ctx context.Context, workflowID string) (proffer.OperationState, error) {
+	if strings.TrimSpace(workflowID) == "" {
+		return proffer.OperationState{}, errors.New("temporal: workflow_id is required to query operation state")
+	}
+	value, err := s.client.QueryWorkflow(ctx, workflowID, "", proffer.OperationQueryName)
+	if err != nil {
+		return proffer.OperationState{}, fmt.Errorf("temporal: query operation state: %w", err)
+	}
+	var state proffer.OperationState
+	if err := value.Get(&state); err != nil {
+		return proffer.OperationState{}, fmt.Errorf("temporal: decode operation state: %w", err)
 	}
 	return state, nil
 }

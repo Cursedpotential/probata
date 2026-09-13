@@ -15,7 +15,9 @@ import (
 
 	"github.com/Cursedpotential/probata/engine/acquisition"
 	"github.com/Cursedpotential/probata/engine/activities"
+	sbvadapter "github.com/Cursedpotential/probata/engine/adapters/sbv"
 	"github.com/Cursedpotential/probata/engine/normalize"
+	"github.com/Cursedpotential/probata/engine/parser"
 	platformpostgres "github.com/Cursedpotential/probata/engine/postgres"
 	"github.com/Cursedpotential/probata/engine/proffer"
 	"github.com/Cursedpotential/probata/engine/runtimeapi"
@@ -33,11 +35,25 @@ type Registrations struct {
 	InventoryObservation  activities.SourceObservationActivities
 	EmbeddedObservation   activities.SourceObservationActivities
 	N8N                   platformtemporal.N8NActivities
+	N8NFlows              platformtemporal.FlowActivities
 	Hash                  activities.HashActivities
+	StructuredELT         activities.StructuredELTActivities
+	HandlerSelection      HandlerSelectionActivities
 	Raw                   activities.RawPipelineActivities
 	Normalized            activities.NormalizedPipelineActivities
 	Repair                activities.RepairActivities
 	Preview               activities.PreviewProjectionActivity
+}
+
+// HandlerSelectionActivities is the production integration seam for the
+// content-backed recommendation and actor-bound decision-validation stores.
+// Their implementations belong with runtime persistence, not workflow
+// orchestration. Both must be supplied together before new-version workflows
+// are enabled in a deployed worker.
+type HandlerSelectionActivities struct {
+	Recover   func(context.Context, proffer.HandlerRecoveryRequest) (proffer.HandlerRecommendationResult, error)
+	Recommend func(context.Context, proffer.StageRequest) (proffer.HandlerRecommendationResult, error)
+	Validate  func(context.Context, proffer.StageRequest) (proffer.HandlerSelectionValidationResult, error)
 }
 
 // RegisterAll installs the one workflow plus every exact stagegraph name on
@@ -54,6 +70,18 @@ func RegisterAll(registrar interface {
 	activities.RegisterEmbeddedMetadataActivity(registrar, registrations.EmbeddedObservation)
 	registrar.RegisterActivityWithOptions(registrations.N8N.SelectParser, activity.RegisterOptions{Name: string(stagegraph.SelectParser)})
 	registrar.RegisterActivityWithOptions(registrations.N8N.ExecuteParser, activity.RegisterOptions{Name: string(stagegraph.ExecuteParser)})
+	activities.RegisterStructuredELTActivities(registrar, registrations.StructuredELT)
+	if registrations.HandlerSelection.Recommend != nil || registrations.HandlerSelection.Validate != nil {
+		if registrations.HandlerSelection.Recommend == nil || registrations.HandlerSelection.Validate == nil {
+			panic("proffer worker: handler recommendation and validation activities must be registered together")
+		}
+		registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Recommend, activity.RegisterOptions{Name: proffer.RecommendHandlerActivityName})
+		registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Validate, activity.RegisterOptions{Name: proffer.ValidateHandlerSelectionActivityName})
+		if registrations.HandlerSelection.Recover != nil {
+			registrar.RegisterActivityWithOptions(registrations.HandlerSelection.Recover, activity.RegisterOptions{Name: proffer.RecoverHandlerActivityName})
+		}
+	}
+	registrar.RegisterActivityWithOptions(registrations.N8NFlows.RunFlow, activity.RegisterOptions{Name: platformtemporal.RunFlowActivityName})
 	activities.RegisterRawPipelineActivities(registrar, registrations.Raw)
 	activities.RegisterNormalizedPipelineActivities(registrar, registrations.Normalized)
 	activities.RegisterRepairActivities(registrar, registrations.Repair)
@@ -72,6 +100,10 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := validateSharedPaths(cfg); err != nil {
 		return err
 	}
+	flowRegistry, err := loadConfiguredFlowBindings(cfg.N8NFlowBindingsFile)
+	if err != nil {
+		return err
+	}
 	if err := prepareSharedPaths(cfg); err != nil {
 		return err
 	}
@@ -88,7 +120,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return err
 	}
 
-	registrations, err := buildRegistrations(pool, cfg)
+	registrations, err := buildRegistrations(pool, cfg, flowRegistry)
 	if err != nil {
 		return err
 	}
@@ -103,13 +135,20 @@ func Run(ctx context.Context, cfg Config) error {
 	if err := temporalWorker.Start(); err != nil {
 		return fmt.Errorf("proffer worker: start Temporal worker: %w", err)
 	}
-	slog.Info("universal import worker started", "task_queue", cfg.TemporalTaskQueue, "namespace", cfg.TemporalNamespace, "activity_count", len(stagegraph.Stages))
+	slog.Info(
+		"universal import worker started",
+		"task_queue", cfg.TemporalTaskQueue,
+		"namespace", cfg.TemporalNamespace,
+		"activity_count", len(stagegraph.Stages),
+		"n8n_flow_activity", platformtemporal.RunFlowActivityName,
+		"n8n_flow_binding_count", flowRegistry.Count(),
+	)
 	<-ctx.Done()
 	temporalWorker.Stop()
 	return nil
 }
 
-func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
+func buildRegistrations(pool *pgxpool.Pool, cfg Config, flowRegistry *platformtemporal.FlowRegistry) (Registrations, error) {
 	openObject, err := runtimeapi.NewRetainedObjectOpener(pool)
 	if err != nil {
 		return Registrations{}, err
@@ -187,6 +226,30 @@ func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
 	if err != nil {
 		return Registrations{}, err
 	}
+	structuredELTRepo, err := platformpostgres.NewStructuredELTRepository(pool)
+	if err != nil {
+		return Registrations{}, err
+	}
+	decoderAdapters, err := sbvadapter.NewAll(openObject)
+	if err != nil {
+		return Registrations{}, fmt.Errorf("build handler recommendation decoder capabilities: %w", err)
+	}
+	decoderRegistry, err := parser.NewRegistry(decoderAdapters...)
+	if err != nil {
+		return Registrations{}, fmt.Errorf("build handler recommendation decoder registry: %w", err)
+	}
+	handlerSelectionStore, err := platformpostgres.NewHandlerSelectionStoreWithRegistry(pool, openObject, decoderRegistry)
+	if err != nil {
+		return Registrations{}, err
+	}
+	parserBundleFactory, err := runtimeapi.NewFilesystemBundleFactory(pool, cfg.ParserBundleDir)
+	if err != nil {
+		return Registrations{}, err
+	}
+	parserStore, err := platformpostgres.NewParserStore(pool, parserBundleFactory)
+	if err != nil {
+		return Registrations{}, err
+	}
 	rawRepo, err := platformpostgres.NewRawPipelineRepository(pool, openObject)
 	if err != nil {
 		return Registrations{}, err
@@ -227,12 +290,48 @@ func buildRegistrations(pool *pgxpool.Pool, cfg Config) (Registrations, error) {
 		InventoryObservation:  activities.NewSourceObservationActivities(nil, runtimeapi.NewNonContainerMemberEnumerator(), observationRepo),
 		EmbeddedObservation:   activities.NewSourceObservationActivities(embeddedExtractor, nil, observationRepo),
 		N8N:                   platformtemporal.N8NActivities{Client: n8nClient},
+		N8NFlows:              platformtemporal.FlowActivities{Client: n8nClient, Registry: flowRegistry},
 		Hash:                  activities.NewHashActivities(hashRepo),
-		Raw:                   activities.NewRawPipelineActivities(rawRepo),
-		Normalized:            activities.NewNormalizedPipelineActivities(normalizedRepo, normalize.GenericMessageNormalizer{}),
-		Repair:                activities.NewRepairActivities(toolsClient, repairStore),
-		Preview:               activities.PreviewProjectionActivity{Store: previewStore},
+		StructuredELT:         activities.NewStructuredELTActivities(structuredELTRepo, parserStore, handlerSelectionStore),
+		HandlerSelection: HandlerSelectionActivities{
+			Recover: handlerSelectionStore.RecoverHandler,
+			Recommend: func(ctx context.Context, req proffer.StageRequest) (proffer.HandlerRecommendationResult, error) {
+				attempt := activity.GetInfo(ctx).Attempt
+				if attempt < 1 {
+					attempt = 1
+				}
+				return handlerSelectionStore.RecommendHandler(ctx, req, attempt)
+			},
+			Validate: func(ctx context.Context, req proffer.StageRequest) (proffer.HandlerSelectionValidationResult, error) {
+				attempt := activity.GetInfo(ctx).Attempt
+				if attempt < 1 {
+					attempt = 1
+				}
+				return handlerSelectionStore.ValidateHandlerSelection(ctx, req, attempt)
+			},
+		},
+		Raw:        activities.NewRawPipelineActivities(rawRepo),
+		Normalized: activities.NewNormalizedPipelineActivities(normalizedRepo, normalize.GenericMessageNormalizer{}),
+		Repair:     activities.NewRepairActivities(toolsClient, repairStore),
+		Preview:    activities.PreviewProjectionActivity{Store: previewStore},
 	}, nil
+}
+
+// loadConfiguredFlowBindings preserves the legitimate no-extra-flows mode,
+// while making an explicitly configured file a startup contract. A typo or a
+// missing Coolify mount must not silently become an empty registry.
+func loadConfiguredFlowBindings(path string) (*platformtemporal.FlowRegistry, error) {
+	if strings.TrimSpace(path) == "" {
+		return platformtemporal.LoadFlowBindings("")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("proffer worker: N8N_FLOW_BINDINGS_FILE is configured but unavailable: %w", err)
+	}
+	registry, err := platformtemporal.LoadFlowBindings(path)
+	if err != nil {
+		return nil, fmt.Errorf("proffer worker: invalid N8N_FLOW_BINDINGS_FILE: %w", err)
+	}
+	return registry, nil
 }
 
 func prepareSharedPaths(cfg Config) error {

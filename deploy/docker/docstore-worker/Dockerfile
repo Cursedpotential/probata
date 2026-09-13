@@ -16,6 +16,7 @@ COPY scripts/docstore/ /app/scripts/docstore/
 COPY docs/ /app/docs/
 
 EXPOSE 8000
-# API first (so it is reachable immediately); one sync pass runs alongside at every start - each
-# deploy of a docs change is the change event. The Coolify scheduled task re-runs worker_sync.py.
-CMD ["sh", "-c", "python scripts/docstore/worker_sync.py & exec uvicorn --app-dir scripts/docstore api:app --host 0.0.0.0 --port 8000"]
+# The PID-1 supervisor exposes the API while one bounded startup sync runs and
+# preserves a failed sync as observable health state instead of losing a shell
+# background-process exit. It does not retry or schedule additional runs.
+CMD ["python", "scripts/docstore/container_entrypoint.py"]

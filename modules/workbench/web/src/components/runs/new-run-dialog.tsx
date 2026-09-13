@@ -1,384 +1,52 @@
-// Byline: Claude Code · Sonnet (agent) · 2026-07-21 (C2.7: domain relabeled to "Initial routing")
-// Byline: Codex · GPT-5 · 2026-08-18 (conversation provenance and ownership inputs)
-"use client";
-
-/**
- * The "New run" dialog — replaces the rejected upload-then-blind-promote
- * flow. Two sources: pick an already-staged file, or drop a fresh one
- * (which skips staging entirely and goes straight to the spine). Mounted
- * once near the app root (layout.tsx) and opened via useNewRunDialog() from
- * either the Runs page ("New run" button, no prefill) or the Intake page's
- * "Start run ->" row action (prefilled with that staged file).
- *
- * C2 landed the gate controls the supervised toggle's tooltip used to defer
- * to ("gates land in C2") — the tooltip below now describes the real
- * behavior. It also adds an optional custody-tier select (per the C2
- * requirements addendum): 'light' (whole-file hash) vs 'full' (evidence
- * chain), defaulted per workflow the same way the spine itself defaults it
- * when the field is omitted (chat-transcript -> light, sms-xml -> full) —
- * sent explicitly here so the operator can see and override the choice.
- *
- * C2.7 (requirements addenda 7-8): the "Domain" select is relabeled
- * "Initial routing" with helper copy — it's a routing hint for the
- * whole-doc knowledge copy, NOT a classification. Real domain tags land
- * per-segment from the analysis lane later. The field name/values/API
- * contract (`domain`) are unchanged — this is presentation-only.
- */
+// New Run uses the same context-intake surface as /intake, never the legacy Python run port.
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import type { FileRejection } from "react-dropzone";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Dropzone } from "@/components/upload/dropzone";
-import { ApiError, createRunFromFile, createRunFromStaged, listFiles } from "@/lib/api-client";
-import { useRefresh } from "@/lib/refresh-context";
+import { UnifiedIntake } from "@/components/intake/unified-intake";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { listFiles } from "@/lib/api-client";
 import { useNewRunDialog } from "@/lib/new-run-dialog-context";
-import {
-  DOMAIN_OPTIONS,
-  WORKFLOW_OPTIONS,
-  type CustodyTier,
-  type RunMode,
-  type MessageCorpus,
-  type AcquisitionAssertionInput,
-  type StagedFile,
-  type Workflow,
-} from "@/lib/shared/types";
-
-type SourceMode = "staged" | "upload";
-
-/** Mirrors the spine's own per-workflow default (chat-transcript -> light,
- * sms-xml -> full) — sent explicitly rather than omitted, so the select
- * below always shows what will actually happen. */
-function defaultCustodyTierFor(workflow: Workflow): CustodyTier {
-  return workflow === "sms-xml" ? "full" : "light";
-}
+import type { StagedFile } from "@/lib/shared/types";
 
 export function NewRunDialog() {
   const { open, prefill, closeNewRun } = useNewRunDialog();
-  const { triggerRefresh } = useRefresh();
-
-  const [sourceMode, setSourceMode] = useState<SourceMode>("staged");
-  const [stagedFiles, setStagedFiles] = useState<StagedFile[]>([]);
-  const [selectedStagedId, setSelectedStagedId] = useState("");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [workflow, setWorkflow] = useState<Workflow>("chat-transcript");
-  const [domain, setDomain] = useState("");
-  const [mode, setMode] = useState<RunMode>("auto");
-  const [custodyTier, setCustodyTier] = useState<CustodyTier>(defaultCustodyTierFor("chat-transcript"));
-  const [submitting, setSubmitting] = useState(false);
-  const [messageCorpus, setMessageCorpus] = useState<MessageCorpus>("first_party");
-  const [sourcePrincipal, setSourcePrincipal] = useState("");
-  const [callerOwnsConversation, setCallerOwnsConversation] = useState(false);
-  const [acquiredAt, setAcquiredAt] = useState("");
-  const [acquisitionMethod, setAcquisitionMethod] = useState<AcquisitionAssertionInput["method"]>("unknown");
-  const [acquisitionAuthority, setAcquisitionAuthority] = useState<AcquisitionAssertionInput["authority"]>("unclear");
-  const [sourceDevice, setSourceDevice] = useState("");
-  const [deviceCustodian, setDeviceCustodian] = useState("");
-  const [acquisitionNotes, setAcquisitionNotes] = useState("");
-
-  // Reset on open, and seed from a row-action prefill if present.
+  const [files, setFiles] = useState<StagedFile[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     queueMicrotask(() => {
-      setSourceMode("staged");
-      setSelectedStagedId(prefill?.stagedId ?? "");
-      setUploadFile(null);
-      setWorkflow("chat-transcript");
-      setDomain("");
-      setMode("auto");
-      setCustodyTier(defaultCustodyTierFor("chat-transcript"));
-      setMessageCorpus("first_party");
-      setSourcePrincipal("");
-      setCallerOwnsConversation(false);
-      setAcquiredAt("");
-      setAcquisitionMethod("unknown");
-      setAcquisitionAuthority("unclear");
-      setSourceDevice("");
-      setDeviceCustodian("");
-      setAcquisitionNotes("");
-      listFiles({ status: "staged" })
-        .then(setStagedFiles)
-        .catch(() => setStagedFiles([]));
+      if (cancelled) return;
+      setSelectedId(prefill?.stagedId ?? "");
+      setError(null);
+      setLoading(true);
+      listFiles({ status: "staged" }).then((rows) => {
+        if (!cancelled) setFiles(rows);
+      }).catch(() => {
+        if (!cancelled) setError("Staged sources could not be listed. Local and R2 intake remain available.");
+      }).finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     });
+    return () => { cancelled = true; };
   }, [open, prefill]);
-
-  // Re-default the custody tier whenever the workflow changes, mirroring
-  // the spine's own per-workflow default — an operator who wants something
-  // else can still pick it from the select afterward.
-  const handleWorkflowChange = (next: Workflow) => {
-    setWorkflow(next);
-    setCustodyTier(defaultCustodyTierFor(next));
-  };
-
-  const handleFilesRejected = (rejections: FileRejection[]) => {
-    for (const r of rejections) {
-      toast.error(`${r.file.name}: ${r.errors.map((e) => e.message).join(", ")}`);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!domain) {
-      toast.error("Pick a domain");
-      return;
-    }
-    if (sourceMode === "staged" && !selectedStagedId) {
-      toast.error("Pick a staged file");
-      return;
-    }
-    if (sourceMode === "upload" && !uploadFile) {
-      toast.error("Drop a file");
-      return;
-    }
-    if (!sourcePrincipal.trim()) {
-      toast.error("Enter the source account or device principal");
-      return;
-    }
-    if (messageCorpus === "first_party" && !callerOwnsConversation) {
-      toast.error("Confirm authenticated ownership for this first-party conversation");
-      return;
-    }
-    if (messageCorpus === "acquired_third_party" && !acquiredAt) {
-      toast.error("Enter when the third-party conversation was acquired");
-      return;
-    }
-
-    const acquisition: AcquisitionAssertionInput | undefined = messageCorpus === "acquired_third_party"
-      ? {
-          acquired_at: new Date(acquiredAt).toISOString(),
-          method: acquisitionMethod,
-          authority: acquisitionAuthority,
-          source_device: sourceDevice.trim() || null,
-          device_custodian: deviceCustodian.trim() || null,
-          notes: acquisitionNotes.trim() || null,
-        }
-      : undefined;
-
-    setSubmitting(true);
-    try {
-      const result =
-        sourceMode === "staged"
-          ? await createRunFromStaged({ stagedId: selectedStagedId, workflow, domain, mode, custodyTier, messageCorpus, sourcePrincipal: sourcePrincipal.trim(), callerOwnsConversation, acquisition })
-          : await createRunFromFile({ file: uploadFile as File, workflow, domain, mode, custodyTier, messageCorpus, sourcePrincipal: sourcePrincipal.trim(), callerOwnsConversation, acquisition });
-      toast.success(`Run ${result.run_id} started`);
-      triggerRefresh();
-      closeNewRun();
-    } catch (err) {
-      const detail = err instanceof ApiError ? err.message : "Failed to start run";
-      toast.error(detail);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+  const staged = files.find((file) => file.id === selectedId);
   return (
     <Dialog open={open} onOpenChange={(next) => !next && closeNewRun()}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[95vh] overflow-y-auto sm:max-w-[95vw]">
         <DialogHeader>
-          <DialogTitle>New run</DialogTitle>
-          <DialogDescription>
-            Send a file through the evidence spine: custody -&gt; parse -&gt; store -&gt; knowledge.
-          </DialogDescription>
+          <DialogTitle>New context import</DialogTitle>
+          <DialogDescription>Use the engine intake flow. Context ingestion does not promote evidence or create custody.</DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant={sourceMode === "staged" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSourceMode("staged")}
-            >
-              Pick staged file
-            </Button>
-            <Button
-              type="button"
-              variant={sourceMode === "upload" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSourceMode("upload")}
-            >
-              Drop a new file
-            </Button>
-          </div>
-
-          {sourceMode === "staged" ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="staged-file-select">Staged file</Label>
-              <select
-                id="staged-file-select"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-                value={selectedStagedId}
-                onChange={(e) => setSelectedStagedId(e.target.value)}
-              >
-                <option value="">— choose a staged file —</option>
-                {stagedFiles.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <Dropzone
-              onFilesSelected={(files) => setUploadFile(files[0] ?? null)}
-              onFilesRejected={handleFilesRejected}
-              multiple={false}
-            />
-          )}
-          {sourceMode === "upload" && uploadFile && (
-            <p className="text-xs text-muted-foreground">Selected: {uploadFile.name}</p>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="run-workflow-select">Workflow</Label>
-            <select
-              id="run-workflow-select"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-              value={workflow}
-              onChange={(e) => handleWorkflowChange(e.target.value as Workflow)}
-            >
-              {WORKFLOW_OPTIONS.map((w) => (
-                <option key={w} value={w}>
-                  {w}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="run-domain-select">Initial routing</Label>
-            <select
-              id="run-domain-select"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-              value={domain}
-              onChange={(e) => setDomain(e.target.value)}
-            >
-              <option value="">— choose a routing hint —</option>
-              {DOMAIN_OPTIONS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Whole-doc knowledge copy lands here. Real domain tags are applied per-segment by
-              the analysis lane later — one conversation usually spans many domains.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="run-custody-tier-select">Custody tier</Label>
-            <select
-              id="run-custody-tier-select"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px]"
-              value={custodyTier}
-              onChange={(e) => setCustodyTier(e.target.value as CustodyTier)}
-            >
-              <option value="light">light — whole-file hash</option>
-              <option value="full">full — evidence chain</option>
-            </select>
-          </div>
-
-          <div className="space-y-3 rounded-md border p-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="run-message-corpus">Conversation source</Label>
-              <select
-                id="run-message-corpus"
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                value={messageCorpus}
-                onChange={(event) => {
-                  setMessageCorpus(event.target.value as MessageCorpus);
-                  setCallerOwnsConversation(false);
-                }}
-              >
-                <option value="first_party">First-party — owner participated</option>
-                <option value="acquired_third_party">Acquired third-party — owner did not participate</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="run-source-principal">Source account/device principal</Label>
-              <Input
-                id="run-source-principal"
-                value={sourcePrincipal}
-                onChange={(event) => setSourcePrincipal(event.target.value)}
-                placeholder="Account, phone, device, or export owner"
-              />
-            </div>
-            {messageCorpus === "first_party" ? (
-              <div className="flex items-center justify-between gap-4">
-                <Label htmlFor="run-owner-confirmation">I am the authenticated owner and participated in this conversation</Label>
-                <Switch id="run-owner-confirmation" checked={callerOwnsConversation} onCheckedChange={setCallerOwnsConversation} />
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">The owner will not be added to the historical participants. Record how the source became available.</p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="run-acquired-at">Acquired at</Label>
-                  <Input id="run-acquired-at" type="datetime-local" value={acquiredAt} onChange={(event) => setAcquiredAt(event.target.value)} />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="run-acquisition-method">Method</Label>
-                    <select id="run-acquisition-method" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm" value={acquisitionMethod} onChange={(event) => setAcquisitionMethod(event.target.value as AcquisitionAssertionInput["method"])}>
-                      <option value="own_device">Own device</option><option value="household_device">Household device</option><option value="voluntary_third_party">Voluntary third party</option><option value="legal_process">Legal process</option><option value="public_source">Public source</option><option value="unknown">Unknown</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="run-acquisition-authority">Authority</Label>
-                    <select id="run-acquisition-authority" className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm" value={acquisitionAuthority} onChange={(event) => setAcquisitionAuthority(event.target.value as AcquisitionAssertionInput["authority"])}>
-                      <option value="device_owner">Device owner</option><option value="parent_guardian">Parent/guardian</option><option value="account_holder">Account holder</option><option value="consent_given">Consent given</option><option value="court_order">Court order</option><option value="unclear">Unclear</option>
-                    </select>
-                  </div>
-                </div>
-                <Input value={sourceDevice} onChange={(event) => setSourceDevice(event.target.value)} placeholder="Source device (optional)" aria-label="Source device" />
-                <Input value={deviceCustodian} onChange={(event) => setDeviceCustodian(event.target.value)} placeholder="Device custodian (optional)" aria-label="Device custodian" />
-                <Input value={acquisitionNotes} onChange={(event) => setAcquisitionNotes(event.target.value)} placeholder="Acquisition notes (optional)" aria-label="Acquisition notes" />
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between rounded-md border p-3">
-            <div className="space-y-0.5">
-              <Label htmlFor="run-supervised-toggle">Supervised</Label>
-              <p className="text-xs text-muted-foreground">
-                Pause between stages for review instead of running straight through.
-              </p>
-            </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Switch
-                    id="run-supervised-toggle"
-                    checked={mode === "supervised"}
-                    onCheckedChange={(checked) => setMode(checked ? "supervised" : "auto")}
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                Pauses at each stage boundary — use Continue or Abort from the run&apos;s detail view to proceed.
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={closeNewRun} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Starting…" : "Start run"}
-          </Button>
-        </DialogFooter>
+        <label className="grid gap-2 text-sm">
+          Source
+          <select aria-label="Staged source" className="rounded border bg-background p-2" value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+            <option value="">Choose a local file or browse R2</option>
+            {files.map((file) => <option key={file.id} value={file.id}>{file.name}</option>)}
+          </select>
+        </label>
+        {error && <p role="alert">{error}</p>}
+        {selectedId && !staged ? <p role="status">{loading ? "Loading selected staged source…" : "The selected staged source is unavailable. Choose another source above."}</p> : open && <UnifiedIntake key={selectedId || "new"} stagedSource={staged ? { id: staged.id, name: staged.name, byte_length: staged.size } : undefined} />}
       </DialogContent>
     </Dialog>
   );

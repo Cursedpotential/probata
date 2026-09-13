@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createRunReviewAction } from "@/lib/api-client";
 import type { RunReport } from "@/lib/shared/types";
+import { ingestStageLabel } from "./stage-label";
 
 export function RunReportPanel({
   runId,
@@ -72,7 +73,7 @@ export function RunReportPanel({
               onClick={() => setSelectedSeq(stage.seq)}
               className={`block w-full rounded border p-2 text-left text-xs ${selectedSeq === stage.seq ? "border-primary bg-primary/5" : ""}`}
             >
-              <span className="font-semibold">{stage.seq}. {stage.name} — {stage.status}</span>
+              <span className="font-semibold">{stage.seq}. {ingestStageLabel(stage.name)} — {stage.status}</span>
               <span className="mt-0.5 block text-muted-foreground">
                 {stage.reason.code || "unspecified"}: {stage.reason.detail || "No detail recorded"}
               </span>

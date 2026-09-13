@@ -557,7 +557,7 @@ func parseUUIDRef(ref proffer.Ref, name string) (uuid.UUID, error) {
 }
 
 func selectionIdempotencyKey(spec activities.ParserSelectionSpec) string {
-	return fmt.Sprintf("parser-selection:%s:%s:%s", spec.RequestID, spec.SourceVersionRef, spec.DeclaredFormat)
+	return fmt.Sprintf("parser-selection:%s:%s:%s:%s:%s", spec.RequestID, spec.SourceVersionRef, spec.DeclaredFormat, spec.ParserID, spec.ParserVersion)
 }
 
 func executionIdempotencyKey(spec activities.ParserExecutionSpec) string {

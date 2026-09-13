@@ -97,6 +97,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	retainedOpener, err := runtimeapi.NewRetainedObjectOpener(pool)
+	if err != nil {
+		return err
+	}
+	handlerSelectionStore, err := platformpostgres.NewHandlerSelectionStore(pool, retainedOpener)
+	if err != nil {
+		return err
+	}
 	cursorKey, err := previewCursorKey()
 	if err != nil {
 		return err
@@ -109,7 +117,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	previewHandler, err := runtimeapi.NewPreviewHTTPHandler(starter, previewStore, repairStore, cursorKey, serviceTokenFile, sourceContextStore)
+	previewHandler, err := runtimeapi.NewPreviewHTTPHandler(starter, previewStore, repairStore, handlerSelectionStore, cursorKey, serviceTokenFile, sourceContextStore)
 	if err != nil {
 		return err
 	}

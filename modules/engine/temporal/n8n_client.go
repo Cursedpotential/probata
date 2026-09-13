@@ -22,12 +22,13 @@ const (
 
 // stageRoute is everything the N8N client needs to reach and safely wait on
 // one n8n-backed Activity: its webhook path, the compact set of Refs keys
-// the n8n workflow's own validator requires (exactly these, nothing else —
-// see docker/n8n/workflows/proffer/README.md), and how long the
+// the n8n workflow's own validator requires plus the bounded durable handler
+// decision references accepted after content-backed validation, and how long the
 // HTTP leg to n8n is allowed to run.
 type stageRoute struct {
 	path        string
 	requireRefs []string
+	allowRefs   []string
 	timeout     time.Duration
 }
 
@@ -36,14 +37,20 @@ func stageRoutes(cfg Config) map[stagegraph.StageID]stageRoute {
 		stagegraph.SelectParser: {
 			path:        "proffer/select-parser-activity",
 			requireRefs: []string{"filesystem_metadata", "container_manifest", "metadata_manifest"},
+			allowRefs:   handlerDecisionRefNames(),
 			timeout:     cfg.SelectHTTPTimeout,
 		},
 		stagegraph.ExecuteParser: {
 			path:        "proffer/execute-parser-activity",
 			requireRefs: []string{"parser_selection", "original", "parser_options"},
+			allowRefs:   handlerDecisionRefNames(),
 			timeout:     cfg.ExecuteHTTPTimeout,
 		},
 	}
+}
+
+func handlerDecisionRefNames() []string {
+	return []string{"handler_recommendation", "handler_decision", "handler_validation", "detected_format", "content_signature", "handler_compatibility"}
 }
 
 // N8NClient calls the two n8n-backed parser Activity webhooks over HTTP. It
@@ -216,13 +223,31 @@ func validateOutboundRequest(route stageRoute, req proffer.StageRequest) error {
 	if strings.TrimSpace(req.DeclaredFormat) == "" {
 		return errors.New("temporal: StageRequest.DeclaredFormat is required")
 	}
-	if len(req.Refs) != len(route.requireRefs) {
-		return fmt.Errorf("temporal: StageRequest.Refs must contain exactly %v", route.requireRefs)
-	}
 	for _, name := range route.requireRefs {
 		ref, ok := req.Refs[name]
 		if !ok || strings.TrimSpace(string(ref)) == "" {
 			return fmt.Errorf("temporal: StageRequest.Refs missing required non-empty %q", name)
+		}
+	}
+	allowedHandlerRefs := 0
+	for _, name := range route.allowRefs {
+		if _, ok := req.Refs[name]; ok {
+			allowedHandlerRefs++
+		}
+	}
+	if allowedHandlerRefs != 0 && allowedHandlerRefs != len(route.allowRefs) {
+		return fmt.Errorf("temporal: StageRequest.Refs must contain all handler decision refs %v or none", route.allowRefs)
+	}
+	allowed := make(map[string]struct{}, len(route.requireRefs)+len(route.allowRefs))
+	for _, name := range append(append([]string(nil), route.requireRefs...), route.allowRefs...) {
+		allowed[name] = struct{}{}
+	}
+	for name, ref := range req.Refs {
+		if _, ok := allowed[name]; !ok {
+			return fmt.Errorf("temporal: StageRequest.Refs contains unsupported %q", name)
+		}
+		if strings.TrimSpace(string(ref)) == "" {
+			return fmt.Errorf("temporal: StageRequest.Refs contains empty %q", name)
 		}
 	}
 	return nil

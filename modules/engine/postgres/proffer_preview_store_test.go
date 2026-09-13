@@ -113,6 +113,26 @@ func TestPreviewStoreAgainstSnapshotSchemaRollbackOnly(t *testing.T) {
 	if err != nil || duplicate.Handle != binding.Handle {
 		t.Fatalf("idempotent binding = %+v, %v; want handle %s", duplicate, err, binding.Handle)
 	}
+	page, err := store.ListBindings(ctx, nil, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundBinding := false
+	for _, listed := range page.Bindings {
+		if listed.Handle == binding.Handle {
+			foundBinding = true
+			if listed.CreatedAt.IsZero() {
+				t.Fatal("listed binding omitted its durable created_at coordinate")
+			}
+		}
+	}
+	if !foundBinding {
+		t.Fatalf("operation binding %s was absent from the newest page", binding.Handle)
+	}
+	stages, err := store.OperationStages(ctx, binding.Handle)
+	if err != nil || len(stages) != 0 {
+		t.Fatalf("unregistered operation stages = %+v, %v; want an empty durable projection", stages, err)
+	}
 	if _, err := store.Snapshot(ctx, binding.Handle); !errors.Is(err, previewmodel.ErrNotReady) {
 		t.Fatalf("unpublished snapshot error = %v", err)
 	}
@@ -140,7 +160,7 @@ func TestPreviewStoreAgainstSnapshotSchemaRollbackOnly(t *testing.T) {
 		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_receipt
 			(preview_handle,snapshot_seq,receipt_type,receipt_ref,status,recorded_at)
 			SELECT $1,0,receipt_type,'receipt-'||receipt_type,'completed',now()
-			FROM unnest(ARRAY['custody','parser_selection','parser_execution','normalization','storage','completeness']) receipt_type`, binding.Handle); err != nil {
+			FROM unnest(ARRAY['raw_source_verification','parser_selection','parser_execution','normalization','storage','completeness']) receipt_type`, binding.Handle); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO context.proffer_preview_participant

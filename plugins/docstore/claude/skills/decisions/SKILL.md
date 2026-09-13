@@ -1,7 +1,7 @@
 ---
 name: decisions
 description: Amend or query probata's DECISION_LOG (D-numbers) and the store's decision documents (doc_type "decision"). Use when the user says "record a decision", "amend D-<n>", "what did we decide", "close these docs with this decision", or a conversation reaches an explicit ruling that should close out one or more open documents.
-allowed-tools: mcp__plugin_docstore_docs__run mcp__plugin_docstore_docs__list Read
+allowed-tools: mcp__plugin_propria_docstore_docs__run mcp__plugin_propria_docstore_docs__list Read
 ---
 
 # Decisions

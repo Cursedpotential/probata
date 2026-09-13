@@ -55,6 +55,7 @@ reporting 0 records, logging it loudly on the store stage's content.
 """
 # Byline: Claude Code · Sonnet (agent) · 2026-07-22 (C2 gates+retry+custody_tier 2026-07-20; C2.6 retry from_stage + health/deps 2026-07-21; C3 KnowledgeHandle live-resolve + retry-gap for completed parents 2026-07-22)
 # Byline: Codex · GPT-5 · 2026-08-13 (ADR-0053 five-lane alignment)
+# Byline: Codex · GPT-5 · 2026-09-12 (reject unsupported retry before creating an orphan child)
 
 from __future__ import annotations
 
@@ -655,6 +656,19 @@ def register_run_routes(
         if run is None:
             raise HTTPException(404, f"run {run_id!r} not found")
 
+        # Validate before any retry path can create a child or read/copy source
+        # bytes. Framework-neutral context runs belong to Go Proffer, not this
+        # historical Python stage registry. The old late lookup orphaned rows.
+        from server.evidence.workflows import WORKFLOW_STAGE_NAMES
+
+        retry_stages = WORKFLOW_STAGE_NAMES.get(run["workflow"])
+        if not retry_stages:
+            raise HTTPException(
+                410,
+                "This historical run cannot be retried by the legacy executor. "
+                "Start a fresh context import through Go Proffer; the original run remains unchanged.",
+            )
+
         if from_stage == "knowledge":
             # C3 retry-gap: from_stage='knowledge' is now ALSO allowed on a
             # COMPLETED parent (not only 'failed') when the knowledge
@@ -764,7 +778,7 @@ def register_run_routes(
             custody_tier=custody_tier,
             source_context=run.get("source_context") or {},
         )
-        seed_stages(new_run_id, WORKFLOW_STAGE_NAMES[workflow])
+        seed_stages(new_run_id, retry_stages)
 
         # Source identity/acquisition context is durable. A retry must replay it
         # exactly; dropping it can reclassify an acquired third-party export as

@@ -24,8 +24,14 @@ func (uploadTestStarter) Decide(context.Context, string, proffer.PreviewDecision
 func (uploadTestStarter) DecideRepair(context.Context, string, proffer.RepairDecision) error {
 	return nil
 }
+func (uploadTestStarter) DecideHandler(context.Context, string, proffer.HandlerSelectionDecision) error {
+	return nil
+}
 func (uploadTestStarter) Preview(context.Context, string) (proffer.PreviewState, error) {
 	return proffer.PreviewState{Phase: proffer.PhaseAwaitingDecision}, nil
+}
+func (uploadTestStarter) Operation(context.Context, string) (proffer.OperationState, error) {
+	return proffer.OperationState{Lifecycle: proffer.OperationAwaitingPreviewDecision, Wait: proffer.OperationWaitPreviewDecision, ActiveStages: []proffer.ActivityName{}}, nil
 }
 
 func TestStarterRoutesMountsTailnetAuthorizedUploadOnSharedRoot(t *testing.T) {

@@ -69,14 +69,14 @@ function statusTone(status: MonitoredActionRun["status"]) {
   return "border-[#cdd3f1] bg-[#e9ecfb] text-[#2f3d9c]";
 }
 
-export function AtomicTools({ embedded = false }: { embedded?: boolean }) {
+export function AtomicTools({ embedded = false, initialSearch = "", requiredToolTerm = "" }: { embedded?: boolean; initialSearch?: string; requiredToolTerm?: string }) {
   const { matter, primaryCourtCase, loading: scopeLoading, error: scopeError } = useFixedCase();
   const [servers, setServers] = useState<ToolServerGroup[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [capability, setCapability] = useState<MonitoredActionCapability | null>(null);
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [selected, setSelected] = useState<CatalogTool | null>(null);
   const [intent, setIntent] = useState("");
   const [horizon, setHorizon] = useState<StartAtomicToolActionRequest["horizon"]>("as_lived");
@@ -129,8 +129,10 @@ export function AtomicTools({ embedded = false }: { embedded?: boolean }) {
   }, [capability?.supports_live_status, run]);
 
   const tools = useMemo<CatalogTool[]>(
-    () => servers.flatMap((server) => (server.tools ?? []).map((tool) => ({ serverKey: server.key, serverLabel: server.label, tool }))),
-    [servers],
+    () => servers
+      .flatMap((server) => (server.tools ?? []).map((tool) => ({ serverKey: server.key, serverLabel: server.label, tool })))
+      .filter(({ serverLabel, tool }) => !requiredToolTerm || `${serverLabel} ${tool.name} ${tool.description ?? ""}`.toLowerCase().includes(requiredToolTerm.toLowerCase())),
+    [requiredToolTerm, servers],
   );
   const visibleTools = useMemo(() => {
     const query = search.trim().toLowerCase();

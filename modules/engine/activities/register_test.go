@@ -126,7 +126,7 @@ func TestRegisterRawPipelineActivitiesUsesExactCanonicalStageNames(t *testing.T)
 func TestRegisterStructuredELTActivitiesUsesExactCanonicalName(t *testing.T) {
 	registrar := &recordingRegistrar{}
 	RegisterStructuredELTActivities(registrar, StructuredELTActivities{})
-	want := []string{ExecuteStructuredELTActivityName}
+	want := []string{SelectStructuredELTActivityName, ExecuteStructuredELTActivityName}
 	if len(registrar.names) != len(want) {
 		t.Fatalf("registered %d structured elt activities, want %d: %v", len(registrar.names), len(want), registrar.names)
 	}

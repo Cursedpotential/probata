@@ -1,0 +1,18 @@
+[project]
+name = "docstore-control"
+version = "0.6.2"
+description = "Isolated CocoIndex/SurrealDB documentation control and MCP resources"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp==3.2.4",
+    "httpx>=0.28,<1",
+    "duckdb>=1.4,<2",
+    "surrealdb==3.0.0b8",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

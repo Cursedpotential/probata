@@ -9,12 +9,11 @@ import asyncio
 import json
 
 import httpx
-
+import pytest
 from app.config import Settings
 from app.runtime import proffer as runtime
-from app.service import proffer
-from starlette.requests import Request
-
+from app.service import proffer, proffer_operations
+from app.service.matter_mode import _clear_preview_modes_for_tests, bind_preview_mode
 from app.types.proffer import (
     ProfferDecisionActor,
     ProfferDecisionRequest,
@@ -22,10 +21,22 @@ from app.types.proffer import (
     ProfferRepairDecisionRequest,
     ProfferStartRequest,
 )
-
+from fastapi import HTTPException
+from pydantic import ValidationError
+from starlette.requests import Request
 
 PREVIEW_HANDLE = "preview_handle_abcdefghijklmnopqrstuvwxyz"
 OTHER_PREVIEW_HANDLE = "preview_handle_zyxwvutsrqponmlkjihgfedcba"
+MATTER_ID = "deadbeef-dead-beef-dead-beefdeadbeef"
+COURT_CASE_ID = "cafebabe-cafe-babe-cafe-babecafebabe"
+
+
+@pytest.fixture(autouse=True)
+def preview_mode_binding():
+    _clear_preview_modes_for_tests()
+    bind_preview_mode(PREVIEW_HANDLE, "TEST")
+    yield
+    _clear_preview_modes_for_tests()
 
 
 def preview_payload(preview_handle: str = PREVIEW_HANDLE) -> dict:
@@ -45,6 +56,25 @@ def preview_payload(preview_handle: str = PREVIEW_HANDLE) -> dict:
         },
         "preview_digest": "b" * 64,
         "receipts": [],
+        "matter_mode": "TEST",
+    }
+
+
+def operation_payload(preview_handle: str = PREVIEW_HANDLE) -> dict:
+    return {
+        "preview_handle": preview_handle,
+        "request_id": "request-1",
+        "source_ref": "r2://casebible-sorted/photos/cat.jpg",
+        "service": "proffer",
+        "created_at": "2026-09-12T12:30:00Z",
+        "lifecycle": "awaiting_repair_decision",
+        "current_stage": "detect_repair_need",
+        "active_stages": [],
+        "wait": "repair_decision",
+        "terminal": False,
+        "reason": "detector found a repair issue",
+        "source_version_ref": "00000000-0000-0000-0000-000000000011",
+        "completed_stage_count": 3,
     }
 
 
@@ -73,9 +103,10 @@ def test_models_reject_unknown_fields() -> None:
             source_ref=f"upload://{'a' * 64}",
             declared_format="pdf",
             parser_options_ref="opts-1",
+            matter_mode="TEST",
             content="forbidden",
         )
-    except Exception as error:
+    except ValidationError as error:
         assert "extra_forbidden" in str(error)
     else:
         raise AssertionError("unknown Proffer start fields must be rejected")
@@ -87,11 +118,12 @@ def test_decision_route_rejects_without_reason() -> None:
             PREVIEW_HANDLE,
             ProfferDecisionRequest(approved=False, reason=""),
             authenticated_request(),
+            "TEST",
         )
 
     try:
         asyncio.run(exercise())
-    except Exception as error:
+    except HTTPException as error:
         assert getattr(error, "status_code", None) == 422
         assert "reason" in str(error.detail)
     else:
@@ -116,12 +148,14 @@ def test_service_preserves_exact_upstream_contract(monkeypatch) -> None:
         return await proffer.start(
             ProfferStartRequest(
                 request_id="r1",
-                matter_id="00000000-0000-0000-0000-000000000001",
-                court_case_id="00000000-0000-0000-0000-000000000002",
+                matter_id=MATTER_ID,
+                court_case_id=COURT_CASE_ID,
                 source_ref="r2://casebible-sorted/intake/source.pdf",
                 declared_format="pdf",
                 parser_options_ref="opts-1",
-            )
+                matter_mode="TEST",
+            ),
+            mode="TEST",
         )
 
     result = asyncio.run(exercise())
@@ -129,8 +163,99 @@ def test_service_preserves_exact_upstream_contract(monkeypatch) -> None:
     assert captured["method"] == "POST"
     assert captured["path"] == "/reference-import/start"
     assert captured["kwargs"]["json"]["source_ref"] == "r2://casebible-sorted/intake/source.pdf"
-    assert captured["kwargs"]["json"]["matter_id"] == "00000000-0000-0000-0000-000000000001"
-    assert captured["kwargs"]["json"]["court_case_id"] == "00000000-0000-0000-0000-000000000002"
+    assert captured["kwargs"]["json"]["matter_id"] == MATTER_ID
+    assert captured["kwargs"]["json"]["court_case_id"] == COURT_CASE_ID
+    assert "matter_mode" not in captured["kwargs"]["json"]
+
+
+def test_operation_list_forwards_only_engine_supported_filters(monkeypatch) -> None:
+    class Response:
+        def json(self):
+            return {"items": [operation_payload()], "next_cursor": "next-page"}
+
+    captured = {}
+
+    async def fake_request(method, path, **kwargs):
+        captured.update(method=method, path=path, kwargs=kwargs)
+        return Response()
+
+    monkeypatch.setattr(proffer, "_request", fake_request)
+    result = asyncio.run(
+        proffer_operations.list_operations(
+            status="awaiting_repair_decision",
+            cursor="current-page",
+            limit=50,
+        )
+    )
+
+    assert captured == {
+        "method": "GET",
+        "path": "/reference-import/operations",
+        "kwargs": {
+            "params": {
+                "status": "awaiting_repair_decision",
+                "cursor": "current-page",
+                "limit": 50,
+            }
+        },
+    }
+    assert result.items[0].preview_handle == PREVIEW_HANDLE
+    assert result.items[0].service == "proffer"
+    assert result.next_cursor == "next-page"
+    assert not hasattr(result.items[0], "workflow_id")
+    assert not hasattr(result.items[0], "run_id")
+
+
+def test_operation_detail_is_addressed_and_correlated_by_preview_handle(monkeypatch) -> None:
+    class Response:
+        def json(self):
+            return {
+                **operation_payload(),
+                "stages": [
+                    {
+                        "stage": "register_source",
+                        "status": "completed",
+                        "receipt_ref": "receipt://register/1",
+                        "attempt": 1,
+                        "completed_at": "2026-09-12T12:30:01Z",
+                    }
+                ],
+            }
+
+    captured = {}
+
+    async def fake_request(method, path, **kwargs):
+        captured.update(method=method, path=path, kwargs=kwargs)
+        return Response()
+
+    monkeypatch.setattr(proffer, "_request", fake_request)
+    result = asyncio.run(proffer_operations.operation(PREVIEW_HANDLE))
+
+    assert captured == {
+        "method": "GET",
+        "path": f"/reference-import/operations/{PREVIEW_HANDLE}",
+        "kwargs": {},
+    }
+    assert result.preview_handle == PREVIEW_HANDLE
+    assert result.stages[0].stage == "register_source"
+
+
+def test_operation_detail_rejects_a_different_preview_handle(monkeypatch) -> None:
+    class Response:
+        def json(self):
+            return {**operation_payload(OTHER_PREVIEW_HANDLE), "stages": []}
+
+    async def fake_request(*args, **kwargs):
+        return Response()
+
+    monkeypatch.setattr(proffer, "_request", fake_request)
+    try:
+        asyncio.run(proffer_operations.operation(PREVIEW_HANDLE))
+    except proffer.ProfferError as error:
+        assert error.status_code == 502
+        assert "operation detail correlation failed" in error.detail
+    else:
+        raise AssertionError("operation detail for another preview handle must fail closed")
 
 
 def test_start_fails_closed_when_upstream_has_only_temporal_ids(monkeypatch) -> None:
@@ -147,12 +272,14 @@ def test_start_fails_closed_when_upstream_has_only_temporal_ids(monkeypatch) -> 
         await proffer.start(
             ProfferStartRequest(
                 request_id="r1",
-                matter_id="00000000-0000-0000-0000-000000000001",
-                court_case_id="00000000-0000-0000-0000-000000000002",
+                matter_id=MATTER_ID,
+                court_case_id=COURT_CASE_ID,
                 source_ref=f"upload://{'a' * 64}",
                 declared_format="pdf",
                 parser_options_ref="opts-1",
-            )
+                matter_mode="TEST",
+            ),
+            mode="TEST",
         )
 
     try:
@@ -167,8 +294,9 @@ def test_start_fails_closed_when_upstream_has_only_temporal_ids(monkeypatch) -> 
 def test_decision_identity_is_derived_from_authentik_request_state(monkeypatch) -> None:
     captured = {}
 
-    async def fake_decide(preview_handle, body, actor):
+    async def fake_decide(preview_handle, body, actor, *, mode):
         captured.update(handle=preview_handle, body=body.model_dump(), actor=actor.model_dump())
+        captured["mode"] = mode
         return {"preview_handle": PREVIEW_HANDLE, "status": "accepted"}
 
     monkeypatch.setattr(runtime, "decide", fake_decide)
@@ -178,6 +306,7 @@ def test_decision_identity_is_derived_from_authentik_request_state(monkeypatch) 
             PREVIEW_HANDLE,
             ProfferDecisionRequest(approved=True, reason=""),
             authenticated_request(),
+            "TEST",
         )
     )
     assert result == {"preview_handle": PREVIEW_HANDLE, "status": "accepted"}
@@ -201,7 +330,7 @@ def test_preview_decision_forwards_actor_only_in_trusted_headers(monkeypatch) ->
 
     monkeypatch.setattr(proffer, "_request", fake_request)
     actor = ProfferDecisionActor(subject_uid="authentik-subject-123", username="matt")
-    asyncio.run(proffer.decide(PREVIEW_HANDLE, ProfferDecisionRequest(approved=True), actor))
+    asyncio.run(proffer.decide(PREVIEW_HANDLE, ProfferDecisionRequest(approved=True), actor, mode="TEST"))
 
     assert captured["kwargs"]["json"] == {"approved": True, "reason": ""}
     assert "actor" not in captured["kwargs"]["json"]
@@ -220,9 +349,10 @@ def test_decision_fails_closed_without_authenticated_subject() -> None:
                 PREVIEW_HANDLE,
                 ProfferDecisionRequest(approved=True, reason=""),
                 request,
+                "TEST",
             )
         )
-    except Exception as error:
+    except HTTPException as error:
         assert getattr(error, "status_code", None) == 401
     else:
         raise AssertionError("decision must require immutable proxy-authenticated identity")
@@ -238,9 +368,10 @@ def test_decision_fails_closed_for_header_unsafe_authenticated_identity() -> Non
                 PREVIEW_HANDLE,
                 ProfferDecisionRequest(approved=True, reason=""),
                 request,
+                "TEST",
             )
         )
-    except Exception as error:
+    except HTTPException as error:
         assert getattr(error, "status_code", None) == 401
         assert "invalid" in error.detail
     else:
@@ -251,7 +382,7 @@ def test_decision_model_rejects_browser_supplied_actor_fields() -> None:
     for forbidden in ({"decider": "owner"}, {"role": "owner"}, {"subject_uid": "forged"}):
         try:
             ProfferDecisionRequest(approved=True, reason="", **forbidden)
-        except Exception as error:
+        except ValidationError as error:
             assert "extra_forbidden" in str(error)
         else:
             raise AssertionError(f"browser actor field accepted: {next(iter(forbidden))}")
@@ -267,6 +398,29 @@ def test_upstream_preview_unknown_fields_are_ignored_compatibly() -> None:
 
     assert result.preview_handle == PREVIEW_HANDLE
     assert not hasattr(result, "future_metadata")
+
+
+def test_partial_preview_preserves_context_import_checkpoints() -> None:
+    result = ProfferPreviewResponse.model_validate(
+        {
+            "preview_handle": PREVIEW_HANDLE,
+            "phase": "starting",
+            "matter_mode": "TEST",
+            "checkpoints": [
+                {"checkpoint": "raw_source_verification", "status": "pending"},
+                {
+                    "checkpoint": "parser_selection",
+                    "status": "completed",
+                    "receipt_ref": "receipt-selection",
+                },
+            ],
+        }
+    )
+
+    assert result.correlation is None
+    assert result.checkpoints is not None
+    assert result.checkpoints[0].checkpoint == "raw_source_verification"
+    assert result.checkpoints[1].receipt_ref == "receipt-selection"
 
 
 def test_repair_assessment_is_readable_only_through_correlated_opaque_handle(monkeypatch) -> None:
@@ -289,7 +443,7 @@ def test_repair_assessment_is_readable_only_through_correlated_opaque_handle(mon
         return Response()
 
     monkeypatch.setattr(proffer, "_request", fake_request)
-    result = asyncio.run(proffer.preview(PREVIEW_HANDLE))
+    result = asyncio.run(proffer.preview(PREVIEW_HANDLE, mode="TEST"))
 
     assert result.phase == "awaiting_repair_decision"
     assert result.repair_assessment is not None
@@ -313,7 +467,7 @@ def test_clean_repair_assessment_is_read_only_and_needs_no_browser_decision(monk
         return Response()
 
     monkeypatch.setattr(proffer, "_request", fake_request)
-    result = asyncio.run(proffer.preview(PREVIEW_HANDLE))
+    result = asyncio.run(proffer.preview(PREVIEW_HANDLE, mode="TEST"))
 
     assert result.repair_assessment is not None
     assert result.repair_assessment.review_required is False
@@ -333,7 +487,9 @@ def test_preview_events_fail_closed_on_non_monotonic_replay() -> None:
 
     async def exercise():
         emitted = []
-        async for item in proffer.validated_preview_events(response, preview_handle=PREVIEW_HANDLE, last_event_id=4):
+        async for item in proffer.validated_preview_events(
+            response, preview_handle=PREVIEW_HANDLE, mode="TEST", last_event_id=4
+        ):
             emitted.append(item)
         return emitted
 
@@ -472,7 +628,7 @@ def test_preview_event_stream_reads_and_forwards_service_token(monkeypatch, tmp_
     monkeypatch.setattr(proffer.settings, "proffer_service_token_file", str(secret))
     monkeypatch.setattr(proffer.httpx, "AsyncClient", Client)
 
-    client, response = asyncio.run(proffer.open_preview_event_stream(PREVIEW_HANDLE, last_event_id=4))
+    client, response = asyncio.run(proffer.open_preview_event_stream(PREVIEW_HANDLE, mode="TEST", last_event_id=4))
     assert captured["request"].headers["Authorization"] == f"Bearer {stream_token}"
     assert captured["request"].headers["Last-Event-ID"] == "4"
     asyncio.run(response.aclose())
@@ -509,7 +665,7 @@ def test_upload_stream_reads_and_forwards_service_token(monkeypatch, tmp_path) -
     monkeypatch.setattr(proffer.httpx, "AsyncClient", Client)
 
     client, response = asyncio.run(
-        proffer.open_upload_stream(body(), content_type="application/octet-stream", content_length="7")
+        proffer.open_upload_stream(body(), mode="TEST", content_type="application/octet-stream", content_length="7")
     )
     assert captured["request"].headers["Authorization"] == f"Bearer {upload_token}"
     assert captured["request"].headers["Content-Length"] == "7"
@@ -519,8 +675,10 @@ def test_upload_stream_reads_and_forwards_service_token(monkeypatch, tmp_path) -
 
 def test_preview_requires_full_correlation_and_digest() -> None:
     try:
-        ProfferPreviewResponse.model_validate({"preview_handle": PREVIEW_HANDLE, "phase": "awaiting_decision"})
-    except Exception as error:
+        ProfferPreviewResponse.model_validate(
+            {"preview_handle": PREVIEW_HANDLE, "phase": "awaiting_decision", "matter_mode": "TEST"}
+        )
+    except ValidationError as error:
         assert "correlation" in str(error)
         assert "preview_digest" in str(error)
     else:
@@ -537,9 +695,11 @@ def test_service_fails_closed_without_dedicated_starter_configuration(monkeypatc
                 source_ref=f"upload://{'a' * 64}",
                 declared_format="pdf",
                 parser_options_ref="opts-1",
-                matter_id="00000000-0000-0000-0000-000000000001",
-                court_case_id="00000000-0000-0000-0000-000000000002",
-            )
+                matter_id=MATTER_ID,
+                court_case_id=COURT_CASE_ID,
+                matter_mode="TEST",
+            ),
+            mode="TEST",
         )
 
     try:
@@ -559,26 +719,36 @@ def test_start_rejects_malformed_matter_uuid() -> None:
             source_ref=f"upload://{'a' * 64}",
             declared_format="pdf",
             parser_options_ref="opts-1",
+            matter_mode="TEST",
         )
-    except Exception as error:
+    except ValidationError as error:
         assert "valid UUID" in str(error)
     else:
         raise AssertionError("malformed matter_id must be rejected")
 
 
-def test_start_accepts_only_upload_or_fixed_casebible_sorted_scope() -> None:
+def test_start_accepts_only_upload_or_allowlisted_casebible_r2_scope() -> None:
     common = {
         "request_id": "r1",
         "matter_id": "00000000-0000-0000-0000-000000000001",
         "court_case_id": "00000000-0000-0000-0000-000000000002",
         "declared_format": "pdf",
         "parser_options_ref": "opts-1",
+        "matter_mode": "TEST",
     }
     upload_ref = f"upload://{'a' * 64}"
     assert ProfferStartRequest(source_ref=upload_ref, **common).source_ref == upload_ref
     assert (
         ProfferStartRequest(source_ref="r2://casebible-sorted/folder/source.pdf", **common).source_ref
         == "r2://casebible-sorted/folder/source.pdf"
+    )
+    assert (
+        ProfferStartRequest(source_ref="r2://casebible-raw/source.xml", **common).source_ref
+        == "r2://casebible-raw/source.xml"
+    )
+    assert (
+        ProfferStartRequest(source_ref="r2://casebible-quarantine/source.zip", **common).source_ref
+        == "r2://casebible-quarantine/source.zip"
     )
     for forbidden in (
         "file:///etc/passwd",
@@ -588,8 +758,8 @@ def test_start_accepts_only_upload_or_fixed_casebible_sorted_scope() -> None:
     ):
         try:
             ProfferStartRequest(source_ref=forbidden, **common)
-        except Exception as error:
-            assert "Case Bible Sorted" in str(error)
+        except ValidationError as error:
+            assert "allowlisted Case Bible R2" in str(error)
         else:
             raise AssertionError(f"forbidden source scope accepted: {forbidden}")
 
@@ -604,7 +774,7 @@ def test_preview_snapshot_requires_exact_requested_handle(monkeypatch) -> None:
 
     monkeypatch.setattr(proffer, "_request", fake_request)
     try:
-        asyncio.run(proffer.preview(PREVIEW_HANDLE))
+        asyncio.run(proffer.preview(PREVIEW_HANDLE, mode="TEST"))
     except proffer.ProfferError as error:
         assert error.status_code == 502
         assert "snapshot correlation failed" in error.detail
@@ -627,7 +797,7 @@ def test_preview_messages_require_exact_requested_handle(monkeypatch) -> None:
 
     monkeypatch.setattr(proffer, "_request", fake_request)
     try:
-        asyncio.run(proffer.preview_messages(PREVIEW_HANDLE, cursor=None, limit=100))
+        asyncio.run(proffer.preview_messages(PREVIEW_HANDLE, mode="TEST", cursor=None, limit=100))
     except proffer.ProfferError as error:
         assert error.status_code == 502
         assert "message correlation failed" in error.detail
@@ -645,7 +815,7 @@ def test_malformed_json_is_normalized_to_502(monkeypatch) -> None:
 
     monkeypatch.setattr(proffer, "_request", fake_request)
     try:
-        asyncio.run(proffer.preview(PREVIEW_HANDLE))
+        asyncio.run(proffer.preview(PREVIEW_HANDLE, mode="TEST"))
     except proffer.ProfferError as error:
         assert error.status_code == 502
         assert "malformed JSON for preview snapshot" in error.detail
@@ -668,6 +838,7 @@ def test_decision_response_requires_exact_requested_handle(monkeypatch) -> None:
                 PREVIEW_HANDLE,
                 ProfferDecisionRequest(approved=True, reason=""),
                 proffer.ProfferDecisionActor(subject_uid="subject-1", username="owner"),
+                mode="TEST",
             )
         )
     except proffer.ProfferError as error:
@@ -702,8 +873,8 @@ def test_repair_decision_forwards_bounded_body_actor_headers_and_deterministic_k
         tool_payload={"destination_ref": "derived://repair/result"},
     )
 
-    first = asyncio.run(proffer.decide_repair(PREVIEW_HANDLE, body, actor))
-    second = asyncio.run(proffer.decide_repair(PREVIEW_HANDLE, body, actor))
+    first = asyncio.run(proffer.decide_repair(PREVIEW_HANDLE, body, actor, mode="TEST"))
+    second = asyncio.run(proffer.decide_repair(PREVIEW_HANDLE, body, actor, mode="TEST"))
 
     assert first.status == second.status == "signaled"
     assert calls[0][0:2] == (
@@ -740,9 +911,10 @@ def test_repair_decision_route_fails_closed_without_authenticated_identity() -> 
                 PREVIEW_HANDLE,
                 ProfferRepairDecisionRequest(approved=True, apply_repair=False),
                 request,
+                "TEST",
             )
         )
-    except Exception as error:
+    except HTTPException as error:
         assert getattr(error, "status_code", None) == 401
     else:
         raise AssertionError("repair decision must require proxy-authenticated identity")
@@ -767,6 +939,7 @@ def test_repair_decision_requires_exact_requested_handle(monkeypatch) -> None:
                 PREVIEW_HANDLE,
                 ProfferRepairDecisionRequest(approved=True, apply_repair=False),
                 ProfferDecisionActor(subject_uid="subject-1", username="owner"),
+                mode="TEST",
             )
         )
     except proffer.ProfferError as error:
@@ -787,9 +960,10 @@ def test_repair_decision_route_preserves_upstream_error(monkeypatch) -> None:
                 PREVIEW_HANDLE,
                 ProfferRepairDecisionRequest(approved=True, apply_repair=False),
                 authenticated_request(),
+                "TEST",
             )
         )
-    except Exception as error:
+    except HTTPException as error:
         assert getattr(error, "status_code", None) == 409
         assert error.detail == "workflow is not awaiting repair"
     else:

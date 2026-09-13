@@ -157,11 +157,11 @@ export interface RunStageSummary {
   content?: string | null;
 }
 
-/** Typed `output` shapes per stage — keyed by convention on stage `name`
- * ("custody" | "parse" | "store" | "knowledge"). Field names verified
+/** Historical ingest output shapes; the old first-stage wire name remains
+ * readable but is displayed as raw-source verification. Field names verified
  * against the real implementation (server/evidence/workflows.py's
  * `_ledger_stage_output`), not just the build brief's prose description. */
-export interface CustodyOutput {
+export interface RawSourceVerificationOutput {
   sha256?: string | null;
   artifact_id?: string | null;
   duplicate?: boolean;
@@ -197,7 +197,7 @@ export interface KnowledgeOutput {
   [key: string]: unknown;
 }
 
-export type StageOutput = CustodyOutput | ParseOutput | StoreOutput | KnowledgeOutput | Record<string, unknown>;
+export type StageOutput = RawSourceVerificationOutput | ParseOutput | StoreOutput | KnowledgeOutput | Record<string, unknown>;
 
 /** A stage as returned by `GET /v1/runs/{run_id}` (the detail view) —
  * `SELECT *` off `analysis.workflow_run_stage`, so `stage_id`/`run_id` also
@@ -911,6 +911,7 @@ export type EvidenceReviewDecision =
 export type KnowledgeLane = "platform" | "legal" | "personal_history" | "context" | "evidence";
 export type RecordSourceKind = "first_party" | "third_party_acquired" | "unclassified";
 export type RecordProjectionKind = "authored_normalized" | "derived_third_party";
+export type MatterMode = "TEST" | "REAL";
 
 export interface Matter {
   id: string;
@@ -920,6 +921,7 @@ export interface Matter {
   partition_keys: string[];
   created_at: string;
   updated_at: string;
+  matter_mode: MatterMode;
 }
 
 export interface MatterListResponse {
@@ -951,6 +953,7 @@ export interface MatterDetail extends Matter {
 
 export interface ProfferUploadResponse {
   acquisition_ref: string;
+  matter_mode: MatterMode;
   sha256: string;
   byte_length: number;
 }
@@ -962,6 +965,15 @@ export interface ProfferSourceObject {
   byte_length: number;
   last_modified?: string | null;
   etag?: string | null;
+  source_ref: string;
+  source_location: "r2";
+  bucket: string;
+  relative_parent: string;
+  extension: string;
+  file_kind: string;
+  media_type?: string | null;
+  archive_format?: string | null;
+  intake_note?: string | null;
 }
 
 export interface ProfferSourcePrefix {
@@ -970,23 +982,52 @@ export interface ProfferSourcePrefix {
   name: string;
 }
 
+export interface ProfferSourceRoot {
+  root_id: string;
+  label: string;
+  source_location: "r2";
+  bucket: string;
+  root_ref: string;
+  temporary: boolean;
+}
+
 export interface ProfferSourceBrowserResponse {
-  source: "casebible-sorted";
+  source: "casebible-raw" | "casebible-sorted" | "casebible-quarantine";
   prefix: string;
   delimiter: "/";
   filter: string;
   filter_applied: boolean;
+  filter_scope: "root";
+  search_complete: boolean;
+  scanned_count: number;
+  scan_limit_reached: boolean;
+  active_root_id: string;
+  available_roots: ProfferSourceRoot[];
+  available_file_types: string[];
   page_size: number;
   is_truncated: boolean;
   continuation_token?: string | null;
   prefixes: ProfferSourcePrefix[];
   objects: ProfferSourceObject[];
+  matter_mode: MatterMode;
+}
+
+export interface ProfferParserCandidate {
+  handler_id: string;
+  handler_version: string;
+  execution_path: "decoder" | "duckdb";
+  compatibility_ref: string;
+  reason: string;
 }
 
 export interface ProfferSourceInspection {
-  source: "casebible-sorted";
+  source: "casebible-raw" | "casebible-sorted" | "casebible-quarantine";
+  root_id: string;
   key: string;
   source_ref: string;
+  active_root_id: string;
+  source_location: "r2";
+  bucket: string;
   name: string;
   byte_length: number;
   etag: string;
@@ -1003,6 +1044,7 @@ export interface ProfferSourceInspection {
     basis: "filename_extension";
     authoritative: false;
   };
+  matter_mode: MatterMode;
 }
 
 export interface ProfferHumanSourceAssertions {
@@ -1027,6 +1069,7 @@ export interface ProfferSourceContextReceipt {
   content_digest: string;
   revision: number;
   recorded_at: string;
+  matter_mode: MatterMode;
 }
 
 export interface ProfferStartRequest {
@@ -1037,18 +1080,205 @@ export interface ProfferStartRequest {
   matter_id: string;
   court_case_id: string;
   source_context_ref?: string | null;
+  matter_mode: MatterMode;
 }
 
 export interface ProfferStartResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
+}
+
+export interface ProfferHandlerSelectionDecisionRequest {
+  recommendation_ref: string;
+  handler_id: string;
+  handler_version: string;
+  execution_path: "decoder" | "duckdb";
+  compatibility_ref: string;
+}
+
+export interface ProfferHandlerSelectionDecisionResponse {
+  preview_handle: string;
+  matter_mode: MatterMode;
+  decision_ref: string;
+  status: string;
+}
+
+export type ProfferOperationLifecycle =
+  | "running"
+  | "awaiting_repair_decision"
+  | "awaiting_preview_decision"
+  | "completed"
+  | "failed"
+  | "unavailable";
+
+export type ProfferOperationWait = "repair_decision" | "preview_decision";
+
+export interface ProfferOperationSummary {
+  preview_handle: string;
+  request_id: string;
+  source_ref: string;
+  service: "proffer";
+  created_at: string;
+  lifecycle: ProfferOperationLifecycle;
+  current_stage?: string | null;
+  active_stages: string[];
+  wait?: ProfferOperationWait | null;
+  terminal: boolean;
+  reason?: string;
+  source_version_ref?: string | null;
+  completed_stage_count: number;
+}
+
+export interface ProfferOperationStage {
+  stage: string;
+  status: string;
+  ref?: string | null;
+  receipt_ref?: string | null;
+  reason?: string;
+  attempt?: number | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface ProfferOperationDetail extends ProfferOperationSummary {
+  stages: ProfferOperationStage[];
+}
+
+export interface ProfferOperationListResponse {
+  items: ProfferOperationSummary[];
+  next_cursor?: string | null;
+}
+
+export interface ProfferProposalResource {
+  preview_handle: string;
+  request_id: string;
+  source_ref: string;
+  created_at: string;
+  lifecycle: ProfferOperationLifecycle;
+  current_stage?: string | null;
+  wait?: ProfferOperationWait | null;
+  terminal: boolean;
+  reason: string;
+  source_version_ref?: string | null;
+  completed_stage_count: number;
+  representation_state: "committed_readback" | "precommit_proposal";
+  representation_detail: string;
+  content_status: "available" | "pending" | "unavailable";
+  content_reason: string;
+  record_preview_available: boolean;
+  chunk_preview_available: boolean;
+  chunk_count?: number | null;
+  open_path: string;
+  content_path: string;
+  operator_path: string;
+}
+
+export interface ProfferProposalResourceCatalog {
+  scope: "context_review_resources";
+  matter_mode: MatterMode;
+  matter_id: string;
+  court_case_id: string;
+  approval_destination: "neo4j";
+  later_manual_projection: "surrealdb";
+  items: ProfferProposalResource[];
+  next_cursor?: string | null;
+}
+
+export interface ProfferOperatorAvailability {
+  status: "available" | "pending" | "unavailable";
+  reason: string;
+  ref?: string | null;
+  count?: number | null;
+}
+
+export interface ProfferOperatorSnapshot {
+  preview_handle: string;
+  matter_mode: MatterMode;
+  matter_id: string;
+  court_case_id: string;
+  request_id: string;
+  source_ref: string;
+  source_version_ref?: string | null;
+  lifecycle: ProfferOperationLifecycle;
+  phase: string;
+  current_stage?: string | null;
+  active_stages: string[];
+  retry_count: number;
+  reason: string;
+  terminal: boolean;
+  parser_handler?: string | null;
+  parser_execution_path?: "decoder" | "duckdb" | null;
+  contracts: Array<{ contract: string; version: string; authority: string }>;
+  package: {
+    original: ProfferOperatorAvailability;
+    original_fingerprint: ProfferOperatorAvailability;
+    package_identity: ProfferOperatorAvailability;
+    package_hash: ProfferOperatorAvailability;
+    metadata: ProfferOperatorAvailability;
+    attachments: ProfferOperatorAvailability;
+    parsed_or_extracted_products: ProfferOperatorAvailability;
+    normalized_products: ProfferOperatorAvailability;
+  };
+  authority_state: {
+    intake_classification: ProfferOperatorAvailability;
+    context_status: ProfferOperatorAvailability;
+    evidence_eligibility: ProfferOperatorAvailability;
+    promotion_prerequisites: ProfferOperatorAvailability;
+    promotion_rehash: ProfferOperatorAvailability;
+    custody_state: ProfferOperatorAvailability;
+  };
+  repair_state: {
+    assessment_report: ProfferOperatorAvailability;
+    affected_units: ProfferOperatorAvailability;
+    engine_profile: ProfferOperatorAvailability;
+    proposed_action: ProfferOperatorAvailability;
+    decision_receipt: ProfferOperatorAvailability;
+    reentry_rule: string;
+  };
+  storage_state: {
+    source_type: ProfferOperatorAvailability;
+    context_target: ProfferOperatorAvailability;
+    postgres_control_state: ProfferOperatorAvailability;
+    searchable_projection: ProfferOperatorAvailability;
+    rule: string;
+  };
+  layers: Array<{
+    layer: "temporal" | "n8n";
+    status: "active" | "waiting" | "completed" | "failed" | "unavailable" | "not_observed";
+    workflow_id: ProfferOperatorAvailability;
+    run_or_execution_id: ProfferOperatorAvailability;
+    version: ProfferOperatorAvailability;
+    current_node_or_stage?: string | null;
+    detail: string;
+  }>;
+  surfaces: Record<"source" | "records" | "chunks" | "entities" | "graph" | "workflow" | "duckdb", ProfferOperatorAvailability>;
+  stages: ProfferOperationStage[];
+  valid_actions: Array<{
+    action: "select_handler" | "retain_original" | "approve_preview" | "reject_preview" | "refresh" | "restart_new_operation";
+    label: string;
+    detail: string;
+    requires_reason: boolean;
+  }>;
+  unavailable_controls: Array<{
+    control: "apply_repair" | "retry_stage" | "skip_stage" | "cancel" | "resume_checkpoint";
+    reason: string;
+  }>;
+  write_boundary: string;
 }
 
 export interface ProfferPreviewReceipt {
-  receipt_type: "custody" | "parser_selection" | "parser_execution" | "normalization" | "storage" | "completeness";
+  receipt_type: "raw_source_verification" | "parser_selection" | "parser_execution" | "normalization" | "storage" | "completeness";
   receipt_ref: string;
   status: "pending" | "running" | "completed" | "failed" | "skipped";
   digest?: string | null;
   recorded_at: string;
+}
+
+export interface ProfferPreviewCheckpoint {
+  checkpoint: ProfferPreviewReceipt["receipt_type"];
+  status: "pending" | "running" | "completed" | "failed";
+  receipt_ref?: string | null;
+  reason?: string;
 }
 
 export interface ProfferRepairAssessmentView {
@@ -1066,14 +1296,16 @@ export interface ProfferRepairDecisionRequest {
 
 export interface ProfferRepairDecisionResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   decision_ref: string;
   status: string;
 }
 
 export interface ProfferPreviewResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   phase: "awaiting_decision" | "approved" | "rejected" | "timed_out" | string;
-  correlation: {
+  correlation?: {
     request_id: string;
     source_version_id: string;
     raw_generation_id: string;
@@ -1084,10 +1316,24 @@ export interface ProfferPreviewResponse {
     parser_version: string;
     config_digest: string;
   } | null;
-  preview_digest: string;
-  receipts: ProfferPreviewReceipt[];
+  preview_digest?: string | null;
+  receipts?: ProfferPreviewReceipt[] | null;
   reason?: string;
   repair_assessment?: ProfferRepairAssessmentView | null;
+  checkpoints?: ProfferPreviewCheckpoint[] | null;
+  handler_recommendation_ref?: string | null;
+  handler_decision_ref?: string | null;
+  detected_format?: string | null;
+  detected_format_ref?: string | null;
+  signature_ref?: string | null;
+  recommended_handler?: ProfferParserCandidate | null;
+  alternative_handlers?: ProfferParserCandidate[] | null;
+  lifecycle?: ProfferOperationLifecycle | null;
+  current_stage?: string | null;
+  active_stages?: string[];
+  wait?: ProfferOperationWait | null;
+  terminal?: boolean | null;
+  completed_stage_count?: number | null;
 }
 
 export interface ProfferPreviewParticipant {
@@ -1118,9 +1364,126 @@ export interface ProfferPreviewMessage {
 
 export interface ProfferPreviewMessagesResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   participants: ProfferPreviewParticipant[];
   messages: ProfferPreviewMessage[];
   next_cursor?: string | null;
+}
+
+export interface ProfferPackageProjection {
+  source_version_ref: string;
+  original_ref?: string | null;
+  original_filename?: string | null;
+  declared_format: string;
+  status: string;
+  original_sha256?: string | null;
+  original_bytes?: number | null;
+  storage_class?: string | null;
+  metadata_count: number;
+  attachment_count: number;
+}
+
+export interface ProfferAttemptProjection {
+  attempt_ref?: string;
+  projection_ref: string;
+  source_version_ref: string;
+  raw_generation_ref: string;
+  normalized_generation_ref: string;
+  parser?: { parser_id: string; parser_version: string; config_digest: string } | null;
+  selection_ref?: string;
+  parser_options_ref?: string;
+  receipts: ProfferPreviewReceipt[];
+}
+
+export interface ProfferGenericRecord {
+  record_id: string;
+  ordinal: number;
+  record_type: "message" | "call" | "event" | "media" | "document" | "other";
+  occurred_at?: string | null;
+  payload: Record<string, unknown>;
+  source_locator_ref: string;
+}
+
+export interface ProfferPackageAttachment {
+  object_ref: string;
+  parent_object_ref?: string | null;
+  member_locator: Record<string, unknown>;
+  sha256: string;
+  byte_length: number;
+  storage_class: string;
+}
+
+export interface ProfferChunkGeneration {
+  generation_ref: string;
+  generation_ordinal: number;
+  status: "open" | "sealed" | "aborted";
+  policy_id: string;
+  policy_version: string;
+  chunker_id: string;
+  chunker_version: string;
+  schema_version: string;
+  source_view: string;
+  source_sha256: string;
+  manifest_sha256?: string | null;
+  chunk_count?: number | null;
+  receipt_ref: string;
+  reassembly_result?: string | null;
+  sealed_at?: string | null;
+}
+
+export interface ProfferContentChunk {
+  chunk_ref: string;
+  index: number;
+  content: string;
+  sha256: string;
+  derivation_mode: "verbatim_span" | "composed" | "unverified_derived";
+  token_count?: number | null;
+  locator_ref: string;
+  byte_start: number;
+  byte_end: number;
+}
+
+export interface ProfferContentResponse {
+  preview_handle: string;
+  matter_mode: MatterMode;
+  package: ProfferPackageProjection;
+  attempt: ProfferAttemptProjection;
+  attempts_complete: boolean;
+  attempts_reason?: string;
+  records: ProfferGenericRecord[];
+  attachments: ProfferPackageAttachment[];
+  chunk_generation?: ProfferChunkGeneration | null;
+  chunks: ProfferContentChunk[];
+  next_record_cursor?: string | null;
+  next_chunk_cursor?: string | null;
+}
+
+export type ProfferPotentialPromotionScope = "record" | "chunk" | "entity";
+
+export interface ProfferPotentialPromotionFlagRequest {
+  scope: ProfferPotentialPromotionScope;
+  target_id: string;
+  attempt_id: string;
+  reason: string;
+}
+
+export interface ProfferPotentialPromotionFlag {
+  flag_id: string;
+  classification: "potential_promotion";
+  preview_handle: string;
+  matter_mode: MatterMode;
+  scope: ProfferPotentialPromotionScope;
+  target_id: string;
+  attempt_id: string;
+  reason: string;
+  actor_subject_uid: string;
+  actor_username: string;
+  flagged_at: string;
+  status: string;
+}
+
+export interface ProfferPotentialPromotionFlagList {
+  flags: ProfferPotentialPromotionFlag[];
 }
 
 export interface ProfferPreviewEvent {
@@ -1128,6 +1491,7 @@ export interface ProfferPreviewEvent {
   event_type: "phase_changed" | "receipt_recorded" | "messages_available" | "decision_requested" | "decision_recorded" | "completed" | "failed";
   occurred_at: string;
   preview_handle: string;
+  matter_mode: MatterMode;
   phase: string;
   receipt_ref?: string | null;
   message_count?: number | null;
@@ -1136,6 +1500,7 @@ export interface ProfferPreviewEvent {
 
 export interface ProfferDecisionResponse {
   preview_handle: string;
+  matter_mode: MatterMode;
   status: string;
 }
 

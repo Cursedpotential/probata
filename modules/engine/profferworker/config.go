@@ -43,11 +43,12 @@ type Config struct {
 	ToolGatewayServiceTokenFile string
 	ToolGatewayServiceToken     string
 
-	N8NBaseURL         string
-	N8NAuthHeader      string
-	N8NAuthValueFile   string
-	SelectHTTPTimeout  time.Duration
-	ExecuteHTTPTimeout time.Duration
+	N8NBaseURL          string
+	N8NAuthHeader       string
+	N8NAuthValueFile    string
+	N8NFlowBindingsFile string
+	SelectHTTPTimeout   time.Duration
+	ExecuteHTTPTimeout  time.Duration
 }
 
 // LoadConfig reads the fail-closed worker environment contract. The worker
@@ -75,6 +76,7 @@ func LoadConfig() (Config, error) {
 		N8NBaseURL:           strings.TrimRight(require("N8N_PROFFER_BASE_URL"), "/"),
 		N8NAuthHeader:        require("N8N_PROFFER_AUTH_HEADER"),
 		N8NAuthValueFile:     firstEnvironment("N8N_PROFFER_AUTH_VALUE_FILE"),
+		N8NFlowBindingsFile:  firstEnvironment("N8N_FLOW_BINDINGS_FILE"),
 		SelectHTTPTimeout:    35 * time.Second,
 		ExecuteHTTPTimeout:   31 * time.Minute,
 	}
@@ -109,6 +111,9 @@ func LoadConfig() (Config, error) {
 	}
 	if !absoluteRuntimePath(cfg.N8NAuthValueFile) {
 		problems = append(problems, "N8N_PROFFER_AUTH_VALUE_FILE must be an absolute path")
+	}
+	if cfg.N8NFlowBindingsFile != "" && !absoluteRuntimePath(cfg.N8NFlowBindingsFile) {
+		problems = append(problems, "N8N_FLOW_BINDINGS_FILE must be an absolute path when configured")
 	}
 	if cfg.TemporalTaskQueue == legacyEvidenceTaskQueue {
 		problems = append(problems, "TEMPORAL_TASK_QUEUE must be dedicated to universal import and cannot be evidence-pipeline")

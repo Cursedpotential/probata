@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { listEvidenceReviews, reviewEvidenceItem } from "@/lib/api-client";
+import { useFixedCase } from "@/lib/fixed-case-context";
 import type {
   EvidenceDetail,
   EvidenceItem,
@@ -48,6 +49,7 @@ function errorMessage(error: unknown) {
 }
 
 export function EvidenceReviewDialog({ item, onReviewed }: EvidenceReviewDialogProps) {
+  const { mode } = useFixedCase();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [decision, setDecision] = useState<EvidenceReviewDecision>("needs_context");
@@ -75,7 +77,7 @@ export function EvidenceReviewDialog({ item, onReviewed }: EvidenceReviewDialogP
     setDetail(null);
     setDetailError(null);
     try {
-      const result = await loadValidatedEvidenceDetail(item);
+      const result = await loadValidatedEvidenceDetail(item, mode);
       if (request !== detailRequestRef.current) return;
       if (result.item.safe_for_legal_use || result.item.is_authenticated) {
         throw new Error("This review gate only accepts unauthenticated, legally unsafe evidence");
@@ -109,7 +111,7 @@ export function EvidenceReviewDialog({ item, onReviewed }: EvidenceReviewDialogP
       const result = await reviewEvidenceItem(item.matter_id, item.id, {
         decision,
         rationale: rationale.trim(),
-      });
+      }, mode);
       if (result.item.safe_for_legal_use || result.item.is_authenticated) {
         throw new Error("Review unexpectedly granted authentication or legal safety");
       }
@@ -203,6 +205,7 @@ interface EvidenceReviewHistoryDialogProps {
 }
 
 export function EvidenceReviewHistoryDialog({ item }: EvidenceReviewHistoryDialogProps) {
+  const { mode } = useFixedCase();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<EvidenceReviewRecord[]>([]);
@@ -215,7 +218,7 @@ export function EvidenceReviewHistoryDialog({ item }: EvidenceReviewHistoryDialo
     setHistory([]);
     setError(null);
     try {
-      const response = await listEvidenceReviews(item.matter_id, item.id);
+      const response = await listEvidenceReviews(item.matter_id, item.id, mode);
       if (request !== requestRef.current) return;
       setHistory(response.data);
     } catch (requestError) {

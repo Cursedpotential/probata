@@ -1,7 +1,7 @@
 ---
-description: Propose an amendment to an ADR or decision in the cloud docstore, and record it only after you approve
-argument-hint: "<ADR / D-number / topic>" "<the change>"
-allowed-tools: Bash, AskUserQuestion, Read
+description: "Propose an amendment to an ADR or decision in the cloud Docstore, and record it only after owner approval."
+argument-hint: '"<ADR / D-number / topic>" "<the change>"'
+allowed-tools: "Bash, AskUserQuestion, Read"
 ---
 
 <!-- Byline: Claude Code · Opus 5 · 2026-09-10 — owner order: "update ADR". Writes go through fn::decision_amend behind an approval gate. -->

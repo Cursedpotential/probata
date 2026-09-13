@@ -1,3 +1,11 @@
+> ## ▶ START HERE: [`SETUP.md`](SETUP.md)
+>
+> `SETUP.md` (2026-09-09, Claude Code · Opus 5) is the **operational truth**: setup from zero,
+> the verified state, all 16 `fn::` signatures, 14 gotchas, change detection, troubleshooting,
+> and the list of what is NOT built. It was written from a live end-to-end verification run.
+> **This file (`README.md`) is build history and upstream-defect narrative** — useful for
+> *why*, superseded for *how*.
+
 > ## ⚠️ SUPERSEDED IN PART — 2026-09-09 (Claude Code · Opus 5)
 >
 > The docstore now runs **fully embedded, in-process**. No server, no port, nothing
@@ -223,7 +231,7 @@ not add a table `DEFINE FIELD` yourself expecting CocoIndex to pick it up —
    (`requests` arrives transitively via `surrealdb`; it backs the raw
    `/sql` chunk writer above.)
 3. Confirm `NVIDIA_API_KEY` is set (used for the embedding calls).
-4. Confirm `E:/AI_Workspace/Projects/the-platform-workspace/probata/.docstore/.env`
+4. Confirm `E:/AI_Workspace/Projects/Propria/Probata/probata/.docstore/.env`
    has `SURREAL_USER`, `SURREAL_PASS`, `SURREAL_NS=probata`, `SURREAL_DB=docs`,
    `SURREAL_BIND=<host:port>`. **The flow reads `SURREAL_BIND` from this file
    at lifespan start and derives `ws://<bind>/rpc` and `http://<bind>` from
@@ -243,7 +251,7 @@ not add a table `DEFINE FIELD` yourself expecting CocoIndex to pick it up —
 
 Full run (every eligible file in the mapping CSV):
 ```
-cd E:/AI_Workspace/Projects/the-platform-workspace/probata/scripts/docstore
+cd E:/AI_Workspace/Projects/Propria/Probata/probata/scripts/docstore
 COCOINDEX_DB="<path-to-state.db>" "C:/Users/matts/.local/bin/python3.exe" flow_docs.py
 ```
 
@@ -267,7 +275,7 @@ doesn't leave orphaned old chunks behind.
 
 | Var | Default | Purpose |
 |---|---|---|
-| `DOCSTORE_REPO_ROOT` | `E:/AI_Workspace/Projects/the-platform-workspace/probata` | repo root; `docs/` is resolved under it |
+| `DOCSTORE_REPO_ROOT` | `E:/AI_Workspace/Projects/Propria/Probata/probata` | repo root; `docs/` is resolved under it |
 | `DOCSTORE_MAPPING_CSV` | `C:\Users\matts\.claude\jobs\68afe1c5\tmp\out\docs-ingest-mapping.csv` | per-file metadata source |
 | `DOCSTORE_STALENESS_INVENTORY` | `docs/reviews/2026-09-09-docs-staleness-inventory.md` | fallback metadata source, dry-run only, only if the CSV is missing |
 | `DOCSTORE_ONLY_FILES` | unset (= full run) | comma-separated `source_path` allow-list |
@@ -361,9 +369,9 @@ command log, verification queries, and results are in
 Run logs are kept under `.docstore/ingest-run<N>-*.log`. Current command:
 
 ```
-cd E:/AI_Workspace/Projects/the-platform-workspace/probata/scripts/docstore
-COCOINDEX_DB="E:/AI_Workspace/Projects/the-platform-workspace/probata/.docstore/cocoindex_state_v2.db" \
-DOCSTORE_MAPPING_CSV="E:/AI_Workspace/Projects/the-platform-workspace/probata/scripts/docstore/mapping/docs-ingest-mapping.csv" \
+cd E:/AI_Workspace/Projects/Propria/Probata/probata/scripts/docstore
+COCOINDEX_DB="E:/AI_Workspace/Projects/Propria/Probata/probata/.docstore/cocoindex_state_v2.db" \
+DOCSTORE_MAPPING_CSV="E:/AI_Workspace/Projects/Propria/Probata/probata/scripts/docstore/mapping/docs-ingest-mapping.csv" \
     "C:/Users/matts/.local/bin/python3.exe" flow_docs.py
 ```
 

@@ -1,10 +1,16 @@
 package profferworker
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.temporal.io/sdk/activity"
 
+	"github.com/Cursedpotential/probata/engine/activities"
+	"github.com/Cursedpotential/probata/engine/proffer"
 	"github.com/Cursedpotential/probata/engine/stagegraph"
 )
 
@@ -21,13 +27,21 @@ func (r *registrationRecorder) RegisterActivityWithOptions(_ interface{}, option
 
 func TestRegisterAllRegistersCanonicalStagesAndReplayAliasesExactlyOnce(t *testing.T) {
 	recorder := &registrationRecorder{}
-	RegisterAll(recorder, Registrations{})
+	RegisterAll(recorder, Registrations{HandlerSelection: HandlerSelectionActivities{
+		Recommend: func(context.Context, proffer.StageRequest) (proffer.HandlerRecommendationResult, error) {
+			return proffer.HandlerRecommendationResult{}, nil
+		},
+		Validate: func(context.Context, proffer.StageRequest) (proffer.HandlerSelectionValidationResult, error) {
+			return proffer.HandlerSelectionValidationResult{}, nil
+		},
+	}})
 	if recorder.workflowCount != 1 {
 		t.Fatalf("workflow registration count = %d, want 1", recorder.workflowCount)
 	}
 	const replayAliasCount = 3
-	if len(recorder.names) != len(stagegraph.Stages)+replayAliasCount || len(stagegraph.Stages) != 26 {
-		t.Fatalf("activity registration count = %d, want 26 canonical + 3 replay aliases", len(recorder.names))
+	const standaloneActivityCount = 5
+	if len(recorder.names) != len(stagegraph.Stages)+replayAliasCount+standaloneActivityCount || len(stagegraph.Stages) != 26 {
+		t.Fatalf("activity registration count = %d, want 26 canonical + 3 replay aliases + 5 standalone activities", len(recorder.names))
 	}
 	registered := make(map[string]int, len(recorder.names))
 	for _, name := range recorder.names {
@@ -43,9 +57,60 @@ func TestRegisterAllRegistersCanonicalStagesAndReplayAliasesExactlyOnce(t *testi
 			t.Errorf("replay alias %q registered %d times", alias, registered[alias])
 		}
 	}
+	if registered[activities.ExecuteStructuredELTActivityName] != 1 {
+		t.Errorf("standalone structured ELT activity %q registered %d times", activities.ExecuteStructuredELTActivityName, registered[activities.ExecuteStructuredELTActivityName])
+	}
+	if registered[activities.SelectStructuredELTActivityName] != 1 {
+		t.Errorf("standalone structured ELT activity %q registered %d times", activities.SelectStructuredELTActivityName, registered[activities.SelectStructuredELTActivityName])
+	}
+	if registered[proffer.RecommendHandlerActivityName] != 1 || registered[proffer.ValidateHandlerSelectionActivityName] != 1 {
+		t.Errorf("handler recommendation/validation activities were not registered exactly once: %#v", registered)
+	}
+	if registered["run_n8n_flow_activity"] != 1 {
+		t.Errorf("generic n8n flow activity registered %d times", registered["run_n8n_flow_activity"])
+	}
 	for name, count := range registered {
 		if count != 1 {
 			t.Errorf("activity name %q registered %d times", name, count)
 		}
+	}
+}
+
+func TestLoadConfiguredFlowBindingsAllowsNoExtraFlows(t *testing.T) {
+	registry, err := loadConfiguredFlowBindings("")
+	if err != nil {
+		t.Fatalf("loadConfiguredFlowBindings() error = %v", err)
+	}
+	if registry.Count() != 0 {
+		t.Fatalf("binding count = %d, want 0", registry.Count())
+	}
+}
+
+func TestLoadConfiguredFlowBindingsFailsClosedWhenConfiguredFileIsMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.json")
+	_, err := loadConfiguredFlowBindings(path)
+	if err == nil || !strings.Contains(err.Error(), "configured but unavailable") {
+		t.Fatalf("loadConfiguredFlowBindings() error = %v, want unavailable file rejection", err)
+	}
+}
+
+func TestLoadConfiguredFlowBindingsValidatesConfiguredFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bindings.json")
+	if err := os.WriteFile(path, []byte(`{"bindings":[{"name":"ocr_page","webhook_path":"proffer/ocr-page"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	registry, err := loadConfiguredFlowBindings(path)
+	if err != nil {
+		t.Fatalf("loadConfiguredFlowBindings() error = %v", err)
+	}
+	if registry.Count() != 1 {
+		t.Fatalf("binding count = %d, want 1", registry.Count())
+	}
+
+	if err := os.WriteFile(path, []byte(`{"bindings":[{"name":"bad/name","webhook_path":"proffer/ocr-page"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadConfiguredFlowBindings(path); err == nil || !strings.Contains(err.Error(), "invalid N8N_FLOW_BINDINGS_FILE") {
+		t.Fatalf("loadConfiguredFlowBindings() error = %v, want invalid binding rejection", err)
 	}
 }

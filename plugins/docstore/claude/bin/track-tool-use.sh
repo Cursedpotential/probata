@@ -28,7 +28,7 @@ mkdir -p "$STATE_DIR" 2>/dev/null || true
 FLAG="$STATE_DIR/last_search_${SESSION_ID:-nosession}.flag"
 
 case "$TOOL_NAME" in
-  mcp__plugin_docstore_docs__*|mcp__plugin_docstore_memory__*|mcp__docs__*|mcp__memory__*)
+  mcp__plugin_propria_docstore_control__*|mcp__plugin_propria_docstore_docs__*|mcp__plugin_propria_docstore_memory__*|mcp__docs__*|mcp__memory__*)
     printf '1' > "$FLAG" 2>/dev/null || true
     ;;
   *)

@@ -11,7 +11,7 @@ Layout:  plugins/docstore/claude/   <- shared namespaced skills, commands and ag
          plugins/docstore/          <- explicit Claude/Codex plugin root
 
 Claude consumes the slim package through its registered local marketplace.
-Codex consumes the root package explicitly as `probata-docstore@probata` via
+Codex consumes the root package explicitly as `propria-docstore@propria` via
 `plugins/.agents/plugins/marketplace.json`. The marker blocks only accidental
 bare-skill scanning; it does not disable explicit plugin loading.
 

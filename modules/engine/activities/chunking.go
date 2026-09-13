@@ -1,30 +1,8 @@
-// Package activities: this file owns chunk_document_activity only — the
-// skip-to-chunk capability Activity (D-116 / owner ruling 2026-08-29:
-// "if it doesn't need to be parsed and really needs to be chunked and
-// ingested, so be it"). It never parses, normalizes, reconciles, or verifies
-// anything beyond the completeness proof engine/chunk.Registry already
-// produces in-process.
-//
-// BUILD LANE C1 wiring status (report this alongside the handoff): this
-// Activity is registered on the Proffer worker (profferworker.RegisterAll) and fully
-// Temporal-callable today, using the exact same proffer.StageRequest ->
-// proffer.StageResult wire contract as every one of ProfferWorkflow's 26
-// canon stages. It is NOT invoked by ProfferWorkflow yet.
-// stagegraph.ChunkDocument documents exactly why splicing it into
-// stagegraph.Stages today is unsafe (the graph has no vocabulary for an
-// alternate, mutually-exclusive path — every Stages member must be a
-// transitive ancestor of PublishGeneration, proven by graph_test.go). Wiring
-// it in cleanly needs two things neither of which this lane forces:
-//  1. A workflow.GetVersion-gated branch in proffer/workflow.go (mirroring the
-//     integratedPreviewChangeID pattern) so already-running/preserved
-//     Temporal histories from before this change keep replaying
-//     deterministically — an ungated new branch point breaks replay for any
-//     in-flight or archived history.
-//  2. A route decision the workflow can read before scheduling
-//     select_parser_activity — e.g. a new WorkflowInput field the starter
-//     sets, or a "route" field added to select_parser_activity's own result
-//     that the workflow inspects — so "chunk-not-parse" is a real decision
-//     made once, not inferred structurally.
+// Package activities: this file owns chunk_document_activity only. Under the
+// D-158 non-messaging context route it chunks the retained source
+// representation selected for one immutable extraction attempt. It runs only
+// after the workflow has verified extraction/normalization and never parses,
+// normalizes, reconciles, publishes, or creates evidence/custody state.
 package activities
 
 import (
@@ -53,24 +31,28 @@ const (
 
 // ChunkDocumentSpec is the compact, already-resolved input to
 // chunk_document_activity, built from proffer.StageRequest by
-// chunkDocumentSpecFrom. OriginalRef names the retained original object to
-// chunk directly (source_view "original" — the skip-to-chunk route this lane
-// implements). Signature selects the chunk.Registry variant
-// (chronology/research_report/strategy_memo/statute_extract).
+// chunkDocumentSpecFrom. SourceRepresentationRef names the retained
+// original/member/derived object used for this exact extraction attempt.
+// Signature selects the chunk.Registry variant.
 type ChunkDocumentSpec struct {
-	RequestID        string
-	Attempt          int32
-	SourceVersionRef proffer.Ref
-	OriginalRef      proffer.Ref
-	Signature        chunk.Signature
-	DerivationMode   string
-	PolicyID         string
-	PolicyVersion    string
+	RequestID                 string
+	Attempt                   int32
+	PackageRef                proffer.Ref
+	ExtractionAttemptRef      proffer.Ref
+	SourceVersionRef          proffer.Ref
+	SourceRepresentationRef   proffer.Ref
+	NormalizedGenerationRef   proffer.Ref
+	NormalizedVerificationRef proffer.Ref
+	Signature                 chunk.Signature
+	DerivationMode            string
+	PolicyID                  string
+	PolicyVersion             string
 }
 
 func (s ChunkDocumentSpec) validate() error {
-	if strings.TrimSpace(s.RequestID) == "" || s.SourceVersionRef == "" || s.OriginalRef == "" {
-		return fmt.Errorf("%s requires request, source version, and original references", stagegraph.ChunkDocument)
+	if strings.TrimSpace(s.RequestID) == "" || s.PackageRef == "" || s.ExtractionAttemptRef == "" ||
+		s.SourceVersionRef == "" || s.SourceRepresentationRef == "" || s.NormalizedGenerationRef == "" || s.NormalizedVerificationRef == "" {
+		return fmt.Errorf("%s requires request, package, extraction-attempt, source, representation, normalized-generation, and verification references", stagegraph.ChunkDocument)
 	}
 	if s.Attempt < 1 {
 		return fmt.Errorf("%s attempt must be positive", stagegraph.ChunkDocument)
@@ -106,14 +88,14 @@ type ChunkGenerationOutcome struct {
 }
 
 // ChunkRepository is the PostgreSQL storage boundary for
-// chunk_document_activity. ResolveOriginal reads the exact bytes to chunk;
+// chunk_document_activity. ResolveSourceRepresentation reads the exact bytes to chunk;
 // PersistChunkGeneration is the only write. Implementations must make
 // PersistChunkGeneration retry-safe using context.activity_execution and
 // context.activity_receipt, exactly like every other repository in this
 // package: a repeated idempotency coordinate returns the existing durable
 // outcome rather than writing a second time.
 type ChunkRepository interface {
-	ResolveOriginal(context.Context, ChunkDocumentSpec) ([]byte, error)
+	ResolveSourceRepresentation(context.Context, ChunkDocumentSpec) ([]byte, error)
 	PersistChunkGeneration(context.Context, ChunkDocumentSpec, chunk.Result) (ChunkGenerationOutcome, error)
 }
 
@@ -148,8 +130,8 @@ func (a ChunkActivities) attempt(ctx context.Context) int32 {
 	return attempt
 }
 
-// ChunkDocument runs the skip-to-chunk route: it resolves the retained
-// original object named by req.Refs["original"], chunks it in-memory via the
+// ChunkDocument resolves the retained source object named by
+// req.Refs["source_representation"], chunks it in-memory via the
 // injected chunk.Registry (which independently validates completeness —
 // contiguous, gap-free, non-overlapping, source/reassembly hashes equal —
 // before ever returning a Result, per engine/chunk.Registry.Execute), then
@@ -169,9 +151,9 @@ func (a ChunkActivities) ChunkDocument(ctx context.Context, req proffer.StageReq
 		return proffer.StageResult{}, err
 	}
 
-	source, err := a.Repository.ResolveOriginal(ctx, spec)
+	source, err := a.Repository.ResolveSourceRepresentation(ctx, spec)
 	if err != nil {
-		return proffer.StageResult{}, fmt.Errorf("%s: resolve original: %w", stagegraph.ChunkDocument, err)
+		return proffer.StageResult{}, fmt.Errorf("%s: resolve source representation: %w", stagegraph.ChunkDocument, err)
 	}
 	if err := ctx.Err(); err != nil {
 		return proffer.StageResult{}, err
@@ -211,7 +193,23 @@ func chunkDocumentSpecFrom(req proffer.StageRequest, attempt int32) (ChunkDocume
 	if strings.TrimSpace(req.RequestID) == "" || req.SourceVersionRef == "" {
 		return ChunkDocumentSpec{}, fmt.Errorf("%s requires request and source version references", stagegraph.ChunkDocument)
 	}
-	original, err := requiredRawRef(req, stagegraph.ChunkDocument, "original")
+	packageRef, err := requiredRawRef(req, stagegraph.ChunkDocument, "package")
+	if err != nil {
+		return ChunkDocumentSpec{}, err
+	}
+	extractionAttemptRef, err := requiredRawRef(req, stagegraph.ChunkDocument, "extraction_attempt")
+	if err != nil {
+		return ChunkDocumentSpec{}, err
+	}
+	sourceRepresentationRef, err := requiredRawRef(req, stagegraph.ChunkDocument, "source_representation")
+	if err != nil {
+		return ChunkDocumentSpec{}, err
+	}
+	normalizedGenerationRef, err := requiredRawRef(req, stagegraph.ChunkDocument, "normalized_generation")
+	if err != nil {
+		return ChunkDocumentSpec{}, err
+	}
+	normalizedVerificationRef, err := requiredRawRef(req, stagegraph.ChunkDocument, "normalized_verification")
 	if err != nil {
 		return ChunkDocumentSpec{}, err
 	}
@@ -232,8 +230,10 @@ func chunkDocumentSpecFrom(req proffer.StageRequest, attempt int32) (ChunkDocume
 		return ChunkDocumentSpec{}, err
 	}
 	return ChunkDocumentSpec{
-		RequestID: req.RequestID, Attempt: attempt, SourceVersionRef: req.SourceVersionRef,
-		OriginalRef: original, Signature: chunk.Signature(signatureRef), DerivationMode: string(derivationRef),
+		RequestID: req.RequestID, Attempt: attempt, PackageRef: packageRef, ExtractionAttemptRef: extractionAttemptRef,
+		SourceVersionRef: req.SourceVersionRef, SourceRepresentationRef: sourceRepresentationRef,
+		NormalizedGenerationRef: normalizedGenerationRef, NormalizedVerificationRef: normalizedVerificationRef,
+		Signature: chunk.Signature(signatureRef), DerivationMode: string(derivationRef),
 		PolicyID: string(policyIDRef), PolicyVersion: string(policyVersionRef),
 	}, nil
 }

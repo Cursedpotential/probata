@@ -1,17 +1,170 @@
 {
   "name": "Universal Import - decision",
   "nodes": [
-    {"parameters":{"httpMethod":"POST","path":"proffer/decision","responseMode":"responseNode","authentication":"headerAuth","options":{}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000401","name":"Webhook - decision","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[-640,0],"webhookId":"7a5ab1a0-1c9c-4c0e-8ae6-000000000402","credentials":{"httpHeaderAuth":{"id":"REPLACE_ME","name":"N8N_PROFFER_WEBHOOK (placeholder)"}}},
-    {"parameters":{"jsCode":"const input=$input.first()||{};const envelope=input.json||{};const body=envelope.body!==undefined?envelope.body:envelope;const allowed=['workflow_id','approved','reason','decider'];const forbidden=['file','files','raw_record','raw_records','record','records','content','data','binary'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('decision: request body must be an object');if(input.binary)throw new Error('decision: binary/file input is forbidden');const keys=Object.keys(body);if(keys.some((key)=>forbidden.includes(key)))throw new Error('decision: forbidden payload field');const unknown=keys.filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('decision: unsupported field(s): '+unknown.join(','));if(typeof body.workflow_id!=='string'||body.workflow_id.trim()==='')throw new Error('decision: workflow_id is required');if(typeof body.approved!=='boolean')throw new Error('decision: approved must be a boolean');if(typeof body.decider!=='string'||body.decider.trim()==='')throw new Error('decision: decider is required');if(!body.approved&&(typeof body.reason!=='string'||body.reason.trim()===''))throw new Error('decision: a rejection requires a non-empty reason');return[{json:{workflow_id:body.workflow_id.trim(),approved:body.approved,reason:typeof body.reason==='string'?body.reason.trim():'',decider:body.decider.trim()}}];"},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000403","name":"Validate + Shape Decision Request","type":"n8n-nodes-base.code","typeVersion":2,"position":[-360,0]},
-    {"parameters":{"method":"POST","url":"={{ 'https://reference-import-starter.example.invalid/reference-import/' + $json.workflow_id + '/decision' }}","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendHeaders":true,"specifyHeaders":"enterBelow","headerParameters":{"parameters":[{"name":"X-Workflow-ID","value":"={{ $json.workflow_id }}"}]},"sendBody":true,"specifyBody":"json","jsonBody":"={{ JSON.stringify({approved: $json.approved, reason: $json.reason, decider: $json.decider}) }}","options":{"response":{"response":{"neverError":false,"fullResponse":false}},"timeout":10000}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000404","name":"HTTP - reference import starter decision","type":"n8n-nodes-base.httpRequest","typeVersion":4.4,"position":[-80,0],"credentials":{"httpHeaderAuth":{"id":"REPLACE_ME","name":"REFERENCE_IMPORT_STARTER (placeholder)"}}},
-    {"parameters":{"jsCode":"const response=$input.first()||{};const body=response.json||{};if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('decision: starter returned a non-object response');if(body.status!=='signaled')throw new Error('decision: starter did not confirm the signal was delivered');return[{json:{status:body.status}}];"},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000405","name":"Validate Compact Decision Response","type":"n8n-nodes-base.code","typeVersion":2,"position":[200,0]},
-    {"parameters":{"respondWith":"json","responseBody":"={{ JSON.stringify({status: $json.status}) }}","options":{}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000406","name":"Respond to Webhook - Decision Response","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[480,0]}
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "proffer/decision",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000401",
+      "name": "Webhook - decision",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        0
+      ],
+      "webhookId": "7a5ab1a0-1c9c-4c0e-8ae6-000000000402",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "N8N_PROFFER_WEBHOOK (placeholder)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()||{};const envelope=input.json||{};const body=envelope.body!==undefined?envelope.body:envelope;const allowed=['preview_handle','approved','reason'];const forbidden=['workflow_id','run_id','decider','file','files','raw_record','raw_records','record','records','content','data','binary'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('decision: request body must be an object');if(input.binary)throw new Error('decision: binary/file input is forbidden');const keys=Object.keys(body);if(keys.some((key)=>forbidden.includes(key)))throw new Error('decision: forbidden payload field');const unknown=keys.filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('decision: unsupported field(s): '+unknown.join(','));if(typeof body.preview_handle!=='string'||body.preview_handle.trim()==='')throw new Error('decision: preview_handle is required');if(typeof body.approved!=='boolean')throw new Error('decision: approved must be a boolean');if(!body.approved&&(typeof body.reason!=='string'||body.reason.trim()===''))throw new Error('decision: a rejection requires a non-empty reason');return[{json:{preview_handle:body.preview_handle.trim(),approved:body.approved,reason:typeof body.reason==='string'?body.reason.trim():''}}];"
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000403",
+      "name": "Validate + Shape Decision Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://reference-import-starter.example.invalid/reference-import/previews/' + $json.preview_handle + '/decision' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "enterBelow",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Preview-Handle",
+              "value": "={{ $json.preview_handle }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({approved: $json.approved, reason: $json.reason}) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": false,
+              "fullResponse": false
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000404",
+      "name": "HTTP - reference import starter decision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -80,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "REFERENCE_IMPORT_STARTER (placeholder)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$input.first()||{};const body=response.json||{};const allowed=['preview_handle','status'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('decision: starter returned a non-object response');const unknown=Object.keys(body).filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('decision: response contains unsupported field(s): '+unknown.join(','));if(typeof body.preview_handle!=='string'||body.preview_handle.trim()===''||!['approved','rejected'].includes(body.status))throw new Error('decision: starter did not return the correlated preview decision');return[{json:{preview_handle:body.preview_handle.trim(),status:body.status}}];"
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000405",
+      "name": "Validate Compact Decision Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({preview_handle: $json.preview_handle, status: $json.status}) }}",
+        "options": {}
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000406",
+      "name": "Respond to Webhook - Decision Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ]
+    }
   ],
-  "connections":{"Webhook - decision":{"main":[[{"node":"Validate + Shape Decision Request","type":"main","index":0}]]},"Validate + Shape Decision Request":{"main":[[{"node":"HTTP - reference import starter decision","type":"main","index":0}]]},"HTTP - reference import starter decision":{"main":[[{"node":"Validate Compact Decision Response","type":"main","index":0}]]},"Validate Compact Decision Response":{"main":[[{"node":"Respond to Webhook - Decision Response","type":"main","index":0}]]}},
-  "active":false,
-  "settings":{"executionOrder":"v1"},
-  "pinData":{},
-  "meta":{"templateCredsSetupCompleted":false},
-  "versionId":"7a5ab1a0-1c9c-4c0e-8ae6-000000000407",
-  "tags":[]
+  "connections": {
+    "Webhook - decision": {
+      "main": [
+        [
+          {
+            "node": "Validate + Shape Decision Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate + Shape Decision Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP - reference import starter decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - reference import starter decision": {
+      "main": [
+        [
+          {
+            "node": "Validate Compact Decision Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Compact Decision Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook - Decision Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "7a5ab1a0-1c9c-4c0e-8ae6-000000000407",
+  "tags": []
 }

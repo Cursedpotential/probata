@@ -1,7 +1,7 @@
 ---
 name: todo
 description: Open or close items on probata's MASTER-TODO register (T-ids) in the SurrealDB docs store. Use when the user says "add a todo", "what's open", "close T-<n>", "what's left to do", or a task surfaces work that isn't done yet.
-allowed-tools: mcp__plugin_docstore_docs__run mcp__plugin_docstore_docs__list Read
+allowed-tools: mcp__plugin_propria_docstore_docs__run mcp__plugin_propria_docstore_docs__list Read
 ---
 
 # Todo

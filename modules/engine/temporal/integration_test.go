@@ -37,6 +37,14 @@ func placeholderStageActivity(_ context.Context, _ proffer.StageRequest) (proffe
 	return proffer.StageResult{Status: proffer.StatusFailed, Reason: "integration test: placeholder activity ran unmocked", ReceiptRef: "placeholder-receipt"}, nil
 }
 
+func placeholderRecommendHandler(_ context.Context, _ proffer.StageRequest) (proffer.HandlerRecommendationResult, error) {
+	return proffer.HandlerRecommendationResult{}, nil
+}
+
+func placeholderValidateHandler(_ context.Context, _ proffer.StageRequest) (proffer.HandlerSelectionValidationResult, error) {
+	return proffer.HandlerSelectionValidationResult{}, nil
+}
+
 func stageStub(id stagegraph.StageID) proffer.StageResult {
 	return proffer.StageResult{Status: proffer.StatusSuccess, Ref: proffer.Ref(string(id) + "-ref"), ReceiptRef: proffer.Ref(string(id) + "-receipt")}
 }
@@ -58,13 +66,23 @@ func registerRealActivities(t *testing.T, env *testsuite.TestWorkflowEnvironment
 	acts := N8NActivities{Client: client}
 	env.RegisterActivityWithOptions(acts.SelectParser, activity.RegisterOptions{Name: string(stagegraph.SelectParser)})
 	env.RegisterActivityWithOptions(acts.ExecuteParser, activity.RegisterOptions{Name: string(stagegraph.ExecuteParser)})
-
+	env.RegisterActivityWithOptions(placeholderRecommendHandler, activity.RegisterOptions{Name: proffer.RecommendHandlerActivityName})
+	env.RegisterActivityWithOptions(placeholderValidateHandler, activity.RegisterOptions{Name: proffer.ValidateHandlerSelectionActivityName})
 	for _, d := range stagegraph.Stages {
 		if d.ID == stagegraph.SelectParser || d.ID == stagegraph.ExecuteParser {
 			continue
 		}
 		env.RegisterActivityWithOptions(placeholderStageActivity, activity.RegisterOptions{Name: string(d.ID)})
 	}
+	candidate := proffer.HandlerCandidate{HandlerID: "sbv", HandlerVersion: "test", ExecutionPath: proffer.HandlerPathDecoder, CompatibilityRef: "compatibility-ref", Reason: "integration decoder"}
+	env.OnActivity(proffer.RecommendHandlerActivityName, mock.Anything, mock.Anything).Return(proffer.HandlerRecommendationResult{
+		RecommendationRef: "recommendation-ref", ReceiptRef: "recommendation-receipt", DetectedFormat: "whatsapp_export_json",
+		DetectedFormatRef: "format-ref", SignatureRef: "signature-ref", Recommended: candidate,
+	}, nil).Once()
+	env.OnActivity(proffer.ValidateHandlerSelectionActivityName, mock.Anything, mock.Anything).Return(proffer.HandlerSelectionValidationResult{
+		DecisionRef: "handler-decision-ref", ActorRef: "operator-1", ValidationReceipt: "validation-receipt",
+		RecommendationRef: "recommendation-ref", DetectedFormat: "whatsapp_export_json", DetectedFormatRef: "format-ref", SignatureRef: "signature-ref", Chosen: candidate,
+	}, nil).Once()
 	for _, d := range stagegraph.Stages {
 		if d.ID == stagegraph.SelectParser || d.ID == stagegraph.ExecuteParser {
 			continue
@@ -124,6 +142,7 @@ func TestIntegrationApprovedRunsAllStagesAndCallsRealParserHTTP(t *testing.T) {
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(proffer.RepairDecisionSignalName, proffer.RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(proffer.HandlerSelectionDecisionSignalName, proffer.HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
 		env.SignalWorkflow(proffer.PreviewDecisionSignalName, proffer.PreviewDecision{Approved: true, Decider: "operator-1"})
 	}, time.Millisecond)
 
@@ -164,6 +183,7 @@ func TestIntegrationRejectedNeverCallsRealParserHTTP(t *testing.T) {
 
 	env.RegisterDelayedCallback(func() {
 		env.SignalWorkflow(proffer.RepairDecisionSignalName, proffer.RepairDecision{DecisionRef: "repair-decision-ref"})
+		env.SignalWorkflow(proffer.HandlerSelectionDecisionSignalName, proffer.HandlerSelectionDecision{DecisionRef: "handler-decision-ref"})
 		env.SignalWorkflow(proffer.PreviewDecisionSignalName, proffer.PreviewDecision{Approved: false, Reason: "wrong format", Decider: "operator-1"})
 	}, time.Millisecond)
 

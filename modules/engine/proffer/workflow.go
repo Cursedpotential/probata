@@ -3,6 +3,7 @@ package proffer
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"go.temporal.io/sdk/workflow"
 
@@ -10,17 +11,31 @@ import (
 )
 
 const (
-	fingerprintVocabularyChangeID   = "proffer-context-fingerprint-vocabulary-v1"
-	fingerprintVocabularyVersion    = workflow.Version(1)
-	previewRepairChangeID           = "proffer-preview-explicit-repair-refs-v1"
-	previewRepairVersion            = workflow.Version(1)
-	integratedPreviewChangeID       = "proffer-integrated-repair-preview-v1"
-	integratedPreviewVersion        = workflow.Version(1)
-	durableReviewWaitChangeID       = "proffer-durable-extended-review-wait-v1"
-	durableReviewWaitVersion        = workflow.Version(1)
-	legacyHashSourceActivity        = "hash_source_activity"
-	legacyHashRawRecordsActivity    = "hash_raw_records_activity"
-	legacyHashRawGenerationActivity = "hash_raw_generation_activity"
+	fingerprintVocabularyChangeID  = "proffer-context-fingerprint-vocabulary-v1"
+	fingerprintVocabularyVersion   = workflow.Version(1)
+	previewRepairChangeID          = "proffer-preview-explicit-repair-refs-v1"
+	previewRepairVersion           = workflow.Version(1)
+	integratedPreviewChangeID      = "proffer-integrated-repair-preview-v1"
+	integratedPreviewVersion       = workflow.Version(1)
+	durableReviewWaitChangeID      = "proffer-durable-extended-review-wait-v1"
+	durableReviewWaitVersion       = workflow.Version(1)
+	structuredELTRouteChangeID     = "proffer-duckdb-structured-elt-route-v1"
+	structuredELTRouteVersion      = workflow.Version(1)
+	previewCheckpointsChangeID     = "proffer-live-preview-checkpoints-v1"
+	previewCheckpointsVersion      = workflow.Version(1)
+	handlerSelectionChangeID       = "proffer-content-handler-selection-v1"
+	handlerSelectionVersion        = workflow.Version(1)
+	contextChunkGenerationChangeID = "proffer-non-messaging-context-chunk-generation-v1"
+	contextChunkGenerationVersion  = workflow.Version(1)
+	// SelectStructuredELTActivityName and ExecuteStructuredELTActivityName are
+	// the implementation-specific Temporal names for DuckDB execution of the
+	// logical SelectParser and ExecuteParser stages. The Activity package
+	// aliases these constants so registration and dispatch cannot drift.
+	SelectStructuredELTActivityName  = "select_structured_elt_activity"
+	ExecuteStructuredELTActivityName = "execute_structured_elt_activity"
+	legacyHashSourceActivity         = "hash_source_activity"
+	legacyHashRawRecordsActivity     = "hash_raw_records_activity"
+	legacyHashRawGenerationActivity  = "hash_raw_generation_activity"
 )
 
 type fingerprintVocabulary struct {
@@ -55,10 +70,38 @@ func fingerprintVocabularyFor(ctx workflow.Context) fingerprintVocabulary {
 // canon name (ActivityName, identical to stagegraph.StageID) so a worker in
 // a later lane can register real Activities without this file changing.
 func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, error) {
-	r := &run{requestID: in.RequestID, matterID: in.MatterID, courtCaseID: in.CourtCaseID}
+	contextChunkingInput := in.contextChunkingInput()
+	r := &run{
+		requestID:   in.RequestID,
+		matterID:    in.MatterID,
+		courtCaseID: in.CourtCaseID,
+		operation: OperationState{
+			Lifecycle:    OperationRunning,
+			ActiveStages: []ActivityName{},
+			Stages:       []OperationStage{},
+		},
+	}
+	if contextChunkingInput != nil {
+		r.operation.PackageRef = contextChunkingInput.PackageRef
+		r.operation.AttemptRef = contextChunkingInput.AttemptRef
+	}
+	if err := workflow.SetQueryHandler(ctx, OperationQueryName, func() (OperationState, error) {
+		return r.operationSnapshot(), nil
+	}); err != nil {
+		return r.result(""), fmt.Errorf("proffer: register operation query handler: %w", err)
+	}
 	fingerprint := fingerprintVocabularyFor(ctx)
 	integratedPreview := workflow.GetVersion(ctx, integratedPreviewChangeID, workflow.DefaultVersion, integratedPreviewVersion)
 	durableReviewWait := workflow.GetVersion(ctx, durableReviewWaitChangeID, workflow.DefaultVersion, durableReviewWaitVersion)
+	previewCheckpoints := workflow.GetVersion(ctx, previewCheckpointsChangeID, workflow.DefaultVersion, previewCheckpointsVersion) != workflow.DefaultVersion
+	handlerSelection := workflow.GetVersion(ctx, handlerSelectionChangeID, workflow.DefaultVersion, handlerSelectionVersion)
+	contextChunkGeneration := workflow.GetVersion(ctx, contextChunkGenerationChangeID, workflow.DefaultVersion, contextChunkGenerationVersion)
+	if contextChunkGeneration != workflow.DefaultVersion && contextChunkingInput != nil {
+		if err := contextChunkingInput.validate(); err != nil {
+			r.operation.Reason = err.Error()
+			return r.result(""), fmt.Errorf("proffer: invalid context chunking input: %w", err)
+		}
+	}
 
 	// Stage 1: register_source_activity — the root. It creates the
 	// identity/idempotency coordinate every later stage keys off.
@@ -71,6 +114,7 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		return r.result(""), err
 	}
 	r.sourceVersionRef = sourceVersionRef
+	r.operation.SourceVersionRef = sourceVersionRef
 
 	// Stage 2: retain_original_activity — the only stage after
 	// register_source that must run before anything touches source bytes.
@@ -82,7 +126,7 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 	}
 
 	activeOriginalRef := originalRef
-	preview := PreviewState{ParserOptionsRef: in.ParserOptionsRef}
+	preview := PreviewState{Phase: PhaseStarting, ParserOptionsRef: in.ParserOptionsRef, Checkpoints: newPreviewCheckpoints(previewCheckpoints)}
 	if integratedPreview != workflow.DefaultVersion {
 		// Repair assessment is produced before the repair gate, so the human is
 		// deciding against durable data that already exists. The signal contains
@@ -100,7 +144,8 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 			return r.result(""), err
 		}
 		assessmentResult := r.results[len(r.results)-1]
-		preview = PreviewState{SourceVersionRef: r.sourceVersionRef, RepairAssessmentRef: repairAssessmentRef, ParserOptionsRef: in.ParserOptionsRef,
+		preview = PreviewState{Phase: PhaseStarting, SourceVersionRef: r.sourceVersionRef, RepairAssessmentRef: repairAssessmentRef, ParserOptionsRef: in.ParserOptionsRef,
+			Checkpoints:      newPreviewCheckpoints(previewCheckpoints),
 			RepairAssessment: &RepairAssessmentView{AssessmentRef: repairAssessmentRef, SourceVersionRef: r.sourceVersionRef, ReviewRequired: assessmentResult.Status != StatusNotApplicable}}
 		if err := workflow.SetQueryHandler(ctx, PreviewQueryName, func() (PreviewState, error) {
 			return preview, nil
@@ -112,10 +157,13 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 			refs["auto_clean_assessment"] = repairAssessmentRef
 		} else {
 			preview.Phase = PhaseAwaitingRepairDecision
+			r.awaiting(OperationAwaitingRepairDecision, OperationWaitRepairDecision)
 			repairDecision, waitErr := awaitRepairDecision(ctx, &preview, durableReviewWait)
 			if waitErr != nil {
+				r.operation.Reason = waitErr.Error()
 				return r.result(""), waitErr
 			}
+			r.running()
 			refs["repair_decision"] = repairDecision.DecisionRef
 		}
 		activeOriginalRef, err = r.exec(ctx, stagegraph.ResolveSourceRepair, in.DeclaredFormat, refs)
@@ -141,6 +189,89 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 	contextSourceFingerprintRef := fanOut[fingerprint.source]
 	containerManifestRef := fanOut[stagegraph.InventoryContainer]
 	metadataManifestRef := fanOut[stagegraph.ExtractEmbeddedMetadata]
+	structuredELTRoute := workflow.GetVersion(ctx, structuredELTRouteChangeID, workflow.DefaultVersion, structuredELTRouteVersion)
+	activeFormat := in.DeclaredFormat
+	useStructuredELT := structuredELTRoute != workflow.DefaultVersion && structuredELTEligible(in.DeclaredFormat)
+	var selectionProgressReceipt Ref
+	recoverableHandler := false
+	selectionRefs := map[string]Ref{
+		"filesystem_metadata": filesystemMetadataRef,
+		"container_manifest":  containerManifestRef,
+		"metadata_manifest":   metadataManifestRef,
+	}
+	if handlerSelection != workflow.DefaultVersion {
+		preview.setCheckpoint("parser_selection", CheckpointRunning, "", "")
+		recommendation, recommendErr := recommendHandler(ctx, StageRequest{
+			RequestID: r.requestID, MatterID: r.matterID, CourtCaseID: r.courtCaseID,
+			SourceVersionRef: r.sourceVersionRef, DeclaredFormat: in.DeclaredFormat,
+			Refs: map[string]Ref{
+				"original":            activeOriginalRef,
+				"filesystem_metadata": filesystemMetadataRef,
+				"container_manifest":  containerManifestRef,
+				"metadata_manifest":   metadataManifestRef,
+			},
+		})
+		if recommendErr != nil {
+			preview.setCheckpoint("parser_selection", CheckpointFailed, "", recommendErr.Error())
+			return r.result(""), recommendErr
+		}
+		preview.Phase = PhaseAwaitingHandlerSelection
+		preview.HandlerRecommendationRef = recommendation.RecommendationRef
+		preview.DetectedFormat = recommendation.DetectedFormat
+		preview.DetectedFormatRef = recommendation.DetectedFormatRef
+		preview.SignatureRef = recommendation.SignatureRef
+		preview.RecommendedHandler = &recommendation.Recommended
+		preview.AlternativeHandlers = append([]HandlerCandidate(nil), recommendation.Alternatives...)
+		preview.setCheckpoint("parser_selection", CheckpointRunning, recommendation.ReceiptRef, "awaiting explicit handler selection")
+		selectionProgressReceipt = recommendation.ReceiptRef
+		if integratedPreview == workflow.DefaultVersion {
+			if err := workflow.SetQueryHandler(ctx, PreviewQueryName, func() (PreviewState, error) { return preview, nil }); err != nil {
+				return r.result(""), fmt.Errorf("proffer: register handler-selection preview query: %w", err)
+			}
+		}
+		decision := HandlerSelectionDecision{DecisionRef: recommendation.EngineDecisionRef}
+		recoverableHandler = recommendation.EngineDecisionRef != ""
+		if in.ParserOptionsRef == OperatorHandlerSelectionOptions {
+			decision.DecisionRef = ""
+		}
+		var decisionErr error
+		// Historical recommendations without an engine decision preserve their
+		// original replay behavior. New runs are signature-selected server-side.
+		if decision.DecisionRef == "" {
+			decision, decisionErr = awaitHandlerSelectionDecision(ctx, &preview, durableReviewWait)
+		}
+		if decisionErr != nil {
+			preview.setCheckpoint("parser_selection", CheckpointFailed, recommendation.ReceiptRef, decisionErr.Error())
+			return r.result(""), decisionErr
+		}
+		validation, validationErr := validateSelectedHandler(ctx, StageRequest{
+			RequestID: r.requestID, MatterID: r.matterID, CourtCaseID: r.courtCaseID,
+			SourceVersionRef: r.sourceVersionRef, DeclaredFormat: in.DeclaredFormat,
+			Refs: map[string]Ref{
+				"handler_recommendation": recommendation.RecommendationRef,
+				"handler_decision":       decision.DecisionRef,
+				"detected_format":        recommendation.DetectedFormatRef,
+				"content_signature":      recommendation.SignatureRef,
+			},
+		})
+		if validationErr != nil {
+			preview.setCheckpoint("parser_selection", CheckpointFailed, recommendation.ReceiptRef, validationErr.Error())
+			return r.result(""), validationErr
+		}
+		if err := validateHandlerSelection(recommendation, decision.DecisionRef, validation); err != nil {
+			preview.setCheckpoint("parser_selection", CheckpointFailed, validation.ValidationReceipt, err.Error())
+			return r.result(""), fmt.Errorf("proffer: reject handler selection: %w", err)
+		}
+		preview.Phase = PhaseHandlerSelected
+		preview.HandlerDecisionRef = decision.DecisionRef
+		useStructuredELT = validation.Chosen.ExecutionPath == HandlerPathDuckDB
+		selectionRefs["handler_recommendation"] = recommendation.RecommendationRef
+		selectionRefs["handler_decision"] = decision.DecisionRef
+		selectionRefs["handler_validation"] = validation.ValidationReceipt
+		selectionRefs["detected_format"] = recommendation.DetectedFormatRef
+		selectionRefs["content_signature"] = recommendation.SignatureRef
+		selectionRefs["handler_compatibility"] = validation.Chosen.CompatibilityRef
+	}
 
 	// Stage 7: select_parser_activity joins the fan-out; it needs the
 	// container manifest and metadata manifest to pick an adapter. It does
@@ -148,48 +279,142 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 	// selection. The workflow still joins the fan-out (including
 	// fingerprint_source) before scheduling select_parser — only the context source fingerprint
 	// reference itself is withheld from this stage's request.
-	parserSelectionRef, err := r.exec(ctx, stagegraph.SelectParser, in.DeclaredFormat, map[string]Ref{
-		"filesystem_metadata": filesystemMetadataRef,
-		"container_manifest":  containerManifestRef,
-		"metadata_manifest":   metadataManifestRef,
-	})
+	selectionActivity := string(stagegraph.SelectParser)
+	if useStructuredELT {
+		selectionActivity = SelectStructuredELTActivityName
+	}
+	preview.setCheckpoint("parser_selection", CheckpointRunning, selectionProgressReceipt, "")
+	parserSelectionRef, err := r.execActivity(ctx, stagegraph.SelectParser, selectionActivity, activeFormat, selectionRefs)
 	if err != nil {
+		preview.setCheckpoint("parser_selection", CheckpointFailed, r.receiptRef(stagegraph.SelectParser), err.Error())
 		return r.result(""), err
 	}
+	preview.setCheckpoint("parser_selection", CheckpointCompleted, r.receiptRef(stagegraph.SelectParser), "")
 
 	activeSelectionRef := parserSelectionRef
 	activeParserOptionsRef := in.ParserOptionsRef
 	if integratedPreview == workflow.DefaultVersion {
-		preview = PreviewState{Phase: PhaseAwaitingDecision, SelectRef: activeSelectionRef, ParserOptionsRef: activeParserOptionsRef}
-		if err := workflow.SetQueryHandler(ctx, PreviewQueryName, func() (PreviewState, error) { return preview, nil }); err != nil {
-			return r.result(""), fmt.Errorf("proffer: register legacy preview query handler: %w", err)
+		preview = PreviewState{Phase: PhaseAwaitingDecision, SelectRef: activeSelectionRef, ParserOptionsRef: activeParserOptionsRef,
+			Checkpoints: newPreviewCheckpoints(previewCheckpoints)}
+		if handlerSelection == workflow.DefaultVersion {
+			if err := workflow.SetQueryHandler(ctx, PreviewQueryName, func() (PreviewState, error) { return preview, nil }); err != nil {
+				return r.result(""), fmt.Errorf("proffer: register legacy preview query handler: %w", err)
+			}
 		}
+		r.awaiting(OperationAwaitingPreviewDecision, OperationWaitPreviewDecision)
 		if err := awaitLegacyPreviewDecision(ctx, &preview, &activeSelectionRef, &activeParserOptionsRef, durableReviewWait); err != nil {
+			r.operation.Reason = err.Error()
 			return r.result(""), err
 		}
+		r.running()
 	}
 
-	// Stage 8: execute_parser_activity — parse only.
-	rawBundleRef, err := r.exec(ctx, stagegraph.ExecuteParser, in.DeclaredFormat, map[string]Ref{
+	// Stage 8: execute_parser_activity's logical extraction boundary. New
+	// histories route only the explicitly supported structured signatures to
+	// DuckDB. Both implementations return the same immutable raw-bundle Ref
+	// and identify their logical result as ExecuteParser, so every downstream
+	// persistence, fingerprint, reconciliation, normalization, preview, and
+	// publication stage remains unchanged. The version marker preserves the
+	// original parser Activity command for histories started before this route
+	// existed. Exactly one implementation is scheduled for a source.
+	executionActivity := string(stagegraph.ExecuteParser)
+	if useStructuredELT {
+		executionActivity = ExecuteStructuredELTActivityName
+	}
+	preview.setCheckpoint("parser_execution", CheckpointRunning, "", "")
+	executionRefs := map[string]Ref{
 		"parser_selection": activeSelectionRef,
 		"original":         activeOriginalRef,
 		"parser_options":   activeParserOptionsRef,
-	})
+	}
+	for _, name := range []string{"handler_recommendation", "handler_decision", "handler_validation", "detected_format", "content_signature", "handler_compatibility"} {
+		if ref := selectionRefs[name]; ref != "" {
+			executionRefs[name] = ref
+		}
+	}
+	rawBundleRef, err := r.execActivity(ctx, stagegraph.ExecuteParser, executionActivity, activeFormat, executionRefs)
+	// Only new engine-selected runs enter this bounded recovery hold. A failed
+	// selected unit is logged before any backup is offered; an authenticated
+	// operator must select a durable compatibility reference for each retry.
+	for recoveryAttempt := 1; err != nil && recoverableHandler && recoveryAttempt <= 3; recoveryAttempt++ {
+		failureReason := err.Error()
+		var recommendation HandlerRecommendationResult
+		recoveryContext := workflow.WithActivityOptions(ctx, optionsFor(stagegraph.SelectParser))
+		recoveryReq := HandlerRecoveryRequest{
+			Request: StageRequest{RequestID: r.requestID, MatterID: r.matterID, CourtCaseID: r.courtCaseID,
+				SourceVersionRef: r.sourceVersionRef, DeclaredFormat: activeFormat, Refs: executionRefs},
+			AttemptIdentity: fmt.Sprintf("%s:%d", workflow.GetInfo(ctx).WorkflowExecution.RunID, recoveryAttempt), FailureReason: failureReason,
+		}
+		if recoveryErr := workflow.ExecuteActivity(recoveryContext, RecoverHandlerActivityName, recoveryReq).Get(recoveryContext, &recommendation); recoveryErr != nil {
+			return r.result(""), fmt.Errorf("log selected handler failure and prepare recovery: %w", recoveryErr)
+		}
+		if recoveryErr := validateHandlerRecommendation(recommendation); recoveryErr != nil {
+			return r.result(""), recoveryErr
+		}
+		if recommendation.FailureReceiptRef == "" {
+			return r.result(""), errors.New("handler recovery lacks a durable selected-unit failure receipt")
+		}
+		preview.Phase = PhaseAwaitingHandlerSelection
+		preview.HandlerRecommendationRef = recommendation.RecommendationRef
+		preview.RecommendedHandler = &recommendation.Recommended
+		preview.AlternativeHandlers = append([]HandlerCandidate(nil), recommendation.Alternatives...)
+		preview.setCheckpoint("parser_execution", CheckpointFailed, recommendation.FailureReceiptRef, failureReason)
+		decision, decisionErr := awaitHandlerSelectionDecision(ctx, &preview, durableReviewWait)
+		if decisionErr != nil {
+			return r.result(""), decisionErr
+		}
+		validationReq := recoveryReq.Request
+		validationReq.Refs = map[string]Ref{"handler_recommendation": recommendation.RecommendationRef,
+			"handler_decision": decision.DecisionRef, "detected_format": recommendation.DetectedFormatRef, "content_signature": recommendation.SignatureRef}
+		validation, validationErr := validateSelectedHandler(ctx, validationReq)
+		if validationErr != nil {
+			return r.result(""), validationErr
+		}
+		if validationErr = validateHandlerSelection(recommendation, decision.DecisionRef, validation); validationErr != nil {
+			return r.result(""), validationErr
+		}
+		for key, value := range validationReq.Refs {
+			selectionRefs[key] = value
+			executionRefs[key] = value
+		}
+		selectionRefs["handler_validation"] = validation.ValidationReceipt
+		selectionRefs["handler_compatibility"] = validation.Chosen.CompatibilityRef
+		executionRefs["handler_validation"] = validation.ValidationReceipt
+		executionRefs["handler_compatibility"] = validation.Chosen.CompatibilityRef
+		preview.HandlerDecisionRef = decision.DecisionRef
+		preview.Phase = PhaseHandlerSelected
+		selectionActivity, executionActivity = string(stagegraph.SelectParser), string(stagegraph.ExecuteParser)
+		if validation.Chosen.ExecutionPath == HandlerPathDuckDB {
+			selectionActivity, executionActivity = SelectStructuredELTActivityName, ExecuteStructuredELTActivityName
+		}
+		activeSelectionRef, err = r.execActivity(ctx, stagegraph.SelectParser, selectionActivity, activeFormat, selectionRefs)
+		if err != nil {
+			break
+		}
+		executionRefs["parser_selection"] = activeSelectionRef
+		preview.setCheckpoint("parser_execution", CheckpointRunning, recommendation.ReceiptRef, "operator-directed recovery")
+		rawBundleRef, err = r.execActivity(ctx, stagegraph.ExecuteParser, executionActivity, activeFormat, executionRefs)
+	}
 	if err != nil {
+		preview.setCheckpoint("parser_execution", CheckpointFailed, r.receiptRef(stagegraph.ExecuteParser), err.Error())
 		return r.result(""), err
 	}
+	preview.setCheckpoint("parser_execution", CheckpointCompleted, r.receiptRef(stagegraph.ExecuteParser), "")
 
 	// Stage 9: persist_raw_generation_activity, then stage 10:
 	// fingerprint_raw_records_activity (context raw-record fingerprint) — strict sequence
 	// (persist before hashing the persisted rows). DeclaredFormat is
 	// preserved here (not dropped to "") because the raw generation's own
 	// persisted record needs to know what format it was parsed from.
-	rawGenerationRef, err := r.exec(ctx, stagegraph.PersistRawGeneration, in.DeclaredFormat, map[string]Ref{
+	preview.setCheckpoint("storage", CheckpointRunning, "", "")
+	rawGenerationRef, err := r.exec(ctx, stagegraph.PersistRawGeneration, activeFormat, map[string]Ref{
 		"raw_bundle": rawBundleRef,
 	})
 	if err != nil {
+		preview.setCheckpoint("storage", CheckpointFailed, r.receiptRef(stagegraph.PersistRawGeneration), err.Error())
 		return r.result(""), err
 	}
+	preview.setCheckpoint("storage", CheckpointCompleted, r.receiptRef(stagegraph.PersistRawGeneration), "")
 	rawFingerprintManifestRef, err := r.exec(ctx, fingerprint.rawRecords, "", map[string]Ref{
 		"raw_generation": rawGenerationRef,
 	})
@@ -230,6 +455,7 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 	// generation fingerprint chain, and checks the accounted byte coverage
 	// against the context source fingerprint. Verification remains separate
 	// from every fingerprint computation.
+	preview.setCheckpoint("raw_source_verification", CheckpointRunning, "", "")
 	rawSourceVerificationRef, err := r.exec(ctx, stagegraph.VerifyRawCoverageAgainstSource, "", map[string]Ref{
 		"accounting":             accountingRef,
 		"coverage":               coverageRef,
@@ -237,25 +463,31 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		"raw_generation_chain":   rawGenerationFingerprintChainRef,
 	})
 	if err != nil {
+		preview.setCheckpoint("raw_source_verification", CheckpointFailed, r.receiptRef(stagegraph.VerifyRawCoverageAgainstSource), err.Error())
 		return r.result(""), err
 	}
+	preview.setCheckpoint("raw_source_verification", CheckpointCompleted, r.receiptRef(stagegraph.VerifyRawCoverageAgainstSource), "")
 
 	// Stage 14: normalize_generation_activity, then stage 15:
 	// persist_normalized_generation_activity — strict sequence (normalize
 	// is transform-only, persist is the only write).
+	preview.setCheckpoint("normalization", CheckpointRunning, "", "")
 	normalizedBundleRef, err := r.exec(ctx, stagegraph.NormalizeGeneration, "", map[string]Ref{
 		"raw_source_verification": rawSourceVerificationRef,
 		"raw_generation":          rawGenerationRef,
 	})
 	if err != nil {
+		preview.setCheckpoint("normalization", CheckpointFailed, r.receiptRef(stagegraph.NormalizeGeneration), err.Error())
 		return r.result(""), err
 	}
 	normalizedGenerationRef, err := r.exec(ctx, stagegraph.PersistNormalizedGeneration, "", map[string]Ref{
 		"normalized_bundle": normalizedBundleRef,
 	})
 	if err != nil {
+		preview.setCheckpoint("normalization", CheckpointFailed, r.receiptRef(stagegraph.PersistNormalizedGeneration), err.Error())
 		return r.result(""), err
 	}
+	preview.setCheckpoint("normalization", CheckpointCompleted, r.receiptRef(stagegraph.PersistNormalizedGeneration), "")
 
 	// Stages 16-19: the third parallel pair. persist_lineage ->
 	// validate_raw_lineage is one branch off persist_normalized_generation;
@@ -304,31 +536,71 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 
 	// Stage 20: verify_normalized_generation_activity joins the lineage
 	// branch and the normalized-digest branch.
+	preview.setCheckpoint("completeness", CheckpointRunning, "", "")
 	normalizedVerificationRef, err := r.exec(ctx, stagegraph.VerifyNormalizedGeneration, "", map[string]Ref{
 		"lineage_validation":                    lineageValidationRef,
 		"normalized_generation_manifest_digest": normalizedGenerationManifestDigestRef,
 	})
 	if err != nil {
+		preview.setCheckpoint("completeness", CheckpointFailed, r.receiptRef(stagegraph.VerifyNormalizedGeneration), err.Error())
 		return r.result(""), err
 	}
+	preview.setCheckpoint("completeness", CheckpointCompleted, r.receiptRef(stagegraph.VerifyNormalizedGeneration), "")
 
-	// The browser-facing preview can only be projected after normalized
-	// messages and their validation receipts exist. Publishing it before the
-	// human hold removes the former circular wait: the operator now reviews
-	// actual persisted messages, while workflow_id/run_id remain internal to
-	// the opaque binding created by the starter.
+	// D-158 non-messaging context route: chunk the exact retained source
+	// representation only after extraction, normalization, lineage, digest,
+	// and normalized-generation verification have all succeeded. The Activity
+	// persists a sealed versioned generation and exact reassembly receipt;
+	// only their references enter workflow history and the preview request.
+	// Messaging runs leave the context-chunk fields empty and preserve the established
+	// normalized-message preview path.
+	var chunkGenerationRef, chunkReceiptRef Ref
+	if contextChunkGeneration != workflow.DefaultVersion && contextChunkingInput != nil {
+		chunkGenerationRef, err = r.exec(ctx, stagegraph.ChunkDocument, in.DeclaredFormat, map[string]Ref{
+			"package":                 contextChunkingInput.PackageRef,
+			"extraction_attempt":      contextChunkingInput.AttemptRef,
+			"source_representation":   activeOriginalRef,
+			"normalized_generation":   normalizedGenerationRef,
+			"normalized_verification": normalizedVerificationRef,
+			"chunk_signature":         Ref(contextChunkingInput.Signature),
+			"chunk_derivation_mode":   "verbatim_span",
+			"chunk_policy_id":         Ref(contextChunkingInput.PolicyID),
+			"chunk_policy_version":    Ref(contextChunkingInput.PolicyVersion),
+		})
+		if err != nil {
+			return r.result(""), err
+		}
+		chunkReceiptRef = r.receiptRef(stagegraph.ChunkDocument)
+		preview.PackageRef = contextChunkingInput.PackageRef
+		preview.AttemptRef = contextChunkingInput.AttemptRef
+		preview.SourceRepresentationRef = activeOriginalRef
+		preview.ChunkGenerationRef = chunkGenerationRef
+		preview.ChunkReceiptRef = chunkReceiptRef
+		r.operation.SourceRepresentationRef = activeOriginalRef
+		r.operation.ChunkGenerationRef = chunkGenerationRef
+		r.operation.ChunkReceiptRef = chunkReceiptRef
+	}
+
+	// The browser-facing preview is projected only after normalized validation
+	// and, when selected, the sealed non-messaging chunk generation exist.
+	// Publishing it before the human hold removes the former circular wait:
+	// the operator reviews durable content references while workflow_id/run_id
+	// remain internal to the opaque binding created by the starter.
 	if integratedPreview != workflow.DefaultVersion {
 		previewHandle, err := r.execPreview(ctx, PreviewPublicationRequest{
 			RequestID: in.RequestID, SourceVersionRef: r.sourceVersionRef,
-			RawGenerationRef: rawGenerationRef, NormalizedGenerationRef: normalizedGenerationRef,
+			PackageRef: preview.PackageRef, AttemptRef: preview.AttemptRef,
+			SourceRepresentationRef: preview.SourceRepresentationRef,
+			RawGenerationRef:        rawGenerationRef, NormalizedGenerationRef: normalizedGenerationRef,
+			ChunkGenerationRef: chunkGenerationRef, ChunkReceiptRef: chunkReceiptRef,
 			ParserSelectionRef: activeSelectionRef, ParserOptionsRef: activeParserOptionsRef,
 			ReceiptRefs: map[string]Ref{
-				"custody":          r.receiptRef(stagegraph.VerifyRawCoverageAgainstSource),
-				"parser_selection": r.receiptRef(stagegraph.SelectParser),
-				"parser_execution": r.receiptRef(stagegraph.ExecuteParser),
-				"normalization":    r.receiptRef(stagegraph.PersistNormalizedGeneration),
-				"storage":          r.receiptRef(stagegraph.PersistRawGeneration),
-				"completeness":     r.receiptRef(stagegraph.VerifyNormalizedGeneration),
+				"raw_source_verification": r.receiptRef(stagegraph.VerifyRawCoverageAgainstSource),
+				"parser_selection":        r.receiptRef(stagegraph.SelectParser),
+				"parser_execution":        r.receiptRef(stagegraph.ExecuteParser),
+				"normalization":           r.receiptRef(stagegraph.PersistNormalizedGeneration),
+				"storage":                 r.receiptRef(stagegraph.PersistRawGeneration),
+				"completeness":            r.receiptRef(stagegraph.VerifyNormalizedGeneration),
 			},
 		})
 		if err != nil {
@@ -337,9 +609,16 @@ func ProfferWorkflow(ctx workflow.Context, in WorkflowInput) (WorkflowResult, er
 		preview.Phase, preview.PreviewHandle = PhaseAwaitingDecision, previewHandle
 		preview.SelectRef, preview.ParserOptionsRef = activeSelectionRef, activeParserOptionsRef
 		preview.Reason = ""
+		r.awaiting(OperationAwaitingPreviewDecision, OperationWaitPreviewDecision)
 		if err := awaitPreviewDecision(ctx, &preview, durableReviewWait); err != nil {
+			r.operation.Reason = err.Error()
+			if errors.Is(err, ErrPreviewRerunRequired) {
+				r.operation.Lifecycle = OperationRerunRequired
+				r.operation.Wait = ""
+			}
 			return r.result(""), err
 		}
+		r.running()
 	}
 
 	// Stage 21: seal_generation_activity.
@@ -380,6 +659,23 @@ func awaitRepairDecision(ctx workflow.Context, state *PreviewState, waitVersion 
 	return decision, nil
 }
 
+func awaitHandlerSelectionDecision(ctx workflow.Context, state *PreviewState, waitVersion workflow.Version) (HandlerSelectionDecision, error) {
+	var decision HandlerSelectionDecision
+	decided, err := awaitReviewSignal(ctx, workflow.GetSignalChannel(ctx, HandlerSelectionDecisionSignalName), &decision, waitVersion)
+	if err != nil {
+		return HandlerSelectionDecision{}, fmt.Errorf("proffer: await handler selection decision: %w", err)
+	}
+	if !decided {
+		state.Phase, state.Reason = PhaseTimedOut, "handler selection decision timed out"
+		return HandlerSelectionDecision{}, errors.New("proffer: handler selection decision timed out")
+	}
+	if decision.DecisionRef == "" {
+		state.Phase, state.Reason = PhaseRejected, "handler selection decision reference is required"
+		return HandlerSelectionDecision{}, errors.New("proffer: handler selection decision reference is required")
+	}
+	return decision, nil
+}
+
 func awaitPreviewDecision(ctx workflow.Context, state *PreviewState, waitVersion workflow.Version) error {
 	signalChannel := workflow.GetSignalChannel(ctx, PreviewDecisionSignalName)
 	for {
@@ -391,6 +687,13 @@ func awaitPreviewDecision(ctx workflow.Context, state *PreviewState, waitVersion
 		if !decided {
 			state.Phase, state.Reason = PhaseTimedOut, "preview decision timed out"
 			return errors.New("proffer: preview decision timed out")
+		}
+		selectionChanged := decision.RepairedSelectionRef != "" && decision.RepairedSelectionRef != state.SelectRef
+		optionsChanged := decision.RepairedParserOptionsRef != "" && decision.RepairedParserOptionsRef != state.ParserOptionsRef
+		if selectionChanged || optionsChanged {
+			state.Phase = PhaseRerunRequired
+			state.Reason = ErrPreviewRerunRequired.Error()
+			return ErrPreviewRerunRequired
 		}
 		if !decision.Approved {
 			state.Phase, state.Reason = PhaseRejected, decision.Reason
@@ -478,6 +781,7 @@ type run struct {
 	courtCaseID      string
 	sourceVersionRef Ref
 	results          []StageResult
+	operation        OperationState
 }
 
 // pending is an in-flight Activity future paired with the stage id that
@@ -496,8 +800,58 @@ func (r *run) exec(ctx workflow.Context, id stagegraph.StageID, declaredFormat s
 	return r.settle(id, r.start(ctx, id, declaredFormat, refs).fut.Get, ctx)
 }
 
+// execActivity dispatches an implementation-specific Temporal Activity while
+// retaining the logical stage identity used by receipts, retry options, and
+// downstream references. It exists only for mutually exclusive
+// implementations of one stage; it must never schedule both implementations.
+func (r *run) execActivity(ctx workflow.Context, id stagegraph.StageID, activityName, declaredFormat string, refs map[string]Ref) (Ref, error) {
+	req := StageRequest{
+		RequestID: r.requestID, MatterID: r.matterID, CourtCaseID: r.courtCaseID,
+		SourceVersionRef: r.sourceVersionRef, DeclaredFormat: declaredFormat, Refs: refs,
+	}
+	actCtx := workflow.WithActivityOptions(ctx, optionsFor(id))
+	future := workflow.ExecuteActivity(actCtx, activityName, req)
+	return r.settle(id, future.Get, ctx)
+}
+
+func recommendHandler(ctx workflow.Context, req StageRequest) (HandlerRecommendationResult, error) {
+	var result HandlerRecommendationResult
+	actCtx := workflow.WithActivityOptions(ctx, optionsFor(stagegraph.SelectParser))
+	if err := workflow.ExecuteActivity(actCtx, RecommendHandlerActivityName, req).Get(actCtx, &result); err != nil {
+		return HandlerRecommendationResult{}, fmt.Errorf("proffer: recommend handler: %w", err)
+	}
+	if err := validateHandlerRecommendation(result); err != nil {
+		return HandlerRecommendationResult{}, fmt.Errorf("proffer: invalid handler recommendation: %w", err)
+	}
+	return result, nil
+}
+
+func validateSelectedHandler(ctx workflow.Context, req StageRequest) (HandlerSelectionValidationResult, error) {
+	var result HandlerSelectionValidationResult
+	actCtx := workflow.WithActivityOptions(ctx, optionsFor(stagegraph.SelectParser))
+	if err := workflow.ExecuteActivity(actCtx, ValidateHandlerSelectionActivityName, req).Get(actCtx, &result); err != nil {
+		return HandlerSelectionValidationResult{}, fmt.Errorf("proffer: validate handler selection: %w", err)
+	}
+	return result, nil
+}
+
+// structuredELTEligible exists only for replay of the first versioned DuckDB
+// route, before content-backed handler recommendations were introduced. Keep
+// the exact canonical signatures aligned with StructuredELTFormatForDeclaredFormat;
+// filename-derived aliases such as sms_export_xml must never enter this list.
+// New histories route from a validated HandlerCandidate instead.
+func structuredELTEligible(declaredFormat string) bool {
+	switch strings.TrimSpace(declaredFormat) {
+	case "csv", "ndjson", "jsonl", "smsbackuprestore_xml", "chatgpt_official_json", "messages_transcript":
+		return true
+	default:
+		return false
+	}
+}
+
 func (r *run) execPreview(ctx workflow.Context, request PreviewPublicationRequest) (Ref, error) {
 	id := stagegraph.PublishPreview
+	r.markStageStarted(id)
 	actCtx := workflow.WithActivityOptions(ctx, optionsFor(id))
 	future := workflow.ExecuteActivity(actCtx, string(id), request)
 	return r.settle(id, future.Get, ctx)
@@ -515,6 +869,7 @@ func (r *run) receiptRef(id stagegraph.StageID) Ref {
 // start schedules one Activity without blocking, for use in parallel
 // fan-outs and branches.
 func (r *run) start(ctx workflow.Context, id stagegraph.StageID, declaredFormat string, refs map[string]Ref) pending {
+	r.markStageStarted(id)
 	req := StageRequest{
 		RequestID:        r.requestID,
 		MatterID:         r.matterID,
@@ -538,6 +893,7 @@ func (r *run) start(ctx workflow.Context, id stagegraph.StageID, declaredFormat 
 //   - a result whose Status doesn't carry the receipt evidence that Status
 //     requires — see validateStageResult.
 func (r *run) settle(id stagegraph.StageID, get func(workflow.Context, interface{}) error, ctx workflow.Context) (Ref, error) {
+	defer r.markStageSettled(id)
 	var res StageResult
 	if err := get(ctx, &res); err != nil {
 		// The Activity may have crashed before producing a receipt at all,
@@ -662,8 +1018,21 @@ func (r *run) branch(ctx workflow.Context, fn func(workflow.Context) (Ref, error
 // far. publicationRef is empty on any non-success path.
 func (r *run) result(publicationRef Ref) WorkflowResult {
 	status := StatusSuccess
+	r.operation.ActiveStages = []ActivityName{}
+	r.operation.CurrentStage = ""
+	r.operation.Wait = ""
+	r.operation.Terminal = true
 	if publicationRef == "" {
 		status = StatusFailed
+		if r.operation.Lifecycle != OperationRerunRequired {
+			r.operation.Lifecycle = OperationFailed
+		}
+		if r.operation.Reason == "" && len(r.results) > 0 {
+			r.operation.Reason = r.results[len(r.results)-1].Reason
+		}
+	} else {
+		r.operation.Lifecycle = OperationCompleted
+		r.operation.Reason = ""
 	}
 	return WorkflowResult{
 		SourceVersionRef: r.sourceVersionRef,
@@ -671,4 +1040,64 @@ func (r *run) result(publicationRef Ref) WorkflowResult {
 		Status:           status,
 		Stages:           r.results,
 	}
+}
+
+func (r *run) awaiting(lifecycle OperationLifecycle, wait OperationWait) {
+	r.operation.Lifecycle = lifecycle
+	r.operation.Wait = wait
+	r.operation.CurrentStage = ""
+	r.operation.Reason = ""
+}
+
+func (r *run) running() {
+	r.operation.Lifecycle = OperationRunning
+	r.operation.Wait = ""
+	r.operation.Reason = ""
+	if len(r.operation.ActiveStages) > 0 {
+		r.operation.CurrentStage = r.operation.ActiveStages[0]
+	}
+}
+
+func (r *run) markStageStarted(id ActivityName) {
+	for _, active := range r.operation.ActiveStages {
+		if active == id {
+			return
+		}
+	}
+	r.operation.ActiveStages = append(r.operation.ActiveStages, id)
+	if r.operation.Wait == "" {
+		r.operation.Lifecycle = OperationRunning
+		if r.operation.CurrentStage == "" {
+			r.operation.CurrentStage = id
+		}
+	}
+}
+
+func (r *run) markStageSettled(id ActivityName) {
+	active := r.operation.ActiveStages[:0]
+	for _, candidate := range r.operation.ActiveStages {
+		if candidate != id {
+			active = append(active, candidate)
+		}
+	}
+	r.operation.ActiveStages = active
+	r.operation.CurrentStage = ""
+	if len(active) > 0 && r.operation.Wait == "" {
+		r.operation.CurrentStage = active[0]
+	}
+}
+
+func (r *run) operationSnapshot() OperationState {
+	state := r.operation
+	state.SourceVersionRef = r.sourceVersionRef
+	state.ActiveStages = append([]ActivityName(nil), r.operation.ActiveStages...)
+	state.CompletedStageCount = len(r.results)
+	state.Stages = make([]OperationStage, 0, len(r.results))
+	for _, result := range r.results {
+		state.Stages = append(state.Stages, OperationStage{
+			Stage: result.Stage, Status: result.Status, Ref: result.Ref,
+			ReceiptRef: result.ReceiptRef, Reason: result.Reason,
+		})
+	}
+	return state
 }

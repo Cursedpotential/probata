@@ -16,7 +16,7 @@ const rootRoute = createRootRoute({
       <p className="platform-kicker">Unknown destination</p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight">This Workbench route does not exist.</h1>
       <a className="mt-6 text-sm font-semibold text-primary underline underline-offset-4" href="/">
-        Return to the Evidence Operations Desk
+        Return to the Context Intake Desk
       </a>
     </section>
   ),
@@ -35,6 +35,8 @@ const routeTree = rootRoute.addChildren([
   applicationRoute("classification-test", () => import("@/app/classification-test/page")),
   applicationRoute("copilot", () => import("@/app/copilot/page")),
   applicationRoute("evidence-queue", () => import("@/app/evidence-queue/page")),
+  applicationRoute("review", () => import("@/app/evidence/preview/page")),
+  // Preserve old deep links while Review becomes the canonical destination.
   applicationRoute("evidence/preview", () => import("@/app/evidence/preview/page")),
   applicationRoute("intake", () => import("@/app/intake/page")),
   applicationRoute("knowledge", () => import("@/app/knowledge/page")),

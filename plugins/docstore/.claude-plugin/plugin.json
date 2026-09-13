@@ -1,9 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
-  "name": "probata-docstore",
-  "displayName": "Probata Universal Docstore",
+  "name": "propria-docstore",
+  "displayName": "Propria Docstore",
   "description": "Universal Propria documentation retrieval, notes, decisions, revisions, CDC verification, project registry, graph resources, and memory access. Isolated from codebase CCC indexes.",
-  "version": "0.5.2",
+  "version": "0.6.2",
   "author": {
     "name": "Matthew Salem"
   },
@@ -24,6 +24,5 @@
     "./claude/agents/docstore-librarian.md",
     "./claude/agents/docstore-reconciler.md",
     "./claude/agents/memory-curator.md"
-  ],
-  "mcpServers": "./.mcp.json"
+  ]
 }

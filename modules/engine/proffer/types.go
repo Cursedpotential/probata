@@ -12,7 +12,12 @@
 // Package proffer (formerly uiw / Universal Import Workflow; renamed D-140, 2026-09-05).
 package proffer
 
-import "github.com/Cursedpotential/probata/engine/stagegraph"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Cursedpotential/probata/engine/stagegraph"
+)
 
 // ActivityName is the Temporal-registered name for one Activity in
 // ProfferWorkflow. It is always identical to the canon StageID from
@@ -35,12 +40,58 @@ type Ref string
 // handle.
 type PreviewPublicationRequest struct {
 	RequestID               string         `json:"request_id"`
+	PackageRef              Ref            `json:"package_ref,omitempty"`
+	AttemptRef              Ref            `json:"attempt_ref,omitempty"`
 	SourceVersionRef        Ref            `json:"source_version_ref"`
+	SourceRepresentationRef Ref            `json:"source_representation_ref,omitempty"`
 	RawGenerationRef        Ref            `json:"raw_generation_ref"`
 	NormalizedGenerationRef Ref            `json:"normalized_generation_ref"`
+	ChunkGenerationRef      Ref            `json:"chunk_generation_ref,omitempty"`
+	ChunkReceiptRef         Ref            `json:"chunk_receipt_ref,omitempty"`
 	ParserSelectionRef      Ref            `json:"parser_selection_ref"`
 	ParserOptionsRef        Ref            `json:"parser_options_ref"`
 	ReceiptRefs             map[string]Ref `json:"receipt_refs"`
+}
+
+// ContextChunkingInput opts a non-messaging package into the D-158 context
+// chunk path. It contains only opaque references and short, version-pinned
+// controlled-vocabulary identifiers. Source bytes, extracted records, chunk
+// text, and parser/template bodies never enter Temporal history.
+//
+// Messaging imports leave the corresponding WorkflowInput fields empty and
+// preserve the existing normalized-message preview path. A caller must not
+// use this as a generic "chunk every import" flag: message chunking has its
+// own ordered-record contract.
+type ContextChunkingInput struct {
+	PackageRef    Ref
+	AttemptRef    Ref
+	ContextKind   string
+	Signature     string
+	PolicyID      string
+	PolicyVersion string
+}
+
+func (in ContextChunkingInput) validate() error {
+	if in.PackageRef == "" || in.AttemptRef == "" {
+		return fmt.Errorf("non-messaging context chunking requires package and extraction-attempt references")
+	}
+	if in.ContextKind != "non_messaging" {
+		return fmt.Errorf("context chunking requires context kind %q", "non_messaging")
+	}
+	for name, value := range map[string]string{
+		"signature":      in.Signature,
+		"policy id":      in.PolicyID,
+		"policy version": in.PolicyVersion,
+	} {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return fmt.Errorf("non-messaging context chunking requires %s", name)
+		}
+		if len(trimmed) > 256 {
+			return fmt.Errorf("non-messaging context chunking %s exceeds 256 bytes", name)
+		}
+	}
+	return nil
 }
 
 // Status is the recorded business outcome of one stage. success and
@@ -83,6 +134,28 @@ type WorkflowInput struct {
 	// SourceContextRef points to the append-only, actor-bound operator
 	// assertion receipt. Metadata values never enter Temporal history.
 	SourceContextRef Ref
+	// The context-chunk fields enable the D-158 non-messaging context path.
+	// Empty fields preserve the established messaging path. The flat wire
+	// shape deliberately uses only Refs and bounded strings.
+	PackageRef                Ref
+	AttemptRef                Ref
+	ContextKind               string
+	ContextChunkSignature     string
+	ContextChunkPolicyID      string
+	ContextChunkPolicyVersion string
+}
+
+func (in WorkflowInput) contextChunkingInput() *ContextChunkingInput {
+	if in.PackageRef == "" && in.AttemptRef == "" && strings.TrimSpace(in.ContextKind) == "" &&
+		strings.TrimSpace(in.ContextChunkSignature) == "" && strings.TrimSpace(in.ContextChunkPolicyID) == "" &&
+		strings.TrimSpace(in.ContextChunkPolicyVersion) == "" {
+		return nil
+	}
+	return &ContextChunkingInput{
+		PackageRef: in.PackageRef, AttemptRef: in.AttemptRef, ContextKind: strings.TrimSpace(in.ContextKind),
+		Signature: strings.TrimSpace(in.ContextChunkSignature), PolicyID: strings.TrimSpace(in.ContextChunkPolicyID),
+		PolicyVersion: strings.TrimSpace(in.ContextChunkPolicyVersion),
+	}
 }
 
 // StageRequest is the single compact wire type sent to every Activity: the

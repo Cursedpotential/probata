@@ -1,4 +1,8 @@
-# docstore — two SurrealDB MCPs, one plugin, progressive disclosure
+# propria-docstore — universal documentation retrieval with bounded routing
+
+<!-- Updated by: Codex | Date: 2026-09-12 | Rev: 1 | Platform: Codex / win32 | Changes: clarify system ownership | Context: owner request to persist CCC / Intake / Docstore distinction -->
+
+Current owner scope: **Probata hosts the universal Propria Docstore: CocoIndex + NVIDIA NIM embeddings + the dedicated SurrealDB `probata/docs` database**. The memory connection below is a separate service integration. **CCC** is project-local codebase-only CocoIndex Code; **Intake** is the multifaceted CocoIndex/Weaviate/SurrealDB filesystem workstation. The `propria-search` skill routes among them without merging state or ownership. See [shared boundaries](../../../../../SYSTEM-BOUNDARIES.md).
 
 > _Byline: Claude Code · Fable 5.1 · 2026-09-09 (skeleton built by Claude Code · Sonnet 5 the same day; validated with `claude plugin validate --strict`)_
 
@@ -7,7 +11,7 @@ Design: `docs/design/2026-09-09-docstore-memory-plugin-design.md`. Rulings: D-15
 ## Install
 
 ```
-claude --plugin-dir E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore
+claude --plugin-dir E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/claude
 ```
 
 Environment (never commit values):
@@ -22,15 +26,15 @@ Environment (never commit values):
 
 | Layer | Loads | When |
 |---|---|---|
-| 0 | three lines from `SessionStart`: both stores' health, the eight skill names, "search before you read" | every session |
-| 1 | the eight skill descriptions | every turn, by the harness |
+| 0 | bounded `SessionStart` health plus the `propria-search` routing reminder | every session |
+| 1 | the nine skill descriptions | every turn, by the harness |
 | 2 | one `SKILL.md` (≤ 60 lines): the `run` calls it wraps, exact SurrealQL, definition of done | when the skill matches |
 | 3 | `references/functions.md` under that skill: full signatures, schema, worked example, gotchas | on demand |
 | 4 | the MCP servers' generic tool schemas | deferred by the harness; never eagerly loaded |
 
-Skills: `query` (ad-hoc SurrealQL through `scripts/docstore/sq.py`, rendered as a DuckDB table — the one inspection format for every agent), `docs` (search, get, provenance), `docs-write` (register, new version in place, supersede), `decisions` (ADR banners, D-rows), `todo` (open, close), `handoff` (write and mirror), `memory` (remember, recall, supersede, forget, reflect), `reconcile` (stale candidates, ingest mapping).
+Skills: `propria-search` (primary Docs/CCC/mixed router), `query` (ad-hoc SurrealQL through `scripts/docstore/sq.py`, rendered as a DuckDB table), `docs` (semantic search, get, provenance), `docs-write` (register, new version in place, supersede), `decisions` (ADR banners, D-rows), `todo` (open, close), `handoff` (write and mirror), `memory` (remember, recall, supersede, forget, reflect), `reconcile` (stale candidates, ingest mapping).
 
-_2026-09-10 (Claude Code · Opus 5): `query` skill added (owner order: everybody runs the same query format); seven skills → eight._
+_2026-09-12 (Codex): `propria-search` added as the primary routing skill; eight skills → nine. `coco_docstore_search` is the ordinary documentation-search entry point and owns NIM query embedding plus Surreal BM25/KNN fusion._
 
 Agents: `docstore-librarian` (Sonnet, the only writer), `docstore-reconciler` (Opus, interactive, never batch-writes), `memory-curator` (Sonnet). None run on the frontier model.
 
@@ -41,9 +45,14 @@ Agents: `docstore-librarian` (Sonnet, the only writer), `docstore-reconciler` (O
 - `PostToolUse` on `Write|Edit` under `docs/**` → `bin/flag-doc-write.sh`: "unregistered until `docs_register` or `docs_new_version` runs".
 - `PreCompact` → `bin/precompact-marker.sh`: writes a marker the next `SessionStart` reads (PreCompact cannot inject context).
 
-## The one rule
+## Tool boundary
 
-No custom MCP server, ever. A new operation is a new `DEFINE FUNCTION` in the store plus one line in an existing skill, or it does not exist. Raw `query` is denied to the main thread; everything goes through `run` on named functions so scope filters stay inside the KNN predicate.
+Ordinary document retrieval uses the typed `control` MCP tool
+`coco_docstore_search`; it owns input validation, NIM query embedding, Surreal
+BM25/KNN fusion and bounded DuckDB presentation. Exact structured records and
+database/graph inspection may use the native `docs` MCP functions. Raw arbitrary
+querying is not the semantic-search entry point. CCC remains an independent CLI
+and CocoIndex Code application for each source repository.
 
 ## Codex
 

@@ -33,10 +33,11 @@ func NewHashActivities(repository HashRepository) HashActivities {
 // NewParserActivities binds the persisted parser-selection/execution bodies
 // to Temporal attempt numbers. Registry and Store remain explicit runtime
 // dependencies so the UI and workflow history never become parser state.
-func NewParserActivities(registry *parser.Registry, store ParserActivityStore) ParserActivities {
+func NewParserActivities(registry *parser.Registry, store ParserActivityStore, authorization HandlerExecutionAuthorizationStore) ParserActivities {
 	return ParserActivities{
-		Registry: registry,
-		Store:    store,
+		Registry:      registry,
+		Store:         store,
+		Authorization: authorization,
 		Attempt: func(ctx context.Context) int32 {
 			return activity.GetInfo(ctx).Attempt
 		},
@@ -207,24 +208,25 @@ func RegisterNormalizedPipelineActivities(registrar ActivityRegistrar, activitie
 	registrar.RegisterActivityWithOptions(activities.PublishGeneration, activity.RegisterOptions{Name: string(stagegraph.PublishGeneration)})
 }
 
-// NewStructuredELTActivities binds the durable pg_duckdb structured-ELT body
-// (BUILD LANE E1) to the current Temporal attempt, following the same
-// injection shape as every other NewXxxActivities constructor in this file.
-func NewStructuredELTActivities(repository StructuredELTRepository) StructuredELTActivities {
+// NewStructuredELTActivities binds the pg_duckdb row stream and the canonical
+// parser bundle/receipt store to the current Temporal attempt. DuckDB replaces
+// only ExecuteParser; PersistRawGeneration and all downstream gates are shared.
+func NewStructuredELTActivities(rows StructuredELTRowRepository, store ParserActivityStore, authorization HandlerExecutionAuthorizationStore) StructuredELTActivities {
 	return StructuredELTActivities{
-		Repository: repository,
+		Rows:          rows,
+		Store:         store,
+		Authorization: authorization,
 		Attempt: func(ctx context.Context) int32 {
 			return activity.GetInfo(ctx).Attempt
 		},
 	}
 }
 
-// RegisterStructuredELTActivities registers ExecuteStructuredELT under
-// ExecuteStructuredELTActivityName. It is not yet called from
-// profferworker.Run/buildRegistrations — that workflow-layer wiring (constructing
-// a postgres.StructuredELTRepository from the worker's pgxpool.Pool and
-// calling this function alongside the other RegisterXxxActivities calls) is
-// the exact remaining step the BUILD LANE E1 handoff reports as outstanding.
+// RegisterStructuredELTActivities registers the paired select/execute DuckDB
+// implementation under distinct Temporal names. Proffer routes both names
+// together for exact eligible formats, avoiding decoder registration
+// collisions and false parser attribution.
 func RegisterStructuredELTActivities(registrar ActivityRegistrar, activities StructuredELTActivities) {
+	registrar.RegisterActivityWithOptions(activities.SelectStructuredELT, activity.RegisterOptions{Name: SelectStructuredELTActivityName})
 	registrar.RegisterActivityWithOptions(activities.ExecuteStructuredELT, activity.RegisterOptions{Name: ExecuteStructuredELTActivityName})
 }

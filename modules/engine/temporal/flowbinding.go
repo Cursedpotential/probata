@@ -28,6 +28,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -216,14 +217,24 @@ func LoadFlowBindings(path string) (*FlowRegistry, error) {
 		return nil, fmt.Errorf("flow bindings: read %s: %w", path, err)
 	}
 	var doc struct {
-		Bindings []FlowBinding `json:"bindings"`
+		Bindings *[]FlowBinding `json:"bindings"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("flow bindings: %s must be {\"bindings\":[...]}: %w", path, err)
 	}
-	return NewFlowRegistry(doc.Bindings)
+	if doc.Bindings == nil {
+		return nil, fmt.Errorf("flow bindings: %s must contain a bindings array", path)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return nil, fmt.Errorf("flow bindings: %s contains trailing JSON values", path)
+		}
+		return nil, fmt.Errorf("flow bindings: %s contains trailing data: %w", path, err)
+	}
+	return NewFlowRegistry(*doc.Bindings)
 }
 
 // Lookup resolves a declared flow by name.
@@ -250,6 +261,17 @@ func (r *FlowRegistry) Names() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// Count reports how many extra n8n flows are declared for RunFlow. It is
+// intended for bounded startup/health telemetry; it does not assert that the
+// corresponding n8n webhooks are active. Callers that need operator metadata
+// should use List instead.
+func (r *FlowRegistry) Count() int {
+	if r == nil {
+		return 0
+	}
+	return len(r.byName)
 }
 
 // List returns every declared binding in stable order, so the screen can show

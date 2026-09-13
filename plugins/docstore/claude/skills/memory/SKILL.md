@@ -1,7 +1,7 @@
 ---
 name: memory
 description: Write and recall durable agent memory (corrections, preferences, observations, handoffs) in the shared SurrealDB memory store on the VPS (surreal-case), scoped by path probata/<domain>/<agent>. Use when the user corrects you, states a preference, when you discover a non-obvious fact, or when you need to know what a prior session already established before asking again.
-allowed-tools: mcp__plugin_docstore_memory__run mcp__plugin_docstore_memory__list Read
+allowed-tools: mcp__plugin_propria_docstore_memory__run mcp__plugin_propria_docstore_memory__list Read
 ---
 
 # Memory

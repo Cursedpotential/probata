@@ -5,16 +5,10 @@ package stagegraph
 // (section 2) purely for readability; the actual execution order is
 // determined by DependsOn, not slice position.
 //
-// Hash-naming discipline (vendored/sbv/CUSTODY.md is authoritative): H1 is
-// the whole-source digest, H2 is the per-raw-record/span digest, and H3 is
-// the order-sensitive fold of the ordered H2 digests — a raw-custody
-// concept, never a comparison to normalized output. The platform raw-all
-// H3 uses the tested SBV fold implementation under its own membership tag
-// because envelope/unparsed spans are also members. hash_normalized_records
-// and hash_normalized_generation compute separately-named
-// normalized-record digests and a normalized-generation manifest digest;
-// neither is H2 nor H3, and reconciliation/verification of one hash against
-// another remains a distinct responsibility from computing it.
+// D-149/D-152: ingest is context processing, never evidence custody.
+// Source, raw-record, and raw-generation fingerprints use context-specific
+// receipt families. Normalized digests are also context integrity checks.
+// Promotion owns custody sealing and its separately governed hash machinery.
 //
 // Dependency rationale, mirroring the canon document:
 //
@@ -22,21 +16,20 @@ package stagegraph
 //     coordinate every other stage keys off.
 //   - retain_original precedes repair assessment/resolution; the resolved
 //     retained object is the only byte source used by the remaining stages.
-//   - capture_filesystem_metadata, hash_source (H1), inventory_container, and
+//   - capture_filesystem_metadata, fingerprint_source, inventory_container, and
 //     extract_embedded_metadata are the named "safe parallel fan-out": each
 //     depends only on resolve_source_repair and not on one another.
 //   - select_parser joins that fan-out (it needs the container manifest and
 //     metadata manifest to pick an adapter) before execute_parser runs.
-//   - persist_raw_generation, hash_raw_records (H2 per raw record/span), then
-//     hash_raw_generation (H3, the ordered H2 chain) follow parsing in strict
+//   - persist_raw_generation, fingerprint_raw_records, then
+//     fingerprint_raw_generation follow parsing in strict
 //     sequence (persist before hashing the persisted rows, hash the members
 //     before folding their chain).
 //   - reconcile_record_accounting and reconcile_byte_coverage both depend
-//     only on hash_raw_generation and not on each other (second parallel
-//     pair) — reconciliation runs only once the raw generation's full custody
-//     chain (H2 membership + H3 fold) has been computed.
+//     only on fingerprint_raw_generation and not on each other (second parallel
+//     pair) — reconciliation follows the context generation fingerprint.
 //   - verify_raw_coverage_against_source joins that pair and additionally
-//     depends on hash_source, since it compares raw coverage against H1.
+//     depends on fingerprint_source for context source verification.
 //   - normalize_generation, persist_normalized_generation follow verification
 //     in strict sequence (normalize is transform-only, persist is the only
 //     write).

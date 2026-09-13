@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createCourtCase, createMatter } from "@/lib/api-client";
+import { useFixedCase } from "@/lib/fixed-case-context";
 import type { CourtCase, Matter } from "@/lib/shared/types";
 
 function errorMessage(error: unknown) {
@@ -28,6 +29,7 @@ interface CreateMatterDialogProps {
 }
 
 export function CreateMatterDialog({ onCreated }: CreateMatterDialogProps) {
+  const { mode } = useFixedCase();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState("");
@@ -51,7 +53,7 @@ export function CreateMatterDialog({ onCreated }: CreateMatterDialogProps) {
         title: title.trim(),
         description: description.trim() || undefined,
         partition_key: partitionKey.trim() || undefined,
-      });
+      }, mode);
       onCreated(matter);
       setOpen(false);
       reset();
@@ -109,6 +111,7 @@ interface CreateCourtCaseDialogProps {
 }
 
 export function CreateCourtCaseDialog({ matterId, onCreated }: CreateCourtCaseDialogProps) {
+  const { mode } = useFixedCase();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [caption, setCaption] = useState("");
@@ -138,7 +141,7 @@ export function CreateCourtCaseDialog({ matterId, onCreated }: CreateCourtCaseDi
         court_name: courtName.trim() || undefined,
         jurisdiction: jurisdiction.trim() || undefined,
         is_primary: isPrimary,
-      });
+      }, mode);
       onCreated(courtCase);
       setOpen(false);
       reset();

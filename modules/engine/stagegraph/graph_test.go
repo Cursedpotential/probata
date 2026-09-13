@@ -89,6 +89,22 @@ func TestEveryRequiredStageAppearsExactlyOnce(t *testing.T) {
 	}
 }
 
+func TestOptionalNonMessagingChunkStageIsVersionedAfterNormalizedVerification(t *testing.T) {
+	if len(OptionalStages) != 1 {
+		t.Fatalf("optional stage count = %d, want exactly the D-158 non-messaging chunk stage", len(OptionalStages))
+	}
+	d := OptionalStages[0]
+	if d.ID != ChunkDocument || d.Responsibility != RespChunk {
+		t.Fatalf("optional stage = %+v, want atomic chunk_document_activity", d)
+	}
+	if len(d.DependsOn) != 1 || d.DependsOn[0] != VerifyNormalizedGeneration {
+		t.Fatalf("chunk stage dependencies = %v, want verified normalized generation only", d.DependsOn)
+	}
+	if requiredStages[ChunkDocument] {
+		t.Fatal("non-messaging chunk stage was made mandatory for the messaging path")
+	}
+}
+
 func TestPublishRequiresAllGates(t *testing.T) {
 	g, err := NewGraph()
 	if err != nil {

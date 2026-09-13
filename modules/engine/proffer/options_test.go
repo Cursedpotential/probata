@@ -7,7 +7,9 @@ import (
 )
 
 func TestEveryStageHasExplicitBoundedOptions(t *testing.T) {
-	for _, d := range stagegraph.Stages {
+	allStages := append([]stagegraph.Descriptor(nil), stagegraph.Stages...)
+	allStages = append(allStages, stagegraph.OptionalStages...)
+	for _, d := range allStages {
 		opts, ok := stageOptions[d.ID]
 		if !ok {
 			t.Fatalf("stage %q has no ActivityOptions entry", d.ID)
@@ -23,7 +25,7 @@ func TestEveryStageHasExplicitBoundedOptions(t *testing.T) {
 		}
 	}
 
-	if len(stageOptions) != len(stagegraph.Stages) {
-		t.Errorf("stageOptions has %d entries, want exactly %d (one per registered stage, no strays)", len(stageOptions), len(stagegraph.Stages))
+	if len(stageOptions) != len(allStages) {
+		t.Errorf("stageOptions has %d entries, want exactly %d (one per base or optional stage, no strays)", len(stageOptions), len(allStages))
 	}
 }

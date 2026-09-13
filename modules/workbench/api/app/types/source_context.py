@@ -11,6 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
+from app.types.matter_mode import MatterMode
 from app.types.proffer import validate_authorized_source_ref
 
 
@@ -91,6 +92,7 @@ class SourceContextCreateRequest(BaseModel):
     observed_source: ObservedSource
     assertions: HumanSourceAssertions
     change_reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
+    matter_mode: MatterMode
 
     @field_validator("source_ref")
     @classmethod
@@ -106,6 +108,7 @@ class SourceContextReceipt(BaseModel):
     content_digest: Sha256Digest
     revision: Annotated[int, Field(ge=1)]
     recorded_at: datetime
+    matter_mode: MatterMode
 
 
 class HumanCorrection(BaseModel):

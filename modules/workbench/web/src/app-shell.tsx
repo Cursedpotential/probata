@@ -8,6 +8,8 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { FixedCaseProvider } from "@/lib/fixed-case-context";
+import { NewRunDialogProvider } from "@/lib/new-run-dialog-context";
+import { NewRunDialog } from "@/components/runs/new-run-dialog";
 import { RefreshProvider } from "@/lib/refresh-context";
 
 export function AppShell() {
@@ -15,6 +17,7 @@ export function AppShell() {
     <ThemeProvider>
       <RefreshProvider>
         <FixedCaseProvider>
+          <NewRunDialogProvider>
           <SidebarProvider
             className="flex h-screen flex-col overflow-hidden"
             style={{ "--sidebar-width": "14.5rem", "--shell-header-height": "74px" } as React.CSSProperties}
@@ -33,9 +36,11 @@ export function AppShell() {
                   </footer>
                 </div>
               </div>
-              <Toaster />
+                <Toaster />
+                <NewRunDialog />
             </TooltipProvider>
           </SidebarProvider>
+          </NewRunDialogProvider>
         </FixedCaseProvider>
       </RefreshProvider>
     </ThemeProvider>

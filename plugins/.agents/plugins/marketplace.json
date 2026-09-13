@@ -1,11 +1,11 @@
 {
-  "name": "probata",
+  "name": "propria",
   "interface": {
-    "displayName": "Probata Local Plugins"
+    "displayName": "Propria Local Plugins"
   },
   "plugins": [
     {
-      "name": "probata-docstore",
+      "name": "propria-docstore",
       "source": {
         "source": "local",
         "path": "./docstore"

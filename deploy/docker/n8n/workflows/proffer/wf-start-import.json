@@ -1,17 +1,170 @@
 {
   "name": "Universal Import - start",
   "nodes": [
-    {"parameters":{"httpMethod":"POST","path":"proffer/start","responseMode":"responseNode","authentication":"headerAuth","options":{}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000301","name":"Webhook - start","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[-640,0],"webhookId":"7a5ab1a0-1c9c-4c0e-8ae6-000000000302","credentials":{"httpHeaderAuth":{"id":"REPLACE_ME","name":"N8N_PROFFER_WEBHOOK (placeholder)"}}},
-    {"parameters":{"jsCode":"const input=$input.first()||{};const envelope=input.json||{};const body=envelope.body!==undefined?envelope.body:envelope;const allowed=['request_id','source_ref','declared_format','parser_options_ref'];const forbidden=['file','files','raw_record','raw_records','record','records','content','data','binary','refs','source_version_ref','original_ref'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('start: request body must be an object');if(input.binary)throw new Error('start: binary/file input is forbidden; send a source_ref only');const keys=Object.keys(body);if(keys.some((key)=>forbidden.includes(key)))throw new Error('start: forbidden payload field');const unknown=keys.filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('start: unsupported field(s): '+unknown.join(','));if(!allowed.every((field)=>typeof body[field]==='string'&&body[field].trim()!==''))throw new Error('start: request_id, source_ref, declared_format, and parser_options_ref are all required');return[{json:{request_id:body.request_id.trim(),source_ref:body.source_ref.trim(),declared_format:body.declared_format.trim(),parser_options_ref:body.parser_options_ref.trim()}}];"},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000303","name":"Validate + Shape Start Request","type":"n8n-nodes-base.code","typeVersion":2,"position":[-360,0]},
-    {"parameters":{"method":"POST","url":"https://reference-import-starter.example.invalid/reference-import/start","authentication":"genericCredentialType","genericAuthType":"httpHeaderAuth","sendHeaders":true,"specifyHeaders":"enterBelow","headerParameters":{"parameters":[{"name":"X-Request-ID","value":"={{ $json.request_id }}"}]},"sendBody":true,"specifyBody":"json","jsonBody":"={{ JSON.stringify($json) }}","options":{"response":{"response":{"neverError":false,"fullResponse":false}},"timeout":10000}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000304","name":"HTTP - reference import starter start","type":"n8n-nodes-base.httpRequest","typeVersion":4.4,"position":[-80,0],"credentials":{"httpHeaderAuth":{"id":"REPLACE_ME","name":"REFERENCE_IMPORT_STARTER (placeholder)"}}},
-    {"parameters":{"jsCode":"const response=$input.first()||{};const body=response.json||{};const allowed=['workflow_id','run_id'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('start: starter returned a non-object response');const unknown=Object.keys(body).filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('start: response contains unsupported field(s): '+unknown.join(','));if(!allowed.every((field)=>typeof body[field]==='string'&&body[field].trim()!==''))throw new Error('start: response fields are required');return[{json:{workflow_id:body.workflow_id,run_id:body.run_id}}];"},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000305","name":"Validate Compact Start Response","type":"n8n-nodes-base.code","typeVersion":2,"position":[200,0]},
-    {"parameters":{"respondWith":"json","responseBody":"={{ JSON.stringify({workflow_id: $json.workflow_id, run_id: $json.run_id}) }}","options":{}},"id":"7a5ab1a0-1c9c-4c0e-8ae6-000000000306","name":"Respond to Webhook - Start Response","type":"n8n-nodes-base.respondToWebhook","typeVersion":1.1,"position":[480,0]}
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "proffer/start",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000301",
+      "name": "Webhook - start",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        0
+      ],
+      "webhookId": "7a5ab1a0-1c9c-4c0e-8ae6-000000000302",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "N8N_PROFFER_WEBHOOK (placeholder)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$input.first()||{};const envelope=input.json||{};const body=envelope.body!==undefined?envelope.body:envelope;const allowed=['request_id','matter_id','court_case_id','source_ref','declared_format','parser_options_ref','source_context_ref'];const required=['request_id','matter_id','court_case_id','source_ref','declared_format','parser_options_ref'];const forbidden=['file','files','raw_record','raw_records','record','records','content','data','binary','refs','source_version_ref','original_ref','workflow_id','run_id'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('start: request body must be an object');if(input.binary)throw new Error('start: binary/file input is forbidden; send a source_ref only');const keys=Object.keys(body);if(keys.some((key)=>forbidden.includes(key)))throw new Error('start: forbidden payload field');const unknown=keys.filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('start: unsupported field(s): '+unknown.join(','));if(!required.every((field)=>typeof body[field]==='string'&&body[field].trim()!==''))throw new Error('start: request_id, matter_id, court_case_id, source_ref, declared_format, and parser_options_ref are required');const out=Object.fromEntries(required.map((field)=>[field,body[field].trim()]));if(typeof body.source_context_ref==='string'&&body.source_context_ref.trim()!=='')out.source_context_ref=body.source_context_ref.trim();return[{json:out}];"
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000303",
+      "name": "Validate + Shape Start Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://reference-import-starter.example.invalid/reference-import/start",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "specifyHeaders": "enterBelow",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Request-ID",
+              "value": "={{ $json.request_id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": false,
+              "fullResponse": false
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000304",
+      "name": "HTTP - reference import starter start",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -80,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "REFERENCE_IMPORT_STARTER (placeholder)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$input.first()||{};const body=response.json||{};const allowed=['preview_handle'];if(!body||typeof body!=='object'||Array.isArray(body))throw new Error('start: starter returned a non-object response');const unknown=Object.keys(body).filter((key)=>!allowed.includes(key));if(unknown.length)throw new Error('start: response contains unsupported field(s): '+unknown.join(','));if(typeof body.preview_handle!=='string'||body.preview_handle.trim()==='')throw new Error('start: preview_handle is required');return[{json:{preview_handle:body.preview_handle.trim()}}];"
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000305",
+      "name": "Validate Compact Start Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({preview_handle: $json.preview_handle}) }}",
+        "options": {}
+      },
+      "id": "7a5ab1a0-1c9c-4c0e-8ae6-000000000306",
+      "name": "Respond to Webhook - Start Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ]
+    }
   ],
-  "connections":{"Webhook - start":{"main":[[{"node":"Validate + Shape Start Request","type":"main","index":0}]]},"Validate + Shape Start Request":{"main":[[{"node":"HTTP - reference import starter start","type":"main","index":0}]]},"HTTP - reference import starter start":{"main":[[{"node":"Validate Compact Start Response","type":"main","index":0}]]},"Validate Compact Start Response":{"main":[[{"node":"Respond to Webhook - Start Response","type":"main","index":0}]]}},
-  "active":false,
-  "settings":{"executionOrder":"v1"},
-  "pinData":{},
-  "meta":{"templateCredsSetupCompleted":false},
-  "versionId":"7a5ab1a0-1c9c-4c0e-8ae6-000000000307",
-  "tags":[]
+  "connections": {
+    "Webhook - start": {
+      "main": [
+        [
+          {
+            "node": "Validate + Shape Start Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate + Shape Start Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP - reference import starter start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - reference import starter start": {
+      "main": [
+        [
+          {
+            "node": "Validate Compact Start Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Compact Start Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook - Start Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "versionId": "7a5ab1a0-1c9c-4c0e-8ae6-000000000307",
+  "tags": []
 }

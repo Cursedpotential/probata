@@ -1,4 +1,6 @@
-# Probata universal Docstore plugin
+# Propria universal Docstore plugin
+
+Byline: Codex / GPT-6, 2026-09-12 — canonical Codex registration repair.
 
 This directory is the source package for Propria's universal documentation
 plane. It is separate from project-local CCC code indexes and from Intake's
@@ -6,18 +8,25 @@ filesystem/evidence index.
 
 ## Canonical surfaces
 
-- `control/`: the governed FastMCP control server and its tests. It exposes 21
-  tools, five static resources, four resource templates and one prompt.
+- `control/`: the governed FastMCP control server and its tests. It exposes 22
+  tools, seven resources, four resource templates and one prompt. API resources
+  `docstore://api/openapi` and `docstore://api/surreal` retrieve live schemas.
 - `claude/`: the slim Claude marketplace package. It contains the user-facing
   skills, commands and agents and launches `control/` from the E-drive source.
-- root `.claude-plugin/plugin.json` and `.mcp.json`: the self-contained source
-  bundle used by Codex as `probata-docstore@probata` and available for Claude
-  packaging. Codex marketplace registration lives at
+- root `.claude-plugin/plugin.json`: the skills bundle used by Codex as
+  `propria-docstore@propria`. Root `.mcp.json` is deliberately empty: Codex uses
+  one explicitly configured `probata-docstore` server with absolute source paths
+  and the canonical configuration loader. It must not also inject unresolved
+  `control`, `surreal`, or `memory` aliases. Claude uses the separate `claude/`
+  package and its own MCP manifest. Codex marketplace registration lives at
   `../.agents/plugins/marketplace.json`.
 
-The marketplace entry is `probata-docstore@probata`, version 0.5.2. The older
-`docstore@probata` 0.4.0 identity is superseded and must remain disabled; it is
-not deleted automatically.
+The source marketplace entry is `propria-docstore@propria`, version 0.6.2. The
+older `docstore@probata` and `probata-docstore@probata` identities are
+superseded and must remain disabled; they are not deleted automatically. The
+deployed MCP server can retain its separately configured `probata-docstore`
+runtime identity while clients migrate; that server name does not rename the
+Propria plugin package.
 
 ## Transport and federation
 

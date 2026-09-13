@@ -1,0 +1,35 @@
+[
+  {
+    "id": "probata-demo-chatgpt-1",
+    "title": "Custody-safe import test",
+    "create_time": 1789228800.0,
+    "mapping": {
+      "root": {
+        "id": "root",
+        "parent": null,
+        "children": ["user-1"],
+        "message": null
+      },
+      "user-1": {
+        "id": "user-1",
+        "parent": "root",
+        "children": ["assistant-1"],
+        "message": {
+          "author": {"role": "user"},
+          "create_time": 1789228801.0,
+          "content": {"content_type": "text", "parts": ["Run a non-destructive mixed-format intake proof."]}
+        }
+      },
+      "assistant-1": {
+        "id": "assistant-1",
+        "parent": "user-1",
+        "children": [],
+        "message": {
+          "author": {"role": "assistant"},
+          "create_time": 1789228802.0,
+          "content": {"content_type": "text", "parts": ["Hash first, parse through the proper lane, and retain the receipt."]}
+        }
+      }
+    }
+  }
+]

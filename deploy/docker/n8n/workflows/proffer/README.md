@@ -3,8 +3,10 @@
 Five deliberately small n8n 2.36.6 workflow exports implement the HTTP body
 of the two n8n-backed parser Activities plus the "start / decide / preview"
 surface a human operator uses to run one end-to-end import through
-`engine/proffer.ProfferWorkflow` — the real 23-stage workflow, not a
-substitute. Temporal remains the durable owner of sequencing, timeouts,
+`modules/engine/proffer.ProfferWorkflow` — the real workflow, not a
+substitute. The executable stage graph currently contains 26 base Activity
+descriptors plus the version-gated `chunk_document_activity` used for
+non-messaging context. Temporal remains the durable owner of sequencing, timeouts,
 retry policy, and the human preview hold's Signal/Query/Timer state; n8n
 only validates envelopes, calls the authenticated Go HTTP endpoint it owns,
 validates the response, and sends it back to the caller.
@@ -12,13 +14,16 @@ validates the response, and sends it back to the caller.
 ```
 n8n "start" webhook --> engine/temporal starter HTTP --> Temporal client
   --> engine/proffer.ProfferWorkflow
-        --> register_source_activity ... the observation fan-out (stages 1-6)
+        --> register_source_activity ... source observation and repair routing
         --> select_parser_activity  --> n8n "select" webhook --> engine/runtimeapi (Go parser)
-        --> [human preview hold: a real Signal + Query + Timer, entirely
-             inside ProfferWorkflow — engine/proffer/preview.go]
-        --> n8n "decision" webhook --> engine/temporal starter HTTP --> Signal
         --> execute_parser_activity --> n8n "execute" webhook --> engine/runtimeapi (Go parser)
-        --> persist/hash/reconcile/normalize/seal/publish (stages 9-22)
+        --> persist/hash/reconcile/normalize/verify
+        --> [non-messaging context only: chunk_document_activity]
+        --> publish_preview_activity
+        --> [human preview hold: a real Signal + Query + Timer, entirely
+             inside ProfferWorkflow — modules/engine/proffer/preview.go]
+        --> n8n "decision" webhook --> engine/temporal starter HTTP --> Signal
+        --> seal_generation_activity --> publish_generation_activity
 ```
 
 The preview hold lives **inside** ProfferWorkflow itself, as a
@@ -71,6 +76,41 @@ could invoke a real parser Activity. All five Webhook nodes now require the
 `headerAuth` credential `N8N_PROFFER_WEBHOOK (placeholder)` — set a
 real header/value pair on it before activating any of these workflows in a
 live instance.
+
+## Generic flow Activity registry
+
+The Proffer worker also registers one generic Temporal Activity named
+`run_n8n_flow_activity`. Its body resolves a named n8n flow from the optional
+JSON file named by `N8N_FLOW_BINDINGS_FILE`, validates the flow's declared
+reference and scalar-input requirements, and then calls the bound webhook.
+Temporal still owns retries and durability; the request carries locators and
+bounded inputs, never source bytes.
+
+`N8N_FLOW_BINDINGS_FILE` is optional. With no file configured, the worker
+starts with zero extra flow bindings and the two dedicated parser Activities
+continue to work. When the variable is set, it must point to an absolute,
+read-only mounted regular file. A missing, unreadable, malformed, duplicate,
+or unsafe binding stops worker startup instead of silently producing an empty
+registry. Startup logs include `n8n_flow_binding_count` only; they do not log
+URLs or credentials.
+
+The deployed compose file does **not** currently mount or select a production
+binding document, and none of the checked-in inactive `.example.invalid`
+workflow exports is activated by this registration. A deployable binding must
+name a real active webhook that implements the `FlowRequest` / `FlowResult`
+contract in `engine/temporal/flowactivity.go`. A Temporal workflow or operator
+plan must also explicitly schedule `run_n8n_flow_activity`; merely declaring a
+binding does not insert it into `ProfferWorkflow`.
+
+For Coolify 4.1.2, do not add a repository-relative bind such as
+`./deploy/.../bindings.json:/run/config/...`: Coolify renders the compose in an
+application directory that does not contain the repository checkout, and
+Docker creates an empty directory at the missing source path. Provision the
+reviewed JSON as an absolute host file (for example under
+`/data/probata/config/proffer-worker/`), mount that absolute file read-only,
+and set `N8N_FLOW_BINDINGS_FILE` to its absolute container path. An environment
+change requires a Coolify deploy, not only a container restart, followed by an
+actual webhook/worker health check before calling the binding active.
 
 **Corrected 2026-08-27:** `wf-start-import.json` and `engine/temporal`
 previously started a smaller, package-local substitute workflow instead of
@@ -162,12 +202,17 @@ workflow having acted on it yet, since Signals are asynchronous.
 `wf-preview-status.json` is a `GET` with `?workflow_id=...` and returns the
 current `{"phase": "...", "select_ref": "...", "reason": "..."}` (`reason`
 only present once the run has left `awaiting_decision`). `phase` is one of
-`awaiting_decision`, `approved`, `rejected`, `timed_out` — see
-`engine/proffer/preview.go`'s `PreviewPhase` constants. The hold itself sits
-between `select_parser_activity` and `execute_parser_activity`
-(`engine/proffer/workflow.go`) and times out after 24 hours
-(`engine/proffer/preview.go`'s `previewDecisionTimeout`) if never decided — a
-real Temporal Timer, not bounded by any Activity's own timeout.
+`starting`, `awaiting_repair_decision`, `repair_approved`,
+`awaiting_handler_selection`, `handler_selected`, `awaiting_decision`,
+`approved`, `rejected`, `rerun_required`, or `timed_out` — see
+`modules/engine/proffer/preview.go`'s `PreviewPhase` constants. The final
+preview hold begins only after normalized-generation verification,
+`chunk_document_activity` when the non-messaging route selects it, and
+`publish_preview_activity`. It times out after 24 hours if never decided — a
+real Temporal Timer, not bounded by any Activity's own timeout. A decision
+that changes the parser selection or parser-options reference ends the current
+immutable attempt as `rerun_required`; the workflow does not relabel or publish
+the already-produced bytes under the changed configuration.
 
 ## Node inventory
 
@@ -192,11 +237,12 @@ relaying start/Signal/Query calls to Temporal. The select call uses a
 
 ## The `engine/temporal` side
 
-`engine/cmd/proffer-worker` is the sole production Temporal worker:
-it registers the real `engine/proffer.ProfferWorkflow` and all 23 canon
-Activity names on one dedicated UIW task queue. The two parser Activities are
-thin, heartbeating HTTP proxies to the n8n webhooks above; the other 21 use
-their concrete PostgreSQL/runtime implementations. The old
+`modules/engine/cmd/proffer-worker` is the sole production Temporal worker:
+it registers the real `modules/engine/proffer.ProfferWorkflow`, its current
+base and optional stage Activities, and the handler-selection helpers on one
+dedicated Proffer task queue. The two parser Activities are thin, heartbeating
+HTTP proxies to the n8n webhooks above; the other stages use their concrete
+PostgreSQL/runtime implementations. The old
 `engine/temporal/cmd/worker` partial-worker entry point is retired and fails
 closed instead of polling a queue with only two registered bodies.
 `engine/temporal/cmd/starter` is the small authenticated HTTP service the
@@ -208,7 +254,7 @@ Signal/Query against the workflow's own durable history, not any in-process
 state shared between them.
 
 The existing Python worker continues polling `evidence-pipeline` unchanged.
-The Go UIW worker rejects that queue name at startup: disjoint partial workers
+The Go Proffer worker rejects that queue name at startup: disjoint partial workers
 must not compete for Activity tasks on one queue.
 
 Shared starter/worker environment:
@@ -217,9 +263,10 @@ Shared starter/worker environment:
 |---|---|
 | `TEMPORAL_HOST_PORT` | Temporal frontend address |
 | `TEMPORAL_NAMESPACE` | Temporal namespace |
-| `TEMPORAL_TASK_QUEUE` | dedicated UIW task queue shared by the all-23 worker and starter; never `evidence-pipeline` |
+| `TEMPORAL_TASK_QUEUE` | dedicated Proffer task queue shared by the complete worker and starter; never `evidence-pipeline` |
 | `N8N_PROFFER_BASE_URL` | n8n webhook base (worker only) |
 | `N8N_PROFFER_AUTH_HEADER` / `N8N_PROFFER_AUTH_VALUE` | header the worker sends on every call to the n8n webhooks — must match the `headerAuth` credential on the select/execute Webhook nodes (worker only) |
+| `N8N_FLOW_BINDINGS_FILE` | optional absolute, read-only mounted JSON registry for extra flows invoked through `run_n8n_flow_activity`; an explicitly configured missing or invalid file stops worker startup |
 | `REFERENCE_STARTER_TOKEN` | bearer token the starter HTTP service requires — must match the `headerAuth` credential on the start/decision/preview Webhook nodes |
 | `REFERENCE_STARTER_ADDR` | starter listen address (default `:8091`) |
 | `SELECT_PARSER_HTTP_TIMEOUT` / `EXECUTE_PARSER_HTTP_TIMEOUT` | optional overrides (Go duration strings) |
@@ -247,9 +294,9 @@ otherwise retained `file://` locators correctly fail closed.
 5. Deploy `deploy/proffer-worker.yaml`, confirm its startup schema
    gate passes, and deploy the starter against the identical dedicated queue.
 6. Keep the workflows inactive while reviewing endpoints and credentials;
-   activate only once the all-23 worker and starter are both running.
+   activate only once the complete Proffer worker and starter are both running.
 7. Start a run, poll preview, send a decision, and verify the approved run
-   reaches publication or a rejected/timed-out run fails closed before parser
-   execution.
+   reaches seal/publication or a rejected, rerun-required, or timed-out run
+   fails closed before either stage.
 
 No local containers or live n8n deployment are part of this packet.

@@ -5,22 +5,22 @@ import type { WorkbenchNavigationItem } from "@/platform-ui/navigation";
 export const primaryNavigationItems = [
   {
     title: "Desk",
-    pageTitle: "Evidence Operations Desk",
+    pageTitle: "Context Intake Desk",
     href: "/",
     icon: LayoutDashboard,
     surface: "primary",
   },
   {
     title: "Intake",
-    pageTitle: "Intake new evidence",
+    pageTitle: "Intake new source material",
     href: "/intake",
     icon: Inbox,
     surface: "primary",
   },
   {
-    title: "Preview",
-    pageTitle: "Inspect pipeline preview",
-    href: "/evidence/preview",
+    title: "Review",
+    pageTitle: "Review extracted context",
+    href: "/review",
     icon: FileSearch,
     surface: "primary",
   },

@@ -88,6 +88,9 @@ func TestLoadFlowBindingsReadsDeclarations(t *testing.T) {
 	if got := registry.Names(); len(got) != 2 || got[0] != "chunk_preview" || got[1] != "ocr_page" {
 		t.Fatalf("names = %v, want sorted [chunk_preview ocr_page]", got)
 	}
+	if got := registry.Count(); got != 2 {
+		t.Fatalf("count = %d, want 2", got)
+	}
 	binding, err := registry.Lookup("chunk_preview")
 	if err != nil {
 		t.Fatalf("Lookup: %v", err)
@@ -107,6 +110,26 @@ func TestLoadFlowBindingsRejectsUnknownFields(t *testing.T) {
 	}
 	if _, err := LoadFlowBindings(path); err == nil {
 		t.Fatal("expected an unknown field to be refused")
+	}
+}
+
+func TestLoadFlowBindingsRequiresOneCompleteBindingsDocument(t *testing.T) {
+	for label, doc := range map[string]string{
+		"missing bindings": `{}`,
+		"null document":    `null`,
+		"null bindings":    `{"bindings":null}`,
+		"trailing value":   `{"bindings":[]} {"bindings":[]}`,
+		"trailing junk":    `{"bindings":[]} nope`,
+	} {
+		t.Run(label, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "bindings.json")
+			if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadFlowBindings(path); err == nil {
+				t.Fatalf("LoadFlowBindings() accepted %s", doc)
+			}
+		})
 	}
 }
 

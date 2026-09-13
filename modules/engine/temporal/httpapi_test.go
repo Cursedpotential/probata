@@ -43,6 +43,9 @@ func (f *fakeStarter) Decide(_ context.Context, workflowID string, decision prof
 	return f.decideErr
 }
 func (f *fakeStarter) DecideRepair(context.Context, string, proffer.RepairDecision) error { return nil }
+func (f *fakeStarter) DecideHandler(context.Context, string, proffer.HandlerSelectionDecision) error {
+	return nil
+}
 
 func (f *fakeStarter) Preview(_ context.Context, workflowID string) (proffer.PreviewState, error) {
 	f.previewID = workflowID
@@ -50,6 +53,9 @@ func (f *fakeStarter) Preview(_ context.Context, workflowID string) (proffer.Pre
 		return proffer.PreviewState{}, f.previewErr
 	}
 	return f.previewResult, nil
+}
+func (f *fakeStarter) Operation(context.Context, string) (proffer.OperationState, error) {
+	return proffer.OperationState{Lifecycle: proffer.OperationRunning, ActiveStages: []proffer.ActivityName{}}, nil
 }
 
 func newTestHandler(t *testing.T, starter *fakeStarter) http.Handler {

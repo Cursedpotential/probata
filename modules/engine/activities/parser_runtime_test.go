@@ -168,6 +168,14 @@ func parserStageRequest() proffer.StageRequest {
 	}
 }
 
+func contentValidatedParserStageRequest() proffer.StageRequest {
+	req := parserStageRequest()
+	for _, name := range handlerDecisionRefs {
+		req.Refs[name] = proffer.Ref(name + ":1")
+	}
+	return req
+}
+
 func successfulParser(capability parser.Capability, calls *int) runtimeAdapter {
 	return runtimeAdapter{
 		capability: capability,
@@ -320,5 +328,61 @@ func TestParserActivitiesSelectionNeverRoutesOnInputSizeAndWireIsCompact(t *test
 				t.Fatalf("activity wire type %s field %s carries a slice", typeOfValue.Name(), typeOfValue.Field(index).Name)
 			}
 		}
+	}
+}
+
+func TestContentValidatedParserSelectionAndExecutionHonorExactAuthorizedIdentity(t *testing.T) {
+	preferredCalls, authorizedCalls := 0, 0
+	preferred := successfulParser(runtimeCapability("preferred-parser", "2.0.0", parser.QualityPrimary), &preferredCalls)
+	authorized := successfulParser(runtimeCapability("authorized-parser", "1.0.0", parser.QualityFallback), &authorizedCalls)
+	registry, err := parser.NewRegistry(preferred, authorized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &runtimeStore{input: runtimeInput(), writer: &runtimeBundleWriter{}}
+	authorization := &fakeHandlerExecutionAuthorizationStore{authorization: HandlerExecutionAuthorization{
+		DetectedFormat: "sms_xml_backup", HandlerID: "authorized-parser", HandlerVersion: "1.0.0", ExecutionPath: proffer.HandlerPathDecoder,
+	}}
+	activities := ParserActivities{Registry: registry, Store: store, Authorization: authorization}
+	req := contentValidatedParserStageRequest()
+	req.DeclaredFormat = "generic_xml_extension_hint"
+	store.input.DeclaredFormat = parser.FormatID(req.DeclaredFormat)
+	if _, err := activities.SelectParser(context.Background(), req); err != nil {
+		t.Fatalf("SelectParser() exact authorization error = %v", err)
+	}
+	if store.selectionSpec.ParserID != "authorized-parser" || store.selectionSpec.ParserVersion != "1.0.0" {
+		t.Fatalf("selection independently chose a parser instead of the authorized identity: %+v", store.selectionSpec)
+	}
+	if _, err := activities.ExecuteParser(context.Background(), req); err != nil {
+		t.Fatalf("ExecuteParser() exact authorization error = %v", err)
+	}
+	if preferredCalls != 0 || authorizedCalls != 1 {
+		t.Fatalf("executed parser calls preferred/authorized=%d/%d, want 0/1", preferredCalls, authorizedCalls)
+	}
+	if store.writer.(*runtimeBundleWriter).header.FormatID != parser.FormatID(req.DeclaredFormat) {
+		t.Fatal("signature-based decoder execution overwrote original declaration")
+	}
+}
+
+func TestContentValidatedParserExecutionRejectsAuthorizationSelectionMismatch(t *testing.T) {
+	calls := 0
+	adapter := successfulParser(runtimeCapability("selected-parser", "1.0.0", parser.QualityPrimary), &calls)
+	registry, err := parser.NewRegistry(adapter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &runtimeStore{
+		input: runtimeInput(), writer: &runtimeBundleWriter{},
+		selection: PersistedParserSelection{SourceVersionRef: "source:version:1", DeclaredFormat: "sms_xml_backup", ParserID: "selected-parser", ParserVersion: "1.0.0"},
+	}
+	authorization := &fakeHandlerExecutionAuthorizationStore{authorization: HandlerExecutionAuthorization{
+		DetectedFormat: "xml", HandlerID: "different-parser", HandlerVersion: "9.9.9", ExecutionPath: proffer.HandlerPathDecoder,
+	}}
+	_, err = (ParserActivities{Registry: registry, Store: store, Authorization: authorization}).ExecuteParser(context.Background(), contentValidatedParserStageRequest())
+	if err == nil || !strings.Contains(err.Error(), "does not match the exact authorized decoder identity") {
+		t.Fatalf("ExecuteParser() mismatch error = %v", err)
+	}
+	if calls != 0 || store.persistExecCalls != 0 {
+		t.Fatalf("authorization mismatch executed or persisted parser: calls=%d receipts=%d", calls, store.persistExecCalls)
 	}
 }

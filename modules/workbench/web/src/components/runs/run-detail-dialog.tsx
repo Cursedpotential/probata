@@ -52,6 +52,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { StageRail } from "./stage-rail";
 import { StageDrawer } from "./stage-drawer";
 import { CopyButton } from "./stage-output-view";
+import { ingestStageLabel } from "./stage-label";
 import { RunReportPanel } from "./run-report-panel";
 import { RunEventsPanel } from "./run-events-panel";
 import { ApiError, abortRun, continueRun, getRun, getRunReport, retryRun } from "@/lib/api-client";
@@ -257,7 +258,7 @@ export function RunDetailDialog({ runId, open, onOpenChange, onNavigateToRun }: 
                 <div className="space-y-2 rounded-md border-2 border-destructive bg-destructive/10 p-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
                     <AlertTriangle className="size-4 shrink-0" />
-                    {failedStage ? `Run failed at stage "${failedStage.name}"` : "Run failed"}
+                    {failedStage ? `Run failed at stage "${ingestStageLabel(failedStage.name)}"` : "Run failed"}
                   </div>
                   {failedStage?.content && (
                     <div className="relative">
@@ -301,7 +302,7 @@ export function RunDetailDialog({ runId, open, onOpenChange, onNavigateToRun }: 
                   <div className="flex items-center gap-2 text-sm">
                     <Pause className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                     <span className="font-medium text-amber-700 dark:text-amber-400">
-                      Paused at gate — next: {gatedStage?.name ?? "unknown stage"}
+                      Paused at gate — next: {gatedStage ? ingestStageLabel(gatedStage.name) : "unknown stage"}
                     </span>
                   </div>
                   <div className="flex gap-2">
@@ -361,7 +362,7 @@ export function RunDetailDialog({ runId, open, onOpenChange, onNavigateToRun }: 
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        Skips custody/parse/store — re-ingests this run&apos;s already-stored records
+                        Uses this historical run&apos;s already-stored records
                       </TooltipContent>
                     </Tooltip>
                   )}
@@ -385,10 +386,6 @@ export function RunDetailDialog({ runId, open, onOpenChange, onNavigateToRun }: 
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">sha256</span>
                   <span className="truncate font-mono text-xs">{run.sha256}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Custody tier</span>
-                  <span className="capitalize">{run.custody_tier}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Created</span>
