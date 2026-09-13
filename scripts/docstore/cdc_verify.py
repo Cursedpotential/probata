@@ -10,6 +10,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import os
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +25,17 @@ class SourceDocument:
 
 
 def _fold_non_bmp(value: str) -> str:
-    return "".join(char if ord(char) <= 0xFFFF else "\ufffd" for char in value)
+    """Mirror flow_docs.fold_non_bmp without importing the CocoIndex graph."""
+    folded: list[str] = []
+    for char in value:
+        if ord(char) <= 0xFFFF:
+            folded.append(char)
+            continue
+        try:
+            folded.append(":" + unicodedata.name(char).lower().replace(" ", "_") + ":")
+        except ValueError:
+            folded.append(f":u{ord(char):04x}:")
+    return "".join(folded)
 
 
 def _matches(relative: str, source: SourceSpec) -> bool:

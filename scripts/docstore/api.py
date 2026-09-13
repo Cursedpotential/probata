@@ -55,6 +55,7 @@ _jobs_lock = threading.Lock()
 app = FastAPI(title="probata docstore API", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST", "DELETE"], allow_headers=["*"])
 INDEX_IDENTITY = {"app": "ProbataDocStore", "environment": "probata-docstore", "index_kind": "docs",
+                  "contract": "propria-docstore-operations/v1",
                   "allowed_source_roots": ["docs/"], "allowed_file_classes": ["markdown"],
                   "rejected_file_classes": ["source_code", "configuration", "test"]}
 
@@ -100,7 +101,18 @@ def _public_status(value: dict) -> dict:
                "full_reprocess",
                "tracking_rebuild", "tracking_state_quarantined", "projection_retirement",
                "source_digest_before", "source_digest_after", "cdc_verified", "cdc_attribution")
-    return {key: value.get(key) for key in allowed if key in value}
+    result = {key: value.get(key) for key in allowed if key in value}
+    state = result.get("sync")
+    actions = ["docstore_run_current", "docstore_run_get", "docstore_run_list"]
+    if state in {"queued", "running"}:
+        actions.append("docstore_run_cancel")
+    if state in {"failed", "degraded", "interrupted"}:
+        actions.extend(["docstore_attribution_verify", "docstore_index_full"])
+    if state == "degraded" and result.get("cdc_attribution", {}).get("status") == "mismatch":
+        actions.append("docstore_index_full(full_reprocess=true, tracking_rebuild=true)")
+    result["valid_next_actions"] = actions
+    result["override_supported"] = False
+    return result
 
 
 def _worker_alive(pid: object) -> bool:

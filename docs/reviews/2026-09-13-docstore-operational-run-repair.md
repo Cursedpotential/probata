@@ -80,6 +80,79 @@ dedicated SQLite state and sidecars under the worker volume's `to_be_deleted`,
 bootstraps a fresh declaration, retires only identities absent from the complete
 source snapshot, and still requires the exact zero-drift attribution gate.
 
+Tracking rebuild run `5d86d0419fdf423799e9546c69bad58e` then completed the
+membership repair in 509 seconds: it retained the old tracking state, upserted the
+complete 488-source declaration, retired the 20 unexpected projections, and reached
+488 observed documents with no missing or unexpected paths. Its first verifier result
+still reported 17 hash mismatches. End-to-end inspection proved every one of those 17
+stored hashes matched the actual ingest transform. The verifier had replaced every
+non-BMP character with U+FFFD while ingestion folds each such character to its Unicode
+name. The verifier now mirrors the dependency-free ingest fold; all 17 previously
+reported mismatches compare equal against the deployed commit's exact source bytes.
+The run remains recorded as degraded because receipts are immutable evidence; a fresh
+post-deploy run must produce the corrected terminal proof.
+
+## User-facing workflow reasoning
+
+The thinking-model router characterized this as a high-stakes, partly reversible
+architecture and workflow repair: diagnose and decide under concurrent source drift.
+It routed to branch thinking for competing execution paths and second-order reasoning
+for the consequences of repair and retry. Those two methods have distinct jobs; no
+additional reasoning model improved the decision.
+
+The evaluated branches were:
+
+1. Keep ordinary CocoIndex reconciliation only. This is the lowest-complexity path but
+   scored 2/5 because it cannot correct target/tracking divergence and leaves users in
+   a repeated failed-run dead end.
+2. Run CocoIndex full reprocess only. This preserves the framework's normal lifecycle
+   but scored 3/5 after live evidence showed it recomputes without repairing externally
+   drifted target rows.
+3. Use a bounded tracking rebuild plus exact attribution. This scored 5/5 because it is
+   full-source-only, retains prior state in `to_be_deleted`, removes only paths proven
+   absent from the complete snapshot, and must pass a zero-drift gate. The owner's
+   existing requirement for a real operational repair selects this branch.
+
+The workflow surface follows this path: discover a named MCP tool; invoke it directly;
+read an identified queued/running/terminal state; cancel the exact process where the
+worker supports it; retry ordinary failures; request explicit full reprocess/tracking
+rebuild only for attribution drift; then read the result, attribution, document, graph,
+or bounded export. Status returns `valid_next_actions`, evidence fields, an error type,
+and `override_supported=false`, so an unsupported override cannot be inferred.
+
+The consequence chain and guards are:
+
+- A rebuild immediately restores source membership (high probability); on the next
+  cycle, retained evidence and the exact source digest make the repair auditable; at
+  scale, the 1,000-record retirement ceiling and full-source admission prevent a partial
+  selection from becoming a mass retirement.
+- Direct run registration creates operator visibility (high probability); repeated use
+  could create concurrent-job pressure, so the API admits one live child process and
+  reports 409 rather than queueing invisible work.
+- Selected verification improves convenience (high probability); users could mistake it
+  for partial ingestion, so every selected run still reconciles the full declaration and
+  reports that selected paths are verification targets.
+- Cross-store repair packets improve diagnosis (medium probability); an automated loop
+  could cross ownership or ingest boundaries, so Docstore delegates to the canonical
+  Search plugin, exposes per-store state, and never silently edits sources.
+- Documentation and code retrieval become easy to combine (high probability); this
+  raises the risk of identity conflation, so every Docstore run/status/attribution/graph
+  response identifies `index_kind=docs` and rejects code/config/test classes. The CCC
+  index retains its independent root/settings/index identity.
+
+Final pre-deploy verification passed 292 control-plugin tests with 3 live-only
+skips, including the first-class MCP catalog, execution/status/cancellation fences,
+selected/full admission, graph previews/exports, source registration, revision-exact
+writes, and worker attribution safety. Python compilation passed for the worker API,
+worker, run primitives, verifier, graph module, MCP server, and CLI. The canonical
+installed MCP path discovers 40 tools, including all four thin Search adapters. A
+live invocation against Search commit `d50dbf57a687a2f2438b21e5773bbe8e0038e555`
+returned the `propria-search-reconcile/v1` contract with explicit state for all eight
+stores. The selected Docstore adapter was unavailable because
+`PROPRIA_DOCSTORE_ADAPTER` is not configured in that Search branch; its result
+reported requested=true, available=false, queried=false, skipped=unavailable, and
+the exact configuration/retry next action. No ad-hoc search or silent fallback ran.
+
 ## Deployment boundary
 
 The current worker image copies only Probata `docs/` plus `scripts/docstore/`.

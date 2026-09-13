@@ -43,11 +43,13 @@ configuration declares no stable internal CocoIndex app/environment name for it.
 Do not invent one or combine its run/attribution state with Docstore.
 
 Cross-store diagnosis delegates through `docstore_reconcile_query`,
-`docstore_reconcile_packet`, and `docstore_reconcile_validate` to the canonical
-`Propria/tools/agent-reconcile/reconcile.cmd` JSON protocol. These tools query both
-systems with provenance; they do not copy Smart Explore/CCC implementation into the
-plugin and do not change either system's ingestion boundary. Persist adjudication
-through the existing revision-exact Docstore flag/revision tools after human review.
+`docstore_reconcile_packet`, `docstore_reconcile_validate`, and
+`docstore_reconcile_repair` to the canonical `plugins/search/search.cmd` surface.
+These tools query both systems with provenance; they do not copy Smart Explore/CCC
+implementation into the plugin and do not change either system's ingestion boundary.
+Repair creates a bounded agent-action packet and never silently mutates source docs.
+Persist adjudication through the existing revision-exact Docstore flag/revision tools
+after human review.
 
 ## Execution boundary
 

@@ -10,6 +10,11 @@ from contextlib import asynccontextmanager
 
 import pytest
 
+
+def test_cdc_non_bmp_fold_matches_ingest_contract():
+    from cdc_verify import _fold_non_bmp
+    assert _fold_non_bmp("ready 🟡") == "ready :large_yellow_circle:"
+
 PIPELINE = Path(__file__).resolve().parents[4] / 'scripts/docstore'
 sys.path.insert(0, str(PIPELINE))
 import run_support
