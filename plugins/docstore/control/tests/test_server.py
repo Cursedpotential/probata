@@ -2,6 +2,7 @@
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -48,11 +49,14 @@ async def test_discovery_and_capabilities_have_no_network_or_state_writes(config
                 "docstore_get", "docstore_graph", "docstore_index_plan", "docstore_graph_schema",
                 "docstore_graph_query_preview", "docstore_graph_query", "docstore_run_current",
                 "docstore_run_get", "docstore_run_list", "docstore_attribution_verify"} <= tools.keys()
+        assert {"docstore_reconcile_query", "docstore_reconcile_packet",
+                "docstore_reconcile_validate"} <= tools.keys()
         assert 'docstore_selected_update_plan' in tools
         assert 'docstore_cdc_runs' in tools
         writes = {"docstore_set_flags", "docstore_capture_revision", "docstore_approve_revision",
                   "docstore_index_execute", "docstore_cancel_run", "docstore_index_full",
                   "docstore_index_selected", "docstore_run_cancel"}
+        writes.add("docstore_reconcile_packet")
         writes.add("docstore_handoff_write")
         assert writes <= tools.keys()
         assert all(not tools[name].annotations.readOnlyHint for name in writes)
@@ -339,7 +343,8 @@ async def test_governed_run_tools_use_live_job_api(config):
     assert requests[2].method == "DELETE" and requests[2].url.path == "/runs/" + "a" * 32
     assert requests[3].url.path == "/pipeline"
     assert requests[4].method == "POST" and json.loads(requests[4].content) == {
-        "scope": "full", "paths": [], "full_reprocess": False, "index_kind": "docs"}
+        "scope": "full", "paths": [], "full_reprocess": False, "tracking_rebuild": False,
+        "index_kind": "docs"}
     assert requests[5].method == "POST" and json.loads(requests[5].content) == {
         "scope": "selected", "paths": ["docs/note.md"], "full_reprocess": False, "index_kind": "docs"}
     assert requests[6].url.path == "/runs/current"
@@ -365,6 +370,33 @@ async def test_bounded_graph_management_tools_are_first_class(config):
     assert requests[2].url.path == "/graph-query" and requests[2].url.params["preview"] == "false"
     assert requests[2].url.params["relations"] == "cites"
     assert requests[2].url.params["index_kind"] == "docs"
+
+
+async def test_reconciliation_adapter_contract_has_explicit_per_store_state(config, tmp_path, monkeypatch):
+    launcher=tmp_path/'reconcile.cmd'; launcher.write_text('@echo off\n')
+    config=replace(config,reconciliation_launcher=launcher)
+    calls=[]
+    response={"schema":"propria-reconcile/v1","operation":"query","query":"contract",
+              "mode":"selected","project_root":str(tmp_path),"store_runs":[{
+              "store":"ccc","requested":True,"available":True,"queried":True,"skipped":False,
+              "error":None,"adapter":"ccc","identity":{"root":str(tmp_path)},"duration_ms":1,
+              "result_count":0}],"results":[],"decisions":[],"contracts":[],"conflicts":[],
+              "attribution_clean":None,"packet_path":None,"errors":[]}
+    def run(args,**kwargs):
+        calls.append((args,json.loads(kwargs['input'])))
+        return subprocess.CompletedProcess(args,0,json.dumps(response),'')
+    monkeypatch.setattr(_module.subprocess,'run',run)
+    server,_=harness(config)
+    async with Client(server) as client:
+        value=(await client.call_tool("docstore_reconcile_query",{
+            "query":"contract","mode":"selected","stores":["ccc"],
+            "project_root":str(tmp_path)})).data
+        assert value['store_runs'][0]['queried'] is True
+        invalid=await client.call_tool("docstore_reconcile_query",{
+            "query":"contract","mode":"selected","stores":[]},raise_on_error=False)
+        assert invalid.is_error
+    assert calls[0][0][1:]==['query','--request-stdin']
+    assert calls[0][1]['schema']=='propria-reconcile/v1'
 
 
 @pytest.mark.parametrize("paths", [["../outside.md"], ["missing.md"], ["wrong.txt"], [], ["a.md"] * 21])

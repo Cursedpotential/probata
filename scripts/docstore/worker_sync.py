@@ -24,7 +24,7 @@ import uuid
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from run_support import WorkerBusy, worker_lock, write_current_status, write_receipt, run_child
-from cdc_verify import snapshot_sources, verify_projection
+from cdc_verify import retire_unexpected_projection, snapshot_sources, verify_projection
 
 
 class WorkerCancelled(RuntimeError):
@@ -94,6 +94,7 @@ def _sync() -> int:
     run_id = requested_run_id or uuid.uuid4().hex
     requested_paths = tuple(filter(None, os.environ.get('DOCSTORE_REQUESTED_PATHS', '').split('\n')))
     full_reprocess = os.environ.get('DOCSTORE_FULL_REPROCESS', '').strip() == '1'
+    rebuild_tracking = os.environ.get('DOCSTORE_REBUILD_TRACKING', '').strip() == '1'
     source_snapshot, source_digest = snapshot_sources()
     source_paths = {row.source_path for row in source_snapshot}
     if requested_paths and (len(requested_paths) > 20 or len(set(requested_paths)) != len(requested_paths)
@@ -101,9 +102,11 @@ def _sync() -> int:
         raise ValueError('Selected paths are not a bounded subset of the complete source snapshot')
     summary: dict = {'sync':'running', 'app':'ProbataDocStore',
                      'environment':'probata-docstore', 'source_scope':'full',
+                     'worker_pid':os.getpid(),
                      'requested_scope':'selected' if requested_paths else 'full',
                      'requested_paths':list(requested_paths),
                      'full_reprocess':full_reprocess,
+                     'tracking_rebuild':rebuild_tracking,
                      'source_count':len(source_snapshot), 'source_digest_before':source_digest,
                      'cdc_verified':False}
     sequence = 0
@@ -116,7 +119,32 @@ def _sync() -> int:
     try:
         # The current status must also be durable before expensive work begins.
         write_current_status(STATUS, {**summary, 'run_id': run_id})
-        for stage, script, timeout in [('ingest','flow_docs.py',3600),('graph','graph_build.py',900)]:
+        if rebuild_tracking:
+            state_db = pathlib.Path(os.environ.get('DOCSTORE_COCOINDEX_DB', '')).resolve(strict=False)
+            if not state_db.is_absolute() or state_db.parent != STATUS.parent.resolve(strict=False):
+                raise RuntimeError('Tracking rebuild requires the dedicated worker state directory')
+            quarantine = state_db.parent / 'to_be_deleted' / f'cocoindex-tracking-{run_id}'
+            quarantine.mkdir(parents=True, exist_ok=False)
+            moved = []
+            for candidate in (state_db, pathlib.Path(str(state_db) + '-wal'), pathlib.Path(str(state_db) + '-shm')):
+                if candidate.exists():
+                    destination = quarantine / candidate.name
+                    os.replace(candidate, destination)
+                    moved.append(str(destination))
+            summary['tracking_state_quarantined'] = bool(moved)
+            summary['tracking_quarantine_path'] = str(quarantine)
+            record()
+        for stage, script, timeout in [('ingest','flow_docs.py',3600)]:
+            result = _run(script, timeout, RECEIPTS / f'{run_id}-{stage}.log')
+            summary[stage] = result
+            if result['exit_code'] != 0 or result['timed_out'] or result['diagnostic_errors']:
+                summary['sync'] = 'failed'
+                return 1
+            record()
+        if rebuild_tracking:
+            summary['projection_retirement'] = asyncio.run(retire_unexpected_projection(source_snapshot))
+            record()
+        for stage, script, timeout in [('graph','graph_build.py',900)]:
             result = _run(script, timeout, RECEIPTS / f'{run_id}-{stage}.log')
             summary[stage] = result
             if result['exit_code'] != 0 or result['timed_out'] or result['diagnostic_errors']:

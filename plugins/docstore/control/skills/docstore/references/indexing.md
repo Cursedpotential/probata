@@ -21,10 +21,33 @@ Use `docstore_run_cancel` only for the exact active run returned by this API pro
 without starting indexing. `docstore_index_execute`, `docstore_run_status`, and
 `docstore_cancel_run` remain compatibility aliases.
 
+`full_reprocess=true` recomputes CocoIndex transforms but can leave external target
+drift untouched when CocoIndex's tracked desired target already equals the newly
+computed desired target. For that proven condition, the explicit combination
+`full_reprocess=true, tracking_rebuild=true` moves the dedicated SQLite tracking
+database and sidecars into the worker state's retained `to_be_deleted` quarantine,
+bootstraps a fresh target declaration, and retires only Surreal document/chunk/edge
+identities absent from the complete source snapshot. It never deletes the retained
+tracking files. This repair is full-source only and still must pass exact attribution.
+
 Index and run controls are registered MCP tools, not REST-only implementation
 details: `docstore_pipeline_identity`, `docstore_index_full`,
 `docstore_index_selected`, `docstore_run_current`, `docstore_run_get`,
 `docstore_run_list`, `docstore_run_cancel`, and `docstore_attribution_verify`.
+
+The docs index identity is `ProbataDocStore@probata-docstore`, `index_kind=docs`.
+Operational calls accept only that literal kind and admit Markdown from governed
+documentation roots. Source code, configuration, and tests are rejected. The
+separate CCC identity is its project-root/settings/index tuple; repository/deploy
+configuration declares no stable internal CocoIndex app/environment name for it.
+Do not invent one or combine its run/attribution state with Docstore.
+
+Cross-store diagnosis delegates through `docstore_reconcile_query`,
+`docstore_reconcile_packet`, and `docstore_reconcile_validate` to the canonical
+`Propria/tools/agent-reconcile/reconcile.cmd` JSON protocol. These tools query both
+systems with provenance; they do not copy Smart Explore/CCC implementation into the
+plugin and do not change either system's ingestion boundary. Persist adjudication
+through the existing revision-exact Docstore flag/revision tools after human review.
 
 ## Execution boundary
 

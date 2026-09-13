@@ -56,6 +56,18 @@ def test_worker_exit_before_first_receipt_never_stays_queued(tmp_path,monkeypatc
     assert value['cdc_verified'] is False
 
 
+def test_orphaned_running_receipt_is_reported_interrupted(tmp_path,monkeypatch):
+    run_id='c'*32
+    monkeypatch.setattr(api,'RUN_RECEIPTS',tmp_path/'runs')
+    api.RUN_RECEIPTS.mkdir()
+    value={'receipt_kind':'worker-execution-v1','run_id':run_id,'sync':'running',
+           'worker_pid':999999,'cdc_verified':False}
+    (api.RUN_RECEIPTS/f'{run_id}-000.json').write_text(json.dumps(value))
+    response=TestClient(api.app).get('/runs/'+run_id).json()
+    assert response['sync']=='interrupted'
+    assert response['error_type']=='WorkerOwnershipLost'
+
+
 def test_explicit_drift_repair_enables_cocoindex_full_reprocess(tmp_path,monkeypatch):
     api._jobs.clear()
     monkeypatch.setattr(api,'RUN_RECEIPTS',tmp_path/'runs')
@@ -66,6 +78,18 @@ def test_explicit_drift_repair_enables_cocoindex_full_reprocess(tmp_path,monkeyp
     value=response.json()
     assert value['full_reprocess'] is True
     assert api._jobs[value['run_id']].kwargs['env']['DOCSTORE_FULL_REPROCESS']=='1'
+
+
+def test_explicit_tracking_rebuild_is_full_reprocess_only(tmp_path,monkeypatch):
+    api._jobs.clear()
+    monkeypatch.setattr(api,'RUN_RECEIPTS',tmp_path/'runs')
+    monkeypatch.setattr(api.subprocess,'Popen',Process)
+    client=TestClient(api.app)
+    assert client.post('/runs',json={'scope':'full','tracking_rebuild':True}).status_code==400
+    response=client.post('/runs',json={'scope':'full','full_reprocess':True,'tracking_rebuild':True})
+    assert response.status_code==202
+    process=api._jobs[response.json()['run_id']]
+    assert process.kwargs['env']['DOCSTORE_REBUILD_TRACKING']=='1'
 
 
 def test_unsafe_selected_requests_fail_before_launch(monkeypatch):

@@ -6,9 +6,11 @@ index execution API where none exists or present static settings as live status.
 from __future__ import annotations
 
 import hashlib
+import asyncio
 import json
 import os
 import re
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Literal
@@ -25,6 +27,8 @@ READ = {"readOnlyHint": True, "destructiveHint": False,
 DOMAINS = Literal["probata", "proffer", "consignatio", "advocatio", "vestigia",
                   "indagatio", "intake", "workbench", "knowledge", "memory", "infra", "docs"]
 KINDS = Literal["doc", "adr", "decision", "handoff", "todo", "review", "blueprint", "reference", "infrastructure"]
+RECONCILE_STORE = Literal["smart_explore", "ccc", "docstore", "codex_memory",
+                          "claude_memory", "cnf", "remember", "memsearch"]
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,7 @@ class Config:
     native_auth: str = field(default="", repr=False)
     worker_receipts_dir: Path | None = None
     project_registry: Path | None = None
+    reconciliation_launcher: Path = Path(r"E:\AI_Workspace\Projects\Propria\tools\agent-reconcile\reconcile.cmd")
 
     def __post_init__(self):
         url = urlsplit(self.api_url)
@@ -66,6 +71,8 @@ class Config:
                 raise ValueError('Worker receipts must be outside indexed source docs')
         if self.project_registry is not None and not self.project_registry.is_absolute():
             raise ValueError('Docstore project registry must use an explicit absolute path')
+        if not self.reconciliation_launcher.is_absolute() or self.reconciliation_launcher.suffix.lower() != ".cmd":
+            raise ValueError("Reconciliation launcher must be an explicit absolute .cmd path")
 
     @classmethod
     def from_env(cls):
@@ -121,8 +128,11 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 "allowed_file_classes": ["markdown"],
                 "rejected_file_classes": ["source_code", "configuration", "test"],
                 "codebase_index": {"manager": "cocoindex-code (ccc)", "deployment": "local per repository",
-                                   "app": None, "environment": None,
-                                   "identity_status": "not declared in repository or deploy configuration"},
+                                   "app": None, "environment": None, "project_root": r"E:\AI_Workspace",
+                                   "settings": r"E:\AI_Workspace\.cocoindex_code\settings.yml",
+                                   "index": r"E:\AI_Workspace\.cocoindex_code\target_sqlite.db",
+                                   "identity_status": "root/settings/index tuple; no app name declared",
+                                   "docs_exclusion_verified": False},
                 "pipeline_identity_verification_available": True,
                 "pipeline_identity_live_tool": "docstore_pipeline_identity",
                 "index_execution_available": True,
@@ -380,10 +390,12 @@ def build_server(config: Config, transport=None) -> FastMCP:
 
     @mcp.tool(annotations={**WRITE_RUN, "title": "Start full-source Docstore indexing"})
     async def docstore_index_full(full_reprocess: bool = False,
+                                  tracking_rebuild: bool = False,
                                   index_kind: Literal["docs"] = "docs") -> dict:
         """Start one governed full-source CocoIndex reconciliation."""
         return await request("POST", "/runs", payload={
             "scope": "full", "paths": [], "full_reprocess": full_reprocess,
+            "tracking_rebuild": tracking_rebuild,
             "index_kind": index_kind})
 
     @mcp.tool(annotations={**WRITE_RUN, "title": "Start admitted selected-source Docstore indexing"})
@@ -443,6 +455,81 @@ def build_server(config: Config, transport=None) -> FastMCP:
     async def docstore_attribution_verify(index_kind: Literal["docs"] = "docs") -> dict:
         """Run a fresh read-only exact path and normalized-content-hash comparison."""
         return await get("/attribution", {"index_kind": index_kind})
+
+    async def reconcile(operation: str, query: str, mode: str, stores: list[str] | None,
+                        project_root: str, limit: int) -> dict:
+        selected = stores or []
+        if mode == "selected" and not selected:
+            raise ToolError("selected reconciliation mode requires at least one store")
+        if mode != "selected" and stores is not None:
+            raise ToolError("store selectors are accepted only with selected mode")
+        root = Path(project_root).resolve(strict=False) if project_root else config.source_root.parents[2].resolve(strict=False)
+        if not root.is_absolute() or (os.name == "nt" and root.drive.upper() != "E:"):
+            raise ToolError("Reconciliation project_root must be an explicit E: path")
+        launcher = config.reconciliation_launcher
+        if not launcher.is_file():
+            raise ToolError("Propria reconciliation adapter is unavailable")
+        request_value = {"schema": "propria-reconcile/v1", "operation": operation,
+                         "query": query, "mode": mode, "project_root": str(root), "limit": limit}
+        if stores is not None:
+            request_value["stores"] = selected
+
+        def invoke():
+            return subprocess.run([str(launcher), operation, "--request-stdin"],
+                                  input=json.dumps(request_value), text=True, capture_output=True,
+                                  timeout=120, shell=False)
+        try:
+            process = await asyncio.to_thread(invoke)
+        except (OSError, subprocess.TimeoutExpired):
+            raise ToolError("Propria reconciliation adapter failed or timed out") from None
+        if process.returncode != 0 or len(process.stdout.encode("utf-8")) > 2 * 1024 * 1024:
+            raise ToolError("Propria reconciliation adapter rejected the request")
+        try:
+            value = json.loads(process.stdout)
+        except (json.JSONDecodeError, TypeError):
+            raise ToolError("Propria reconciliation adapter returned invalid JSON") from None
+        required = {"schema", "operation", "mode", "project_root", "store_runs", "results",
+                    "decisions", "contracts", "conflicts", "attribution_clean", "errors"}
+        if not isinstance(value, dict) or value.get("schema") != "propria-reconcile/v1" or not required <= value.keys():
+            raise ToolError("Propria reconciliation adapter returned an invalid contract")
+        if not isinstance(value["store_runs"], list) or any(not isinstance(row, dict) or not {
+                "store", "requested", "available", "queried", "skipped", "error", "adapter",
+                "identity", "duration_ms", "result_count"} <= row.keys() for row in value["store_runs"]):
+            raise ToolError("Propria reconciliation adapter omitted per-store state")
+        return value
+
+    @mcp.tool(annotations={**READ, "title": "Query decisions, contracts, code, and memory stores"})
+    async def docstore_reconcile_query(
+        query: Annotated[str, Field(min_length=2, max_length=2048)],
+        mode: Literal["auto", "all", "selected"] = "auto",
+        stores: list[RECONCILE_STORE] | None = None,
+        project_root: Annotated[str, Field(max_length=512)] = "",
+        limit: Annotated[int, Field(ge=1, le=50)] = 20,
+    ) -> dict:
+        """Query selected structural, semantic, Docstore, Codex, Claude, and memory stores with provenance."""
+        return await reconcile("query", query, mode, stores, project_root, limit)
+
+    @mcp.tool(annotations={**WRITE_RUN, "title": "Generate a durable reconciliation conflict packet"})
+    async def docstore_reconcile_packet(
+        query: Annotated[str, Field(min_length=2, max_length=2048)],
+        mode: Literal["auto", "all", "selected"] = "auto",
+        stores: list[RECONCILE_STORE] | None = None,
+        project_root: Annotated[str, Field(max_length=512)] = "",
+        limit: Annotated[int, Field(ge=1, le=50)] = 20,
+    ) -> dict:
+        """Persist a bounded JSON/Markdown conflict packet through the external governed adapter."""
+        return await reconcile("packet", query, mode, stores, project_root, limit)
+
+    @mcp.tool(annotations={**READ, "title": "Validate cross-store reconciliation and attribution"})
+    async def docstore_reconcile_validate(
+        query: Annotated[str, Field(min_length=2, max_length=2048)],
+        mode: Literal["auto", "all", "selected"] = "auto",
+        stores: list[RECONCILE_STORE] | None = None,
+        project_root: Annotated[str, Field(max_length=512)] = "",
+        limit: Annotated[int, Field(ge=1, le=50)] = 20,
+    ) -> dict:
+        """Require explicit per-store state and clean Docstore attribution when Docstore is selected."""
+        return await reconcile("validate", query, mode, stores, project_root, limit)
 
     @mcp.resource("docstore://capabilities")
     def capability_resource() -> dict:

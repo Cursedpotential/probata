@@ -70,6 +70,16 @@ Explicit full reprocess run `6fe6fd6e7f644ac7bf67df57ff546f3d` was then admitted
 with the same 488-document stable source digest. Its terminal attribution is recorded
 in the final section when available; a running receipt is not CDC proof.
 
+The first uninterrupted `full_reprocess=true` proof was run
+`1bcb3295187a4c22888ffeec81dd78ad`: it finished in 519 seconds but left the same
+20 unexpected documents and 17 stale hashes. This proves transformation reprocessing
+alone does not reconcile external Surreal target drift when CocoIndex's tracked
+desired target already matches its recomputed desired target. The follow-up repair
+therefore adds an explicit, full-source-only `tracking_rebuild` mode. It retains the
+dedicated SQLite state and sidecars under the worker volume's `to_be_deleted`,
+bootstraps a fresh declaration, retires only identities absent from the complete
+source snapshot, and still requires the exact zero-drift attribution gate.
+
 ## Deployment boundary
 
 The current worker image copies only Probata `docs/` plus `scripts/docstore/`.
