@@ -23,7 +23,7 @@ After reviewing it, the human explicitly runs approve with --plan-file,
 plan and approval pair. Verify and report accept --plan-file and do not change
 the approved target contract.
 
-Apply prefers uv and sets UV_PROJECT_ENVIRONMENT to the approved ignored
-<target>/.runtime/search/env. If uv is unavailable, it creates that same isolated
+Apply prefers uv and sets UV_PROJECT_ENVIRONMENT to the approved --runtime-env,
+which defaults to <target>/.runtime/search/env. If uv is unavailable, it creates that same isolated
 environment with python -m venv and installs the exact requirements.txt pins.
 Ambient site packages are never used.

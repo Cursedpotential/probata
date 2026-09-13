@@ -115,7 +115,7 @@ def build_plan(a):
     installer='uv' if Path(uv).is_file() or shutil.which('uv') else 'venv-pip'
     plan={'schema':'smart-explore-bootstrap-plan/v1','target':str(target),'source':str(source),
       'plugin_target':str(target/'plugins'/'search'),'index_store':str(a.index_store.resolve()),
-      'result_sink':str(a.result_sink.resolve()),'runtime_env':str(target/'.runtime'/'search'/'env'),
+      'result_sink':str(a.result_sink.resolve()),'runtime_env':str((a.runtime_env or (target/'.runtime'/'search'/'env')).resolve()),
       'profile_registry':str(a.registry_home.resolve()/'profiles'),
       'name':a.name or ''.join(c if c.isalnum() or c in '-_' else '-' for c in target.name.lower()),
       'stores':stores,'installer':installer,'uv':uv if installer=='uv' else None,
@@ -247,6 +247,7 @@ def main():
     ap.add_argument('mode',choices=['scan','plan','approve','apply','verify','report'])
     ap.add_argument('--target',type=Path);ap.add_argument('--source',type=Path)
     ap.add_argument('--index-store',type=Path);ap.add_argument('--result-sink',type=Path)
+    ap.add_argument('--runtime-env',type=Path)
     ap.add_argument('--stores',default='smart_explore,ccc');ap.add_argument('--name')
     ap.add_argument('--registry-home',type=Path,default=Path.home()/'.smart-explore')
     ap.add_argument('--plan-file',type=Path);ap.add_argument('--approval-file',type=Path)
