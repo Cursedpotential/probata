@@ -49,5 +49,8 @@ entries:
       name: authentik Embedded Outpost
     attrs:
       type: proxy
+      config:
+        authentik_host: https://auth.int.mitechconsult.com/
+        authentik_host_browser: https://auth.int.mitechconsult.com/
       providers:
         - !KeyOf probata-workbench-provider

@@ -30,7 +30,9 @@ AUTHENTIK_EXACT_PROXY_SETTING = "${TRAEFIK_PROXY_CIDR:?exact Traefik proxy CIDR 
 # the variable is absent. Workbench uses plain substitution and its own auth
 # boundary rejects an empty or malformed value at runtime.
 WORKBENCH_EXACT_PROXY_SETTING = "${TRAEFIK_PROXY_CIDR}"
-FORWARD_AUTH_ADDRESS = "http://authentik-server:9000/outpost.goauthentik.io/auth/traefik"
+FORWARD_AUTH_ADDRESS = (
+    "https://workbench.int.mitechconsult.com/outpost.goauthentik.io/auth/traefik"
+)
 
 
 def _load(path: Path) -> dict:
@@ -85,12 +87,24 @@ class TestAuthentikProvider:
             "AUTHENTIK_SECRET_KEY": "file:///run/secrets/authentik/secret-key",
             "AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS": AUTHENTIK_EXACT_PROXY_SETTING,
         }
-        for name in ("authentik-server", "authentik-worker"):
-            assert services[name]["environment"] == expected
-
+        assert services["authentik-server"]["environment"] == expected
+        assert services["authentik-worker"]["environment"] == {
+            **expected,
+            "AUTHENTIK_BOOTSTRAP_PASSWORD_HASH": "${AUTHENTIK_BOOTSTRAP_PASSWORD_HASH:-}",
+        }
         text = AUTHENTIK_PATH.read_text(encoding="utf-8")
         assert "AUTHENTIK_POSTGRES__" not in text
         assert "AUTHENTIK_SECRET_KEY_FILE" not in text
+
+    def test_owner_bootstrap_hash_is_worker_only_and_defaults_empty(self) -> None:
+        services = _load(AUTHENTIK_PATH)["services"]
+        assert "AUTHENTIK_BOOTSTRAP_PASSWORD_HASH" not in services["authentik-server"]["environment"]
+        assert (
+            services["authentik-worker"]["environment"]["AUTHENTIK_BOOTSTRAP_PASSWORD_HASH"]
+            == "${AUTHENTIK_BOOTSTRAP_PASSWORD_HASH:-}"
+        )
+        text = AUTHENTIK_PATH.read_text(encoding="utf-8")
+        assert "AUTHENTIK_BOOTSTRAP_PASSWORD:" not in text
 
     def test_secret_mounts_are_read_only(self) -> None:
         services = _load(AUTHENTIK_PATH)["services"]
@@ -153,6 +167,8 @@ class TestAuthentikProvider:
         assert "mode: forward_single" in text
         assert "external_host: https://workbench.int.mitechconsult.com" in text
         assert "name: authentik Embedded Outpost" in text
+        assert "authentik_host: https://auth.int.mitechconsult.com/" in text
+        assert "authentik_host_browser: https://auth.int.mitechconsult.com/" in text
         assert "- !KeyOf probata-workbench-provider" in text
 
 

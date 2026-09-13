@@ -16,10 +16,9 @@
 # =============================================================================
 # AUTHENTIK IDENTITY PROVIDER -- standalone Coolify Docker Compose application
 #
-# Deployed in Coolify on 2026-09-12. Containers are healthy, but the public
-# browser route is not end-to-end verified: first-owner setup and the
-# Workbench provider/application/outpost assignment are still required, and
-# public TCP 443 currently does not reach the host from an external client.
+# Deployed in Coolify on 2026-09-12. Public TCP 443 and trusted TLS are live.
+# The one-time first-owner bootstrap is supplied only to the worker as a
+# password hash, then cleared from the Coolify environment after setup proof.
 # Coolify watch path: deploy/authentik.yaml
 #
 # Host preparation (once, before first deployment):
@@ -33,6 +32,11 @@
 #   TRAEFIK_PROXY_CIDR=<the exact Coolify Traefik socket address>/32
 # Do not use a Docker-private supernet or the tailnet range. Both Authentik and
 # Workbench accept identity headers only from this exact proxy boundary.
+#
+# One-time secret Coolify variable for initial setup only:
+#   AUTHENTIK_BOOTSTRAP_PASSWORD_HASH=<Django-compatible password hash>
+# This must be derived from the existing owner password without printing or
+# storing the plaintext. Clear the value and redeploy after Setup is true.
 #
 # Authentik 2025.10 removed Redis completely. This 2026.8 deployment therefore
 # intentionally has no Redis service or AUTHENTIK_REDIS__* compatibility config.
@@ -140,7 +144,11 @@ services:
     command: worker
     restart: unless-stopped
     shm_size: 512mb
-    environment: *authentik-environment
+    environment:
+      <<: *authentik-environment
+      # Official first-start bootstrap input. It is intentionally worker-only
+      # and defaults empty so normal deployments cannot reset credentials.
+      AUTHENTIK_BOOTSTRAP_PASSWORD_HASH: ${AUTHENTIK_BOOTSTRAP_PASSWORD_HASH:-}
     volumes: *authentik-volumes
     depends_on:
       authentik-postgres:
