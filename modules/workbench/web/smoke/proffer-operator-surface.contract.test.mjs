@@ -102,4 +102,7 @@ test("generic records and exact chunks use the durable content projection", () =
   assert.match(surface, /piece\.sha256/);
   assert.match(surface, /does not publish to Weaviate, promote evidence, or establish custody/);
   assert.match(surface, /Compare attempts and edit-template rerun remain unavailable/);
+  assert.match(preview, /normalized records, source locators, and every required completed receipt/);
+  assert.doesNotMatch(preview, /messagesLoaded &&/);
+  assert.doesNotMatch(preview, /!messageError &&/);
 });

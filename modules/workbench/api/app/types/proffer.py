@@ -15,6 +15,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from app.types.matter_mode import MatterMode
+from app.types.proffer_content import ProfferContentResponse  # noqa: F401
 from app.types.proffer_handler import (
     ProfferHandlerCandidate,
     ProfferHandlerSelectionDecisionRequest,  # noqa: F401
@@ -27,7 +28,6 @@ from app.types.proffer_messages import (
     ProfferPreviewMessagesResponse,  # noqa: F401
     ProfferPreviewParticipant,  # noqa: F401
 )
-from app.types.proffer_content import ProfferContentResponse  # noqa: F401
 from app.types.proffer_sources import (
     ProfferSourceBrowserResponse,  # noqa: F401
     ProfferSourceObject,  # noqa: F401

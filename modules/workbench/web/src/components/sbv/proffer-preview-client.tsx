@@ -64,7 +64,6 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
   const [messageError, setMessageError] = useState<string | null>(null);
   const [eventError, setEventError] = useState<string | null>(null);
   const [messagesLoading, setMessagesLoading] = useState(false);
-  const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [decisionPending, setDecisionPending] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const generationRef = useRef(initialUrlHandle ? 1 : 0);
@@ -94,7 +93,6 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
     setSnapshotError(null);
     setMessageError(null);
     setEventError(null);
-    setMessagesLoaded(false);
     setMessagesLoading(false);
     setDecisionPending(false);
     setRejectionReason("");
@@ -164,7 +162,6 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
       });
       setNextCursor(page.next_cursor ?? null);
       setMessageError(null);
-      if (!cursor) setMessagesLoaded(true);
     } catch (error) {
       if (generation !== generationRef.current || activeHandleRef.current !== handle) return;
       setMessageError(error instanceof Error ? error.message : "Preview messages are unavailable");
@@ -354,10 +351,8 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
   const decisionEligible = Boolean(
     awaitingDecision &&
     preview?.preview_handle === previewHandle &&
-    messagesLoaded &&
     content &&
     !snapshotError &&
-    !messageError &&
     !contentError &&
     provenanceLoaded &&
     receiptsComplete,
@@ -411,7 +406,7 @@ function ModeScopedPreviewClient({ mode }: { mode: "TEST" | "REAL" }) {
       ) : (
         <>
           {eventError && <p className="border border-[#ead5a9] bg-[#fff4dd] p-3 text-sm text-[#684b18]" role="status">{eventError}</p>}
-          {!decisionEligible && awaitingDecision && <p className="border border-[#ead5a9] bg-[#fff4dd] p-3 text-xs text-[#684b18]" role="status">Approval remains locked until this exact preview has normalized records, participant and attachment provenance, and every required completed receipt.</p>}
+          {!decisionEligible && awaitingDecision && <p className="border border-[#ead5a9] bg-[#fff4dd] p-3 text-xs text-[#684b18]" role="status">Approval remains locked until this exact preview has normalized records, source locators, and every required completed receipt.</p>}
           <ProfferOperatorPreview
             key={`${mode}:${previewHandle}`}
             snapshot={operatorSnapshot}

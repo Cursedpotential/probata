@@ -226,3 +226,39 @@ The owner-confirmed product boundary remains intact: Probata/Proffer is app 1. X
 The source-only latest-generation lookup is valid for the current single-attempt executable path. It is not final acceptance once reruns exist; direct attempt binding is required before comparable reruns are complete.
 
 Follow-up checks passed: Go runtime API and PostgreSQL packages; Ruff over changed Workbench API files; 51 focused API tests; TypeScript/Vite production build; ESLint with zero errors and the same 12 existing fast-refresh warnings; and 18 focused UI contract tests. No live PostgreSQL projection or real-file workflow ran. The opt-in schema-backed test still requires `PLATFORM_PREVIEW_STORE_TEST_DSN`.
+
+## Integration correction: chunk-backed final review gate
+
+The follow-up engine integration removes the earlier item 14 gap for the
+current non-messaging path. New Temporal histories now run
+`verify_normalized_generation_activity`, then the independently retryable
+`chunk_document_activity`, then `publish_preview_activity`, and only then open
+the final human decision hold. `PreviewState` and `OperationState` carry the
+exact package, extraction-attempt, source-representation, chunk-generation,
+and chunk-receipt references. The browser renders the sealed generation and
+exact chunk content through the generic content endpoint. That read and review
+path performs no Weaviate publication, evidence promotion, or custody write.
+
+Changing the parser selection or parser-options reference at the final review
+cannot silently approve the prior output. The current attempt becomes terminal
+`rerun_required`, with the reason exposed through the durable preview and
+operation queries. This fail-closed state is implemented and test-covered; a
+new authenticated command that creates the replacement attempt from the
+retained immutable package is still absent.
+
+The combined surface also treats the generic record projection as the approval
+authority for both messaging and non-messaging sources. A message-specific
+projection may be empty or independently unavailable without blocking review
+of a valid non-messaging record set. Approval remains locked until generic
+records carry source locators and every required context receipt is complete.
+
+The remaining acceptance gaps are the actual operator commands and their
+append-only contracts: choose a different parser/extractor or engine profile
+outside the existing handler-selection wait; create, validate, edit, and
+version a template/options document; launch a new immutable attempt with an
+idempotency coordinate and expected-state token; compare complete attempt
+histories; and bind the content query directly to the attempt's chunk
+generation rather than selecting the latest generation for the source. n8n
+workflow/version/activation/execution identities and live deployment proof also
+remain unavailable. The UI must continue to say these controls are unavailable
+until those commands and receipts exist.

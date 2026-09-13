@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 import re
 import stat
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -27,21 +27,20 @@ from app.service.proffer_errors import ProfferError
 from app.service.proffer_sources import browse_sources  # noqa: F401
 from app.types.matter_mode import MatterMode
 from app.types.proffer import (
-    ProfferDecisionRequest,
+    ProfferContentResponse,
     ProfferDecisionActor,
+    ProfferDecisionRequest,
     ProfferDecisionResponse,
     ProfferHandlerSelectionDecisionRequest,
     ProfferHandlerSelectionDecisionResponse,
+    ProfferPreviewMessagesResponse,
+    ProfferPreviewResponse,
     ProfferRepairDecisionRequest,
     ProfferRepairDecisionResponse,
-    ProfferPreviewMessagesResponse,
-    ProfferContentResponse,
-    ProfferPreviewResponse,
     ProfferStartRequest,
     ProfferStartResponse,
     ProfferUploadResponse,
 )
-
 
 _SERVICE_TOKEN = re.compile(r"[A-Za-z0-9\-._~+/]+={0,}")
 _MIN_SERVICE_TOKEN_BYTES = 32

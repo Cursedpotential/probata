@@ -25,15 +25,17 @@ from app.service.proffer import (
     start,
     validated_preview_events,
 )
+from app.service.proffer_operations import list_operations, operation
+from app.service.proffer_operator import operator_snapshot
 from app.types.proffer import (
+    MatterMode,
+    ProfferContentResponse,
     ProfferDecisionActor,
     ProfferDecisionRequest,
     ProfferDecisionResponse,
     ProfferHandlerSelectionDecisionRequest,
     ProfferHandlerSelectionDecisionResponse,
-    MatterMode,
     ProfferPreviewMessagesResponse,
-    ProfferContentResponse,
     ProfferPreviewResponse,
     ProfferRepairDecisionRequest,
     ProfferRepairDecisionResponse,
@@ -42,14 +44,12 @@ from app.types.proffer import (
     ProfferStartResponse,
     ProfferUploadResponse,
 )
-from app.service.proffer_operations import list_operations, operation
-from app.service.proffer_operator import operator_snapshot
-from app.types.proffer_operator import ProfferOperatorSnapshot
 from app.types.proffer_operations import (
     ProfferOperationDetail,
     ProfferOperationLifecycle,
     ProfferOperationListResponse,
 )
+from app.types.proffer_operator import ProfferOperatorSnapshot
 
 router = APIRouter(prefix="/api/proffer", tags=["proffer"])
 

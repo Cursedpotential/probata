@@ -6,12 +6,10 @@ import asyncio
 from uuid import UUID
 
 import pytest
-
 from app.runtime import proffer as runtime
-from app.service import matter_mode, proffer, proffer_operator, proffer_operations
+from app.service import matter_mode, proffer, proffer_operations, proffer_operator
 from app.types.proffer import ProfferPreviewResponse
 from app.types.proffer_operations import ProfferOperationDetail
-
 
 HANDLE = "operator_preview_handle_abcdefghijklmnop"
 MATTER = UUID("11111111-1111-4111-8111-111111111111")

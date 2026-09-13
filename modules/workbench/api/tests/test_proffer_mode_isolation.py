@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 import json
+from datetime import UTC, datetime
 
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 import httpx
 import pytest
-
-from app.runtime import case_management, proffer as proffer_runtime, source_inspection
+from app.runtime import case_management, source_inspection
+from app.runtime import proffer as proffer_runtime
 from app.service import matter_mode, proffer, proffer_sources, source_context
 from app.service.matter_mode import _clear_preview_modes_for_tests, require_preview_mode
 from app.types.proffer import (
@@ -21,7 +19,8 @@ from app.types.proffer import (
     ProfferStartRequest,
 )
 from app.types.source_context import SourceContextCreateRequest
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 TEST_MATTER_ID = "deadbeef-dead-beef-dead-beefdeadbeef"
 TEST_COURT_CASE_ID = "cafebabe-cafe-babe-cafe-babecafebabe"
