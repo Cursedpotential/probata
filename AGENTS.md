@@ -43,6 +43,18 @@ platform on Agno AgentOS~~ **(renamed D-138, 2026-09-05)**. Naming canon:
 Analysis over a bitemporal graph (splitting off as **Indagatio Veri** / `indagatio`,
 D-139). AI Legal Team (to build; product name **advocatio**, D-138).
 
+## Repository and worktree boundary
+
+This repository's canonical checkout is `E:/AI_Workspace/Projects/Propria/Probata/probata`.
+It remains a separate child Git repository pending its controlled import into the Propria
+monorepo; a checkout beneath Propria does not by itself change repository ownership. Normal
+linked worktrees belong under `E:/AI_Workspace/Projects/Propria/_worktrees/`. Codex-managed
+worktrees may instead live under `C:/Users/matts/.codex/worktrees/`; that tool-managed
+exception also does not create a new repository or ownership boundary.
+
+Consignatio is outside this repository's authority. Route Consignatio work to
+`E:/AI_Workspace/Projects/Propria/Consignatio` and follow that repository's own routers.
+
 ## Standing Subagent Authorization
 
 > _Owner directive · 2026-08-18._
@@ -207,8 +219,8 @@ an expected state.
 | `modules/workbench/` | Operator Workbench — `api` (FastAPI) + `web`. Moved from root `workbench/` 2026-09-01. | — |
 | `modules/forks/` | **Nested independent repos, gitignored** — our forks of upstream projects, one repo each. Currently: `timesketch` (fork of google/timesketch) and `sbv` (**DONOR, not a fork** - D-131; MIT, Copyright (c) 2025 **lowcarbdev** - an earlier revision of this line credited "danzek", which was wrong. Being absorbed as a subtree into `modules/engine/decode/`; canonical remote `Cursedpotential/sbv-forensic`, whose CI builds the image the tool-runtime Dockerfile consumes **by digest** — the platform build does NOT need this checkout). Add an `upstream` remote per fork for rebasing. Owner ruling 2026-09-01. | each fork's own README |
 | `modules/custom/` | **One nested independent repo, gitignored** — owner-authored standalone modules versioned together (`llm_probe`, `llm_probe_ui`, `tool-skills`). | — |
-| `modules/advocatio/` (**advocatio**, D-138; directory formerly `modules/Legal-Workspace/`, old name kept as a junction) | **Nested independent product repo, gitignored** — placed beside the Workbench per owner ruling 2026-09-01 ("legal workbench should live next to workbench"). Still consumes `LegalSourcePackage` read-only; never a second writable evidence store. A full merge into the Workbench repo is an OPEN decision, not done. | its own `AGENTS.md` |
-| `modules/vestigia/` (**vestigia**, D-140; directory formerly `modules/traceIQ/`; rename landed 2026-09-06, old name kept as a junction) | **Nested independent product repo, gitignored** (contains its own nested `traceiq-rebuild` repo). | its own `AGENTS.md` |
+| `modules/advocatio-legal_workbench/` (**advocatio**, D-138) | **Nested independent product repo, gitignored** — placed beside the Workbench per owner ruling 2026-09-01 ("legal workbench should live next to workbench"). Still consumes `LegalSourcePackage` read-only; never a second writable evidence store. A full merge into the Workbench repo is an OPEN decision, not done. | its own `AGENTS.md` |
+| `modules/vestigia-geodata_processor/` (**vestigia**, D-140) | **Nested independent product repo, gitignored** (contains its own nested `traceiq-rebuild` repo). | its own `AGENTS.md` |
 | `modules/apps/` | Owner's transient staging area during reorganizations — gitignored, contents move on; never reference it in code or docs | — |
 | `sql/` | **`bootstrap/schema_snapshot_<date>.sql` IS the database** (D-142 §3, D-152, D-153). No migrations: a schema change = edit the snapshot in its final form + `scripts/rebuild_platform_from_snapshot.sh`; the keep set (reference/state) survives every rebuild. Numbered migrations retired to `sql/_stale/` 2026-09-07, never replayed. | `sql/bootstrap/README.md` |
 | `deploy/docker/` | One folder per service image (`tools/`, `gateway/`, `postgres/`, ...) — moved from root `docker/` 2026-09-01; compose files in `deploy/` now resolve their `./docker/...` build contexts correctly per the compose spec | — |
@@ -398,7 +410,9 @@ implementation plans, TODOs, handoffs, or product-status reporting.
 ### Session Learnings 2026-08-12
 - Root `compose.yaml` is the stack definition that GETS MIRRORED TO THE VPS — never describe its comments/docs as "local dev" or "laptop-only" (owner correction 2026-08-12). Compose-file changes to live sections are production-facing edits.
 - Owner vocabulary: "artifact" = created WORKS (AI chats, generated documents/code). Never name extraction output tables/columns `artifact_*` — fact-claims are `claim_candidate` (entities can be merged/deduped; claims accumulate and are NEVER rewritten). Locked in ADR-0052 ruling Q6 / D-054.
-- Parent-workspace worktrees (E:/AI_Workspace/.claude/worktrees/*) materialize this repo as an EMPTY directory — it's a gitlink (mode 160000) in the parent tree, not files. Cross-tree drift checks must compare gitlink pins and main's log, not file contents; a pinned worktree is always an ancestor check away from proving divergence.
+- Linked worktrees for this repository belong under `E:/AI_Workspace/Projects/Propria/_worktrees/`,
+  except Codex-managed worktrees under `C:/Users/matts/.codex/worktrees/`. Always verify the
+  worktree's Git common directory and branch before mutation.
 - Engine-split routing is COVERAGE-based, never size-based (ADR-0052 ruling Q3): Go parses every format it has a decoder for, any size; Python serves uncovered formats or logged failure-fallback only. No byte thresholds anywhere in the router.
 
 ---
