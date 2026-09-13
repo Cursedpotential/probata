@@ -42,7 +42,7 @@ class Config:
     native_auth: str = field(default="", repr=False)
     worker_receipts_dir: Path | None = None
     project_registry: Path | None = None
-    reconciliation_launcher: Path = Path(r"E:\AI_Workspace\Projects\Propria\tools\agent-reconcile\reconcile.cmd")
+    reconciliation_launcher: Path = Path(__file__).resolve().parents[2] / "search" / "search.cmd"
 
     def __post_init__(self):
         url = urlsplit(self.api_url)
@@ -125,6 +125,7 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 "ambient_COCOINDEX_DB_consumed": False,
                 "pipeline_app": "ProbataDocStore", "pipeline_environment": "probata-docstore",
                 "index_kind": "docs", "allowed_source_roots": ["docs/"],
+                "contract": "propria-docstore-operations/v1",
                 "allowed_file_classes": ["markdown"],
                 "rejected_file_classes": ["source_code", "configuration", "test"],
                 "codebase_index": {"manager": "cocoindex-code (ccc)", "deployment": "local per repository",
@@ -149,6 +150,10 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 "worker_run_history_available": True,
                 "cdc_attribution_available": True,
                 "cdc_attribution_contract": "exact source path and normalized content-hash reconciliation",
+                "duckdb_operator_tools": {"inspect_clean_export": ["docstore_compact"],
+                                          "graph_export": ["docstore_graph_query"],
+                                          "arbitrary_sql": False,
+                                          "role": "bounded presentation only; no vector/index ownership"},
                 "scope": "all Propria project documentation",
                 "universal_project_registry": registry,
                 "project_registry_available": registry["status"] == "available",
@@ -469,15 +474,21 @@ def build_server(config: Config, transport=None) -> FastMCP:
         launcher = config.reconciliation_launcher
         if not launcher.is_file():
             raise ToolError("Propria reconciliation adapter is unavailable")
-        request_value = {"schema": "propria-reconcile/v1", "operation": operation,
-                         "query": query, "mode": mode, "project_root": str(root), "limit": limit}
-        if stores is not None:
-            request_value["stores"] = selected
+        command = {
+            "query": ["recall"],
+            "packet": ["reconcile", "run"],
+            "validate": ["recall"],
+            "repair": ["reconcile", "repair"],
+        }.get(operation)
+        if command is None:
+            raise ToolError("Unsupported reconciliation operation")
+        argv = [str(launcher), *command, query, "--path", str(root), "--mode", mode,
+                "--limit", str(limit), "--json"]
+        for store in selected:
+            argv.extend(["--stores", store])
 
         def invoke():
-            return subprocess.run([str(launcher), operation, "--request-stdin"],
-                                  input=json.dumps(request_value), text=True, capture_output=True,
-                                  timeout=120, shell=False)
+            return subprocess.run(argv, text=True, capture_output=True, timeout=120, shell=False)
         try:
             process = await asyncio.to_thread(invoke)
         except (OSError, subprocess.TimeoutExpired):
@@ -490,12 +501,23 @@ def build_server(config: Config, transport=None) -> FastMCP:
             raise ToolError("Propria reconciliation adapter returned invalid JSON") from None
         required = {"schema", "operation", "mode", "project_root", "store_runs", "results",
                     "decisions", "contracts", "conflicts", "attribution_clean", "errors"}
-        if not isinstance(value, dict) or value.get("schema") != "propria-reconcile/v1" or not required <= value.keys():
+        if not isinstance(value, dict) or value.get("schema") != "propria-search-reconcile/v1" or not required <= value.keys():
             raise ToolError("Propria reconciliation adapter returned an invalid contract")
         if not isinstance(value["store_runs"], list) or any(not isinstance(row, dict) or not {
                 "store", "requested", "available", "queried", "skipped", "error", "adapter",
                 "identity", "duration_ms", "result_count"} <= row.keys() for row in value["store_runs"]):
             raise ToolError("Propria reconciliation adapter omitted per-store state")
+        value["docstore_adapter_operation"] = operation
+        value["canonical_launcher"] = str(launcher)
+        if operation == "validate":
+            docstore_row = next((row for row in value["store_runs"]
+                                 if row.get("store") == "docstore" and row.get("requested")), None)
+            if docstore_row is not None:
+                attribution = await get("/attribution", {"index_kind": "docs"})
+                value["docstore_attribution"] = attribution
+                clean = attribution.get("cdc_verified") is True
+                docstore_row["attribution_clean"] = clean
+                value["attribution_clean"] = value.get("attribution_clean") is True and clean
         return value
 
     @mcp.tool(annotations={**READ, "title": "Query decisions, contracts, code, and memory stores"})
@@ -530,6 +552,17 @@ def build_server(config: Config, transport=None) -> FastMCP:
     ) -> dict:
         """Require explicit per-store state and clean Docstore attribution when Docstore is selected."""
         return await reconcile("validate", query, mode, stores, project_root, limit)
+
+    @mcp.tool(annotations={**WRITE_RUN, "title": "Prepare a bounded reconciliation repair packet"})
+    async def docstore_reconcile_repair(
+        query: Annotated[str, Field(min_length=2, max_length=2048)],
+        mode: Literal["auto", "all", "selected"] = "auto",
+        stores: list[RECONCILE_STORE] | None = None,
+        project_root: Annotated[str, Field(max_length=512)] = "",
+        limit: Annotated[int, Field(ge=1, le=50)] = 20,
+    ) -> dict:
+        """Persist the canonical bounded repair packet; source repair still requires an owning agent."""
+        return await reconcile("repair", query, mode, stores, project_root, limit)
 
     @mcp.resource("docstore://capabilities")
     def capability_resource() -> dict:

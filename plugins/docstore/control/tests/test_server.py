@@ -50,13 +50,14 @@ async def test_discovery_and_capabilities_have_no_network_or_state_writes(config
                 "docstore_graph_query_preview", "docstore_graph_query", "docstore_run_current",
                 "docstore_run_get", "docstore_run_list", "docstore_attribution_verify"} <= tools.keys()
         assert {"docstore_reconcile_query", "docstore_reconcile_packet",
-                "docstore_reconcile_validate"} <= tools.keys()
+                "docstore_reconcile_validate", "docstore_reconcile_repair"} <= tools.keys()
         assert 'docstore_selected_update_plan' in tools
         assert 'docstore_cdc_runs' in tools
         writes = {"docstore_set_flags", "docstore_capture_revision", "docstore_approve_revision",
                   "docstore_index_execute", "docstore_cancel_run", "docstore_index_full",
                   "docstore_index_selected", "docstore_run_cancel"}
         writes.add("docstore_reconcile_packet")
+        writes.add("docstore_reconcile_repair")
         writes.add("docstore_handoff_write")
         assert writes <= tools.keys()
         assert all(not tools[name].annotations.readOnlyHint for name in writes)
@@ -373,17 +374,17 @@ async def test_bounded_graph_management_tools_are_first_class(config):
 
 
 async def test_reconciliation_adapter_contract_has_explicit_per_store_state(config, tmp_path, monkeypatch):
-    launcher=tmp_path/'reconcile.cmd'; launcher.write_text('@echo off\n')
+    launcher=tmp_path/'search.cmd'; launcher.write_text('@echo off\n')
     config=replace(config,reconciliation_launcher=launcher)
     calls=[]
-    response={"schema":"propria-reconcile/v1","operation":"query","query":"contract",
+    response={"schema":"propria-search-reconcile/v1","operation":"recall","query":"contract",
               "mode":"selected","project_root":str(tmp_path),"store_runs":[{
               "store":"ccc","requested":True,"available":True,"queried":True,"skipped":False,
               "error":None,"adapter":"ccc","identity":{"root":str(tmp_path)},"duration_ms":1,
               "result_count":0}],"results":[],"decisions":[],"contracts":[],"conflicts":[],
               "attribution_clean":None,"packet_path":None,"errors":[]}
     def run(args,**kwargs):
-        calls.append((args,json.loads(kwargs['input'])))
+        calls.append(args)
         return subprocess.CompletedProcess(args,0,json.dumps(response),'')
     monkeypatch.setattr(_module.subprocess,'run',run)
     server,_=harness(config)
@@ -395,8 +396,8 @@ async def test_reconciliation_adapter_contract_has_explicit_per_store_state(conf
         invalid=await client.call_tool("docstore_reconcile_query",{
             "query":"contract","mode":"selected","stores":[]},raise_on_error=False)
         assert invalid.is_error
-    assert calls[0][0][1:]==['query','--request-stdin']
-    assert calls[0][1]['schema']=='propria-reconcile/v1'
+    assert calls[0][1:4]==['recall','contract','--path']
+    assert calls[0][-3:]==['--json','--stores','ccc']
 
 
 @pytest.mark.parametrize("paths", [["../outside.md"], ["missing.md"], ["wrong.txt"], [], ["a.md"] * 21])

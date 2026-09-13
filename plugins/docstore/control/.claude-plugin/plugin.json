@@ -1,6 +1,6 @@
 {
   "name": "probata-docstore-control",
-  "version": "0.5.1",
+  "version": "0.6.2",
   "description": "Compatibility package for the Probata Docstore control server. Install the canonical probata-docstore plugin from the parent directory for the complete surface.",
   "author": {"name": "Matthew Salem"},
   "keywords": ["cocoindex", "surrealdb", "surrealist", "documentation", "graph", "mcp"],
