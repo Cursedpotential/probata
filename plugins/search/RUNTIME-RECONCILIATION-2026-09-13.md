@@ -80,11 +80,19 @@ Only the owner may delete those quarantined copies.
 
 CCC remains a separate generated code index at
 E:\AI_Workspace\.cocoindex_code\target_sqlite.db; it is not a Smart Explore
-runtime database. The 2,246,606,848-byte database contains 228,756 chunks across
-9,855 files. Direct SQLite inspection found zero documentation-root files/chunks
+runtime database. After the bounded refresh attempt, the 2,847,653,888-byte
+database contains 288,820 chunks across 13,354 files. Its SHA-256 is
+17843B85DD602F1539B9F3154C5261361DF81971D0DD78429FD708D0B4A8BA64.
+SQLite integrity_check returned ok and no WAL or journal sidecar remains. Direct
+SQLite inspection found zero documentation-root files/chunks
 and zero .md, .mdx, .rst, .txt, .html, or .htm files/chunks.
 
-At receipt creation, CCC still reported its previous run as in progress.
-The code-only content fence is proven; freshness remains unproven until a clean
-refresh exits successfully. Search product usability remains pending owner
-review regardless of index plumbing results.
+The refresh could not close successfully. Its vector-index phase grew to more
+than 41 GB private memory on a 38.9 GiB host and left about 0.2 GiB physical
+memory free. It was interrupted cleanly, then the daemon was stopped. A bounded
+semantic query repeated the same defect, consuming about 29 GB and leaving about
+0.7 GiB free before clean interruption. CCC status therefore remains in progress
+and semantic usability is failed, not fresh or operational. The code-only
+content fence and database integrity are proven; CCC resource behavior requires
+repair before another full refresh. Search product usability remains pending
+owner review regardless of index plumbing results.

@@ -59,6 +59,15 @@ class ReconciliationTests(unittest.TestCase):
   self.assertEqual(data['identity']['missing_credential_env'],['NVIDIA_NIM_API_KEY'])
   self.assertIn('rerun memsearch stats',data['next_action'])
 
+ def test_ccc_health_failure_is_visible(self):
+  with tempfile.TemporaryDirectory() as td, patch.object(rec.shutil,'which',return_value='ccc.exe'):
+   cfg=Path(td)/'.cocoindex_code';cfg.mkdir();(cfg/'settings.yml').write_text('include_patterns: []')
+   (cfg/'health.json').write_text(json.dumps({'state':'resource_exhausted','next_action':'bound CCC memory before refresh'}))
+   data=rec.inventory(td)['ccc']
+  self.assertFalse(data['available'])
+  self.assertEqual(data['identity']['health']['state'],'resource_exhausted')
+  self.assertIn('bound CCC memory',data['next_action'])
+
  def test_active_wal_is_reported_and_never_stale(self):
   with tempfile.TemporaryDirectory() as td, patch.object(smart_explore,'PROPRIA_SMART_EXPLORE_RUNTIME',Path(td)), patch.object(smart_explore,'USER_SMART_EXPLORE_HOME',Path(td)/'user'):
    indexes=Path(td)/'indexes'; indexes.mkdir()
