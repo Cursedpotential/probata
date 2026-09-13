@@ -57,4 +57,7 @@ class ReconciliationTests(unittest.TestCase):
   self.assertFalse(rows[0]['stale'])
   self.assertTrue(rows[0]['error'].startswith('active_or_unclean_wal'))
 
+ def test_lock_retry_contract_has_bounded_default(self):
+  self.assertEqual(os.environ.get('SMART_EXPLORE_LOCK_TIMEOUT','60'),'60')
+
 if __name__=='__main__': unittest.main()

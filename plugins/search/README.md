@@ -7,7 +7,10 @@ code only; reconciliation queries the isolated stores and preserves provenance.
 
 ## CLI
 
-Run `search.cmd --help`. Existing Smart Explore commands remain available:
+Run `search.cmd --help`. The launcher uses the plugin's locked `uv` project and
+checks the explicit Windows `uv.exe` path before execution. Arbitrary system-Python
+invocation of `smart_explore.py` is unsupported because it bypasses the declared
+Tree-sitter and DuckDB runtime. Existing Smart Explore commands remain available:
 `index`, `indexes`, `search`, `outline`, `unfold`, `refs`, `lsp`, `imports`,
 `changed`, and safe `prune` quarantine.
 
