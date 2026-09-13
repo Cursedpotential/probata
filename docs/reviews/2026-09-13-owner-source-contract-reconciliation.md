@@ -121,10 +121,15 @@ surface must expose:
 - a deliberate approve/reject decision referencing the exact attempt and
   preview digest.
 
-The original Xplorer kit reinforces this surface contract: stream plans and
-tool calls, show per-call approvals and diffs, keep terminal output visible,
-support follow-along locations, expose Discuss and Draft modes according to
-negotiated capabilities, provide stop/cancel, and provide a kill switch.
+The Xplorer copilot/agent HITL surface is a separate application and workflow;
+it is not a Proffer module and must not be collapsed into the Probata
+intake/context surface. Its interaction requirements provide relevant design
+evidence for visibility and control: stream plans and tool calls, show per-call
+approvals and diffs, keep terminal output visible, support follow-along
+locations, expose Discuss and Draft modes according to negotiated
+capabilities, provide stop/cancel, and provide a kill switch. Probata may reuse
+those interaction principles without importing Xplorer's ACP file-manager
+architecture or confusing the two products.
 
 ### Extract broadly; repair only by explicit choice
 
