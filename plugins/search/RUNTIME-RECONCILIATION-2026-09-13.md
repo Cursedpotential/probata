@@ -3,11 +3,12 @@
 ## Governing location
 
 The only Smart Explore engine implementation is plugins/search. Generated
-Tree-sitter/DuckDB state lives under
-E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore\indexes.
-The Propria root ignores /.runtime/; database and WAL files are never source
-artifacts. Shared runtime-root overrides and legacy repository-local indexes are
-rejected. --db remains available only for isolated diagnostics.
+Tree-sitter/DuckDB state follows two deterministic ownership scopes: Propria
+paths use E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore\indexes;
+all other paths use C:\Users\matts\.smart-explore\indexes. The Propria root
+ignores /.runtime/; database and WAL files are never source artifacts. Shared
+runtime-root overrides and legacy repository-local indexes are rejected. --db
+remains available only for isolated diagnostics.
 
 ## Why E:\data\codex-smart-explore existed
 
@@ -47,6 +48,11 @@ moved without deletion to:
 - E:\AI_Workspace\Projects\Propria\to_be_deleted\smart-explore-runtime-reconciliation-20260913\legacy-user-runtime
 - E:\AI_Workspace\Projects\Propria\to_be_deleted\smart-explore-runtime-reconciliation-20260913\legacy-e-data-runtime
 
+The user-profile quarantine contains 144 files totaling 923,276,630 bytes after
+the Probata WAL checkpoint. The E:\data quarantine contains two files totaling
+4,586,461 bytes. A local PROVENANCE.txt beside them records the source paths,
+counts, hashes, and canonical destination.
+
 Only the owner may delete those quarantined copies.
 
 ## CCC code-index boundary
@@ -61,4 +67,3 @@ At receipt creation, CCC still reported its previous run as in progress.
 The code-only content fence is proven; freshness remains unproven until a clean
 refresh exits successfully. Search product usability remains pending owner
 review regardless of index plumbing results.
-

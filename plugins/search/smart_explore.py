@@ -25,10 +25,11 @@ Subcommands:
 Every subcommand accepts --json for machine-readable output and --db to
 target an explicit index file.
 
-Index location: the Propria runtime store
-E:/AI_Workspace/Projects/Propria/.runtime/search/smart-explore/indexes/
-<slug>-<hash>.duckdb, shared by every agent/CLI tool that indexes the same
-project path. Override a single index with --db for isolated diagnostics.
+Index location is ownership-scoped. Propria paths use
+E:/AI_Workspace/Projects/Propria/.runtime/search/smart-explore/indexes;
+all other paths use C:/Users/<user>/.smart-explore/indexes. Every agent/CLI tool
+shares the index for the same path. Override a single index with --db only for
+isolated diagnostics.
 
 > Byline: Claude Code · Opus 4.8 · 2026-06-21
 > Byline: Claude Code · Fable 5 · 2026-07-28 (cross-tool: central index store, moved to ~/.agents/skills)
@@ -534,20 +535,29 @@ def cmd_unfold(args):
         print()
 
 
+PROPRIA_ROOT = Path(r"E:\AI_Workspace\Projects\Propria")
 PROPRIA_SMART_EXPLORE_RUNTIME = Path(
     r"E:\AI_Workspace\Projects\Propria\.runtime\search\smart-explore"
 )
+USER_SMART_EXPLORE_RUNTIME = Path.home() / ".smart-explore"
 
 
-def central_store() -> Path:
-    """Return the one machine-local runtime store used by Propria Search."""
-    configured = Path(os.environ.get("PROPRIA_SEARCH_RUNTIME", str(PROPRIA_SMART_EXPLORE_RUNTIME)))
-    if str(configured.resolve()).casefold() != str(PROPRIA_SMART_EXPLORE_RUNTIME.resolve()).casefold():
-        raise RuntimeError(
-            "PROPRIA_SEARCH_RUNTIME must resolve to "
-            f"{PROPRIA_SMART_EXPLORE_RUNTIME}; alternate shared runtime roots are unsupported"
-        )
-    return configured / "indexes"
+def is_propria_path(root: Path) -> bool:
+    try:
+        root.resolve().relative_to(PROPRIA_ROOT.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def central_store(root: Path) -> Path:
+    """Route generated indexes by ownership scope without configurable drift."""
+    runtime = PROPRIA_SMART_EXPLORE_RUNTIME if is_propria_path(root) else USER_SMART_EXPLORE_RUNTIME
+    return runtime / "indexes"
+
+
+def central_stores() -> list[Path]:
+    return [PROPRIA_SMART_EXPLORE_RUNTIME / "indexes", USER_SMART_EXPLORE_RUNTIME / "indexes"]
 
 
 def db_for(root: Path, override: str | None) -> Path:
@@ -555,7 +565,7 @@ def db_for(root: Path, override: str | None) -> Path:
         return Path(override).resolve()
     slug = re.sub(r"[^A-Za-z0-9]+", "-", root.name).strip("-") or "root"
     digest = hashlib.sha256(str(root).lower().encode()).hexdigest()[:12]
-    return central_store() / f"{slug}-{digest}.duckdb"
+    return central_store(root) / f"{slug}-{digest}.duckdb"
 
 
 # ---------------------------------------------------------------------------
@@ -732,11 +742,11 @@ def cmd_lsp(args):
 
 
 def store_entries():
-    """Scan the central store; yield one info dict per index db."""
-    store = central_store()
-    dbs = sorted(store.glob("*.duckdb")) if store.exists() else []
-    for db in dbs:
-        entry = {"db": str(db), "name": db.name, "size_kb": db.stat().st_size // 1024,
+    """Scan the Propria and user-wide stores; yield one info dict per index."""
+    for store in central_stores():
+     dbs = sorted(store.glob("*.duckdb")) if store.exists() else []
+     for db in dbs:
+        entry = {"store": str(store), "db": str(db), "name": db.name, "size_kb": db.stat().st_size // 1024,
                  "updated": time.strftime("%Y-%m-%d %H:%M", time.localtime(db.stat().st_mtime))}
         wal = db.with_suffix(db.suffix + ".wal")
         if wal.exists():
@@ -767,15 +777,15 @@ def store_entries():
 
 
 def cmd_indexes(args):
-    """List every index in the central store with its project and stats."""
+    """List every index in the ownership-scoped runtime stores."""
     entries = list(store_entries())
     if args.json:
-        print(json.dumps({"store": str(central_store()), "indexes": entries}, indent=1))
+        print(json.dumps({"stores": [str(s) for s in central_stores()], "indexes": entries}, indent=1))
         return
     if not entries:
-        print(f"No indexes in {central_store()}")
+        print(f"No indexes in {', '.join(str(s) for s in central_stores())}")
         return
-    print(f"-- Indexes in {central_store()} --")
+    print(f"-- Indexes in {', '.join(str(s) for s in central_stores())} --")
     for e in entries:
         if e["error"]:
             print(f"  {e['name']}  ({e['size_kb']}K)  [unreadable: {e['error']}]")
@@ -982,10 +992,10 @@ def cmd_prune(args):
             print(f"  {e['name']}  ({e['size_kb']}K)  [{why}]")
         return
     removed = []
-    quarantine = central_store() / "to_be_deleted" / time.strftime("prune-%Y%m%dT%H%M%SZ", time.gmtime())
-    quarantine.mkdir(parents=True, exist_ok=True)
     for e in stale:
         try:
+            quarantine = Path(e["store"]) / "to_be_deleted" / time.strftime("prune-%Y%m%dT%H%M%SZ", time.gmtime())
+            quarantine.mkdir(parents=True, exist_ok=True)
             shutil.move(e["db"], quarantine / e["name"])
             removed.append(e["name"])
         except OSError as err:
