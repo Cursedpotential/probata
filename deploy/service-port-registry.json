@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "tailnet_dns_suffix": ".tilapia-skilift.ts.net",
+  "families": {
+    "postgres": {"prefix": "54", "range": [5400, 5499], "client_port": 5432},
+    "surreal": {"prefix": "84", "range": [8400, 8499], "client_port": 443},
+    "http": {"prefix": "80", "range": [8000, 8099], "client_port": 443},
+    "portal": {"prefix": "90", "range": [9000, 9099], "client_port": 443}
+  },
+  "products": {
+    "probata": {
+      "code": "71",
+      "endpoints": [
+        {
+          "family": "surreal",
+          "canonical_backend_port": 8471,
+          "service": "svc:surreal",
+          "client_endpoint": "wss://surreal.tilapia-skilift.ts.net"
+        }
+      ]
+    },
+    "docstore": {
+      "code": "72",
+      "endpoints": [
+        {
+          "family": "surreal",
+          "canonical_backend_port": 8472,
+          "service": "svc:surreal-docs",
+          "client_endpoint": "wss://surreal-docs.tilapia-skilift.ts.net"
+        },
+        {
+          "family": "http",
+          "canonical_backend_port": 8072,
+          "transitional_backend_ports": [8474],
+          "service": "svc:docstore-api",
+          "client_endpoint": "https://docstore-api.tilapia-skilift.ts.net"
+        }
+      ]
+    },
+    "intake": {
+      "code": "73",
+      "endpoints": [
+        {
+          "family": "surreal",
+          "canonical_backend_port": 8473,
+          "service": "svc:surreal-intake",
+          "client_endpoint": "wss://surreal-intake.tilapia-skilift.ts.net"
+        }
+      ]
+    },
+    "metabase": {
+      "code": "74",
+      "endpoints": [
+        {
+          "family": "portal",
+          "canonical_backend_port": 9074,
+          "service": "svc:metabase",
+          "client_endpoint": "https://metabase.tilapia-skilift.ts.net"
+        }
+      ]
+    }
+  }
+}

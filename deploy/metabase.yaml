@@ -1,0 +1,122 @@
+# =============================================================================
+# METABASE — owner's single data site for the Propria portal (owner 2026-09-14:
+# "Metabase only" — replaces NocoDB and CloudBeaver). PostgreSQL catalog browsing,
+# SQL, dashboards, PLUS the DuckDB driver for querying Parquet files later.
+#
+# Own Coolify "Docker Compose" app on ovh-app (server fmuao9enq3nxk8qw5hqjzzce,
+# tailnet 100.72.169.40), project agno-platform, environment production.
+# Repo Cursedpotential/probata @ main, compose file /deploy/metabase.yaml.
+#
+# WHY NOT THE STOCK metabase/metabase IMAGE: verified live 2026-09-14 that image
+# is Alpine 3.24.1 / musl / OpenJDK 25. The DuckDB driver (motherduckdb, release
+# 1.5.5.0, fixes Metabase v0.63) is a glibc-only native binding and will not load
+# on musl. So this runs a stock glibc Temurin JRE image and launches the plain
+# Metabase jar + driver jar from a host bind mount instead — no custom registry
+# build (owner: "raw and unfinished is fine").
+#
+# HOST-PREP (already done 2026-09-14 by Claude Code (Opus 5) staging session):
+#   install -d /data/probata/volumes/metabase/{app,plugins,pgdata,data}
+#   metabase.jar      -> app/metabase.jar       (downloads.metabase.com v0.63.17)
+#   duckdb driver jar -> plugins/duckdb.metabase-driver.jar (motherduckdb 1.5.5.0)
+#   sha256 recorded in /data/probata/volumes/metabase/PINNED-SHA256.txt — verified
+#   live against the running host 2026-09-14 (Claude Sonnet 5) before this compose
+#   was written; ownership root:root is fine because both containers below run root.
+#
+# Coolify env required:
+#   BIND_IP=100.72.169.40
+#   METABASE_DB_PASSWORD=<set in Coolify, never in this file>
+#   optional METABASE_IMAGE_TAG (glibc JRE base, pinned default below)
+# Coolify Watch Paths: deploy/metabase.yaml
+#
+# Port registry: product code 74, portal family, canonical_backend_port 9074.
+# See deploy/service-port-registry.json. Tailscale Service svc:metabase serves
+# http://100.72.169.40:9074 -> https://metabase.tilapia-skilift.ts.net (tailnet
+# only for now; public metabase.int.mitechconsult.com comes later via Authentik —
+# traefik labels below are pre-wired but traefik.enable=false, route NOT opened).
+#
+# Owner explicitly does NOT want the admin account created by an agent: the
+# Coolify app is created/deployed/verified up through the setup page only.
+#
+# Byline: Claude Code · Sonnet 5 · 2026-09-14
+# =============================================================================
+
+services:
+  metabase-db:
+    image: postgres:16-alpine
+    container_name: metabase-db
+    restart: unless-stopped
+    volumes:
+      - /data/probata/volumes/metabase/pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: metabase
+      POSTGRES_PASSWORD: ${METABASE_DB_PASSWORD:?set METABASE_DB_PASSWORD in Coolify env}
+      POSTGRES_DB: metabase
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metabase -d metabase"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - metabase-internal
+
+  metabase:
+    image: eclipse-temurin:${METABASE_IMAGE_TAG:-21-jre-jammy}
+    container_name: metabase
+    restart: unless-stopped
+    depends_on:
+      metabase-db:
+        condition: service_healthy
+    entrypoint: ["java", "-jar", "/app/metabase.jar"]
+    cpus: ${METABASE_CPUS:-2}
+    mem_limit: ${METABASE_MEM:-2g}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:9074:3000"   # http://100.72.169.40:9074 — tailnet-only
+    environment:
+      MB_JETTY_HOST: 0.0.0.0
+      MB_JETTY_PORT: "3000"
+      MB_PLUGINS_DIR: /plugins
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: metabase-db
+      MB_DB_PORT: "5432"
+      MB_DB_DBNAME: metabase
+      MB_DB_USER: metabase
+      MB_DB_PASS: ${METABASE_DB_PASSWORD:?set METABASE_DB_PASSWORD in Coolify env}
+      JAVA_TIMEZONE: America/Detroit
+    volumes:
+      - /data/probata/volumes/metabase/app/metabase.jar:/app/metabase.jar:ro
+      - /data/probata/volumes/metabase/plugins:/plugins   # duckdb.metabase-driver.jar loads from here (MB_PLUGINS_DIR)
+      - /data/probata/volumes/metabase/data:/metabase-data  # scratch dir for ad-hoc DuckDB files (e.g. a Parquet test)
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q '\"status\":\"ok\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    networks:
+      - probata
+      - metabase-internal
+    labels:
+      # ---- route prepared, NOT open (mirrors deploy/opencode-server.yaml pattern)
+      - traefik.enable=false
+      - traefik.docker.network=probata
+      - traefik.http.routers.metabase.rule=Host(`metabase.int.mitechconsult.com`)
+      - traefik.http.routers.metabase.entrypoints=https
+      - traefik.http.routers.metabase.tls=true
+      - traefik.http.routers.metabase.tls.certresolver=letsencrypt
+      - traefik.http.routers.metabase.service=metabase
+      - traefik.http.routers.metabase.middlewares=metabase-authentik
+      - traefik.http.services.metabase.loadbalancer.server.port=3000
+      - 'traefik.http.middlewares.metabase-authentik.forwardauth.address=http://authentik-server:9000/outpost.goauthentik.io/auth/traefik'
+      - traefik.http.middlewares.metabase-authentik.forwardauth.trustForwardHeader=true
+      - 'traefik.http.middlewares.metabase-authentik.forwardauth.authResponseHeaders=X-authentik-username,X-authentik-groups,X-authentik-entitlements,X-authentik-email,X-authentik-name,X-authentik-uid,X-authentik-jwt,X-authentik-meta-jwks,X-authentik-meta-outpost,X-authentik-meta-provider,X-authentik-meta-app,X-authentik-meta-version'
+      - coolify.traefik.middlewares=metabase-authentik
+
+  # Tailnet hostname: served by ovh-app's own tailscaled as a Tailscale Service
+  # (`tailscale serve --service=svc:metabase`), like svc:workbench / svc:opencode-server.
+  # No sidecar container — the host binary owns it.
+
+networks:
+  probata:
+    external: true
+  metabase-internal:
+    # app <-> its own postgres only; not reachable from other probata services
