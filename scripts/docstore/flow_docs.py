@@ -184,7 +184,11 @@ VALID_DOMAINS = {"probata", "proffer", "consignatio", "advocatio", "vestigia",
 VALID_STATUSES = {"active", "proposed", "unverified", "superseded", "retracted"}
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
-_DATA_URI_RE = re.compile(r"data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+")
+# Payload is OPTIONAL and any MIME type counts (Claude Code · Fable 5.1 · 2026-09-14): a bare
+# "data:image/png;base64," example in prose survived the old "+" pattern and NIM answered 503
+# "image inputs require VLM serving" for every chunk holding it, with litellm retrying forever.
+_DATA_URI_RE = re.compile(r"data:[a-zA-Z0-9.+/-]+;base64,[A-Za-z0-9+/=]*")
+_DATA_PREFIX_RE = re.compile(r"^\s*data:", re.I)
 _NON_BMP_RE = re.compile(r"[𐀀-􏿿]")
 _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.M)
 
@@ -389,6 +393,12 @@ def strip_data_uris(text: str) -> str:
     """NIM returns 503 'image inputs require VLM serving' for text holding a
     data: image URI."""
     return _DATA_URI_RE.sub("[data-uri-stripped]", text)
+
+
+def embed_safe(text: str) -> str:
+    """Never hand the embedder an input that starts with "data:" -- NIM parses that as a
+    data URI (an image) regardless of what follows. The stored chunk text is untouched."""
+    return _DATA_PREFIX_RE.sub("text: data:", text, count=1) if _DATA_PREFIX_RE.match(text) else text
 
 
 def fold_non_bmp(text: str) -> str:
@@ -654,7 +664,7 @@ async def process_chunk(
             project=project,
             status=meta.status,
             domains=list(meta.domains),
-            embedding=await coco.use_context(EMBEDDER).embed(chunk.text),
+            embedding=await coco.use_context(EMBEDDER).embed(embed_safe(chunk.text)),
         )
     )
 
