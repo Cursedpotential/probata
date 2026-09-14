@@ -197,8 +197,11 @@ def build_server(config: Config, transport=None) -> FastMCP:
             raise ToolError("Native API schema exceeds resource size limit")
         return result
 
+    # Owner 2026-09-14: status is a classification field; search sees every status by default.
+    SEARCH_STATUSES = Literal["all", "active", "unverified", "proposed", "superseded", "retracted"]
+
     async def semantic_search(query: str, domain: DOMAINS, limit: int, kind: KINDS,
-                              status: Literal["active", "all"], rerank: bool) -> dict:
+                              status: SEARCH_STATUSES, rerank: bool) -> dict:
         if not query.strip():
             raise ToolError("Query must contain text")
         from governance import list_flags
@@ -221,7 +224,7 @@ def build_server(config: Config, transport=None) -> FastMCP:
     async def coco_docstore_search(
             query: Annotated[str, Field(min_length=2, max_length=2048)], domain: DOMAINS,
             limit: Annotated[int, Field(ge=1, le=20)] = 8, kind: KINDS = "doc",
-            status: Literal["active", "all"] = "active", rerank: bool = False,
+            status: SEARCH_STATUSES = "all", rerank: bool = False,
             presentation: Literal["compact", "full"] = "compact") -> dict:
         """Primary documentation search: CocoIndex/NIM vectors searched in SurrealDB; compact uses bounded DuckDB presentation."""
         result = await semantic_search(query, domain, limit, kind, status, rerank)
@@ -237,7 +240,7 @@ def build_server(config: Config, transport=None) -> FastMCP:
     async def docstore_search(query: Annotated[str, Field(min_length=2, max_length=2048)],
                               domain: DOMAINS,
                               limit: Annotated[int, Field(ge=1, le=20)] = 8,
-                              kind: KINDS = "doc", status: Literal["active", "all"] = "active",
+                              kind: KINDS = "doc", status: SEARCH_STATUSES = "all",
                               rerank: bool = False) -> dict:
         """Compatibility name for full hybrid search; prefer coco_docstore_search for agent retrieval."""
         return await semantic_search(query, domain, limit, kind, status, rerank)
