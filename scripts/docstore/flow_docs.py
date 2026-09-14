@@ -700,7 +700,7 @@ async def process_file(
     mapping fingerprint, so a text edit or a metadata edit re-runs this file and
     nothing else does."""
     # file_path.path is relative to DOCS_BASE (see the ContextKey note above).
-    source_path = "docs/" + file.file_path.path.as_posix()
+    source_path = fold_non_bmp("docs/" + file.file_path.path.as_posix())
     meta = _METAS.get(source_path)
     if meta is None and source_path.startswith("docs/private/"):
         # docs/private is gitignored on purpose; it is never indexed.
@@ -767,7 +767,10 @@ async def process_project_file(
     File content change detection remains owned by FileLike's fingerprint.
     """
     del registry_fingerprint
-    source_path = canonical_prefix + file.file_path.path.as_posix()
+    # Fold the PATH too (Claude Code · Fable 5.1 · 2026-09-14): a vestigia file named with
+    # an emoji hit the same surrogate-pair parse error in source_path that the body fold
+    # already prevents. Stable ids come from slug(), which strips non-alphanumerics anyway.
+    source_path = fold_non_bmp(canonical_prefix + file.file_path.path.as_posix())
     body = fold_non_bmp(await file.read_text(encoding="utf-8"))
     meta = _METAS.get(source_path) or _auto_meta(source_path, body, default_domains)
     doc_id = slug(source_path)
@@ -776,7 +779,7 @@ async def process_project_file(
             id=doc_id,
             source_path=source_path,
             content_hash=hashlib.sha256(body.encode("utf-8")).hexdigest(),
-            title=meta.title,
+            title=fold_non_bmp(meta.title),
             body=body,
             doc_type=meta.doc_type,
             project=project_id,
