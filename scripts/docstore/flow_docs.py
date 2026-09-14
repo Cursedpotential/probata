@@ -386,7 +386,15 @@ def _auto_meta(
 
 
 def slug(text: str) -> str:
-    return _SLUG_RE.sub("_", text.lower()).strip("_")[:120]
+    """Stable record id from a source path. Ids longer than 120 chars keep a
+    120-char prefix plus a short digest of the full path: a plain cut let two
+    long multi-root paths share one id ("Target state already declared",
+    2026-09-14). No existing id was at the cap when this landed (verified live),
+    so no current id changes. Claude Code · Fable 5.1 · 2026-09-14."""
+    base = _SLUG_RE.sub("_", text.lower()).strip("_")
+    if len(base) <= 120:
+        return base
+    return base[:111] + "_" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
 
 
 def strip_data_uris(text: str) -> str:
