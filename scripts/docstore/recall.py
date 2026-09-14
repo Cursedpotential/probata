@@ -19,7 +19,7 @@ fn::docs_search is not used: it adds raw BM25 (5-10) to cosine similarity (<=1),
 Usage:
   python scripts/docstore/recall.py doc "what did we decide about migrations"
   python scripts/docstore/recall.py adr "surreal as analysis engine" --k 5 --why
-  python scripts/docstore/recall.py handoff "docstore rebuild" --status all --json
+  python scripts/docstore/recall.py handoff "docstore rebuild" --status active --json
 """
 from __future__ import annotations
 
@@ -156,7 +156,7 @@ def keyword_terms(query: str) -> str:
     return " ".join(terms) or query
 
 
-async def recall(query: str, kind: str = "doc", status: str = "active", k: int = 8, domain: str | None = None,
+async def recall(query: str, kind: str = "doc", status: str = "all", k: int = 8, domain: str | None = None,
                  use_rerank: bool = True) -> tuple[list[dict], dict]:
     doc_type = KINDS[kind]
     t0 = time.perf_counter()
@@ -265,7 +265,7 @@ def main() -> int:
     ap.add_argument("kind", choices=sorted(KINDS), help="doc = any type; adr = decision documents; or a doc_type")
     ap.add_argument("query", nargs="+")
     ap.add_argument("--k", type=int, default=8)
-    ap.add_argument("--status", default="active", help="active (default), all, superseded, unverified, proposed")
+    ap.add_argument("--status", default="all", help="all (default; status is a classification field, owner 2026-09-14), active, unverified, proposed, superseded, retracted")
     ap.add_argument("--domain", default=None)
     ap.add_argument("--no-rerank", action="store_true")
     ap.add_argument("--why", action="store_true", help="show the matching passage instead of type/via")

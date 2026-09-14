@@ -37,7 +37,9 @@ DEFINE FUNCTION OVERWRITE fn::docs_search(
   $status: option<string>,
   $k: option<int>
 ) {
-  LET $status_f = $status ?? "active";
+  -- $status NONE = every status (owner 2026-09-14): status is a classification
+  -- field, not a visibility gate. Pass a value to narrow.
+  LET $status_f = $status;
   LET $k_eff = $k ?? 10;
 
   -- BM25 over document title/body, scope predicates inline.
@@ -48,7 +50,7 @@ DEFINE FUNCTION OVERWRITE fn::docs_search(
              OR search::highlight("<<", ">>", 1)) AS excerpt
     FROM document
     WHERE (title @1@ $query OR body @2@ $query)
-      AND status = $status_f
+      AND ($status_f = NONE OR status = $status_f)
       AND ($doc_type = NONE OR doc_type = $doc_type)
       AND ($domain = NONE OR $domain INSIDE domains)
     ORDER BY score DESC
@@ -66,7 +68,7 @@ DEFINE FUNCTION OVERWRITE fn::docs_search(
                text AS excerpt, vector::distance::knn() AS dist
         FROM chunk
         WHERE embedding <|50,256|> $vec
-          AND status = $status_f
+          AND ($status_f = NONE OR status = $status_f)
           AND ($doc_type = NONE OR doc_type = $doc_type)
           AND ($domain = NONE OR $domain INSIDE domains)
         ORDER BY dist
@@ -77,7 +79,7 @@ DEFINE FUNCTION OVERWRITE fn::docs_search(
                text AS excerpt, vector::distance::knn() AS dist
         FROM chunk
         WHERE embedding <|20,128|> $vec
-          AND status = $status_f
+          AND ($status_f = NONE OR status = $status_f)
           AND ($doc_type = NONE OR doc_type = $doc_type)
           AND ($domain = NONE OR $domain INSIDE domains)
         ORDER BY dist
@@ -139,7 +141,7 @@ DEFINE FUNCTION OVERWRITE fn::docs_search(
   );
 
   RETURN $final;
-} COMMENT "Hybrid BM25 + scoped-KNN document search. Scope predicates inline with KNN; K/EF literal; status defaults active." PERMISSIONS FULL;
+} COMMENT "Hybrid BM25 + scoped-KNN document search. Scope predicates inline with KNN; K/EF literal; status NONE = every status." PERMISSIONS FULL;
 
 -- ---------------------------------------------------------------------
 -- fn::docs_get — one document plus its supersedes neighbourhood in both

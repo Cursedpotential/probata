@@ -8,6 +8,8 @@
 
 -- ---------------------------------------------------------------------
 -- fn::search_vec
+-- Status is NOT a filter here (owner 2026-09-14): status tracks classification /
+-- verification; recall must see every status and return it for the caller to judge.
 -- Hybrid index/exact-scan. Tries HNSW; if the post-filter truncates the
 -- result below K, falls back to an exact cosine scan over the scoped
 -- slice. Sound because a post-filter only removes rows, never reorders:
@@ -23,7 +25,6 @@ DEFINE FUNCTION OVERWRITE fn::search_vec(
            vector::distance::knn() AS dist
     FROM chunk
     WHERE embedding <|20,128|> $q
-      AND status = "active"
       AND ($project = NONE OR project = $project)
       AND ($doc_type = NONE OR doc_type = $doc_type)
     ORDER BY dist
@@ -38,8 +39,7 @@ DEFINE FUNCTION OVERWRITE fn::search_vec(
     SELECT id, text, heading, document, doc_type, project,
            1 - vector::similarity::cosine(embedding, $q) AS dist
     FROM chunk
-    WHERE status = "active"
-      AND ($project = NONE OR project = $project)
+    WHERE ($project = NONE OR project = $project)
       AND ($doc_type = NONE OR doc_type = $doc_type)
     ORDER BY dist
     LIMIT 20
@@ -60,7 +60,6 @@ DEFINE FUNCTION OVERWRITE fn::search_text(
            search::highlight("<<", ">>", 1) AS excerpt
     FROM chunk
     WHERE text @1@ $terms
-      AND status = "active"
       AND ($project = NONE OR project = $project)
       AND ($doc_type = NONE OR doc_type = $doc_type)
     ORDER BY score DESC

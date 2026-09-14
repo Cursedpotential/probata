@@ -10,7 +10,7 @@ the commands and agents all get identical results.
 Endpoints (JSON unless noted):
   /health                                   liveness + store reachability
   /stats                                    document/chunk/edge counts, vector index status
-  /recall?q=&kind=doc|adr|handoff|...&k=8&status=active|all&domain=&rerank=true
+  /recall?q=&kind=doc|adr|handoff|...&k=8&status=all|active|unverified|proposed|superseded|retracted (default all)&domain=&rerank=true
   /doc/{record_id}                          one document (body included)
   /graph/{ref}?limit=25&format=json|mermaid ref = ADR-NNNN, document:<id>, or a path fragment
   GET /pipeline                              live app/environment identity from durable status
@@ -326,7 +326,7 @@ async def stats(index_kind: str = "docs", authorization: str | None = Header(def
 
 @app.get("/recall")
 async def recall(q: str = Query(..., min_length=2), kind: str = "doc", k: int = Query(8, ge=1, le=50),
-                 status: str = "active", domain: str | None = None, rerank: bool = True,
+                 status: str = "all", domain: str | None = None, rerank: bool = True,
                  index_kind: str = "docs",
                  authorization: str | None = Header(default=None)) -> dict:
     _auth(authorization)
