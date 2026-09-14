@@ -44,6 +44,12 @@ services:
       DOCSTORE_RUN_STATUS: /data/state/latest-run.json
       DOCSTORE_RUN_RECEIPTS: /data/state/runs
       DOCSTORE_MAX_RSS_MB: "3000"
+      # Multi-root ingestion (owner 2026-09-14: every registered project root, docs -> CocoIndex -> SurrealDB).
+      # Both come from Coolify env; unset = legacy Probata-only source. The registry and the six
+      # source roots live in the bind-mounted exchange projection (/exchange/sources). Fail-closed:
+      # a missing required root aborts the sync, the API stays up.  Byline: Claude Code · Fable 5.1 · 2026-09-14
+      DOCSTORE_PROJECT_REGISTRY: ${DOCSTORE_PROJECT_REGISTRY:-}
+      DOCSTORE_MULTI_ROOT_ENABLED: ${DOCSTORE_MULTI_ROOT_ENABLED:-}
     ports:
       - "${BIND_IP:-127.0.0.1}:8072:8000"   # canonical backend; clients use svc:docstore-api
       - "${BIND_IP:-127.0.0.1}:8474:8000"   # transitional only; remove after service repoint proof
