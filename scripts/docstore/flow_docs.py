@@ -635,7 +635,10 @@ async def process_chunk(
     ordinals: dict[int, int],
     table: surrealdb.TableTarget[ChunkRow],
     edge: surrealdb.RelationTarget[None],
+    project: str = "probata",
 ) -> None:
+    # `project` added 2026-09-14 (Claude Code · Fable 5.1): multi-root chunks were all
+    # stamped "probata", which breaks project-scoped recall for every other root.
     offset = chunk.start.char_offset
     ordinal = ordinals[offset]
     chunk_id = slug(f"{doc_id}_c{ordinal}")
@@ -648,7 +651,7 @@ async def process_chunk(
             text=chunk.text,
             token_est=token_estimate(chunk.text),
             doc_type=meta.doc_type,
-            project="probata",
+            project=project,
             status=meta.status,
             domains=list(meta.domains),
             embedding=await coco.use_context(EMBEDDER).embed(chunk.text),
@@ -729,7 +732,7 @@ async def process_file(
     )
 
 
-@coco.fn(memo=True, version=1)
+@coco.fn(memo=True, version=2)
 async def process_project_file(
     file: FileLike,
     project_id: str,
@@ -776,7 +779,7 @@ async def process_project_file(
     headings = build_heading_index(clean)
     ordinals = {chunk.start.char_offset: index for index, chunk in enumerate(chunks)}
     await coco.map(
-        process_chunk, chunks, doc_id, meta, headings, ordinals, chunk_table, chunk_edge
+        process_chunk, chunks, doc_id, meta, headings, ordinals, chunk_table, chunk_edge, project_id
     )
 
 

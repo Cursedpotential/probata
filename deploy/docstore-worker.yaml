@@ -50,6 +50,8 @@ services:
       # a missing required root aborts the sync, the API stays up.  Byline: Claude Code · Fable 5.1 · 2026-09-14
       DOCSTORE_PROJECT_REGISTRY: ${DOCSTORE_PROJECT_REGISTRY:-}
       DOCSTORE_MULTI_ROOT_ENABLED: ${DOCSTORE_MULTI_ROOT_ENABLED:-}
+      DOCSTORE_INGEST_TIMEOUT_S: ${DOCSTORE_INGEST_TIMEOUT_S:-3600}
+      COCOINDEX_MAX_INFLIGHT_COMPONENTS: ${COCOINDEX_MAX_INFLIGHT_COMPONENTS:-4}
     ports:
       - "${BIND_IP:-127.0.0.1}:8072:8000"   # canonical backend; clients use svc:docstore-api
       - "${BIND_IP:-127.0.0.1}:8474:8000"   # transitional only; remove after service repoint proof

@@ -134,7 +134,11 @@ def _sync() -> int:
             summary['tracking_state_quarantined'] = bool(moved)
             summary['tracking_quarantine_path'] = str(quarantine)
             record()
-        for stage, script, timeout in [('ingest','flow_docs.py',3600)]:
+        # Ingest ceiling is env-configurable (Claude Code · Fable 5.1 · 2026-09-14): the first
+        # multi-root run embeds ~470 new documents at ~4/min on NVIDIA NIM and cannot finish
+        # inside the old fixed 3600 s. Default unchanged.
+        ingest_timeout = int(os.environ.get('DOCSTORE_INGEST_TIMEOUT_S', '3600'))
+        for stage, script, timeout in [('ingest','flow_docs.py',ingest_timeout)]:
             result = _run(script, timeout, RECEIPTS / f'{run_id}-{stage}.log')
             summary[stage] = result
             if result['exit_code'] != 0 or result['timed_out'] or result['diagnostic_errors']:
