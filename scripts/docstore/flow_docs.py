@@ -856,8 +856,24 @@ async def app_main() -> None:
 
 
 async def _raise_component_error(exc: BaseException, ctx: coco.ExceptionContext) -> None:
-    print(f"docstore: component failed; error_type={type(exc).__name__}", file=sys.stderr, flush=True)
+    # Bounded diagnostics (Claude Code · Fable 5.1 · 2026-09-14): the type alone hid the
+    # 2026-09-14 multi-root failure. Message is truncated; no credentials are echoed.
+    message = _bounded_error_text(exc)
+    print(
+        f"docstore: component failed; error_type={type(exc).__name__}; "
+        f"path={getattr(ctx, 'stable_path', None)}; mount_kind={getattr(ctx, 'mount_kind', None)}; "
+        f"message={message}",
+        file=sys.stderr, flush=True,
+    )
     raise exc
+
+
+def _bounded_error_text(exc: BaseException, limit: int = 700) -> str:
+    text = " ".join(str(exc).split())
+    text = re.sub(r"(?i)(bearer|token|api[_-]?key|password|pass)\s*[=:]\s*\S+", r"=<redacted>", text)
+    if exc.__cause__ is not None:
+        text += " | cause: " + " ".join(str(exc.__cause__).split())[:200]
+    return text[:limit]
 
 
 app = coco.App(
@@ -890,5 +906,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(_run_checked())
     except Exception as exc:
-        print(f"docstore: execution failed; error_type={type(exc).__name__}; inspect retained worker log", file=sys.stderr)
+        print(f"docstore: execution failed; error_type={type(exc).__name__}; message={_bounded_error_text(exc)}; inspect retained worker log", file=sys.stderr)
         sys.exit(1)
