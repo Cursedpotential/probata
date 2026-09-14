@@ -886,7 +886,11 @@ def _bounded_error_text(exc: BaseException, limit: int = 700) -> str:
     text = re.sub(r"(?i)(bearer|token|api[_-]?key|password|pass)\s*[=:]\s*\S+", r"=<redacted>", text)
     if exc.__cause__ is not None:
         text += " | cause: " + " ".join(str(exc.__cause__).split())[:200]
-    return text[:limit]
+    if len(text) > limit:
+        # Keep both ends: the head names the failing call, the tail carries the
+        # database/provider message that a traceback string buries last.
+        return text[: limit // 2] + " ... " + text[-(limit // 2):]
+    return text
 
 
 app = coco.App(
