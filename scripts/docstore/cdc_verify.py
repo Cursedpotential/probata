@@ -7,9 +7,9 @@ complete source; selection only narrows the caller's requested verification set.
 """
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 import os
+import re
 import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,13 +38,26 @@ def _fold_non_bmp(value: str) -> str:
     return "".join(folded)
 
 
+def _glob_re(pattern: str) -> "re.Pattern[str]":
+    """Mirror the flow's PatternFilePathMatcher: `**` spans directories, `*` and
+    `?` stay inside one path segment. fnmatch treated `**` as `*`, so
+    `docs/**/*.md` silently excluded `docs/X.md` from the expected set
+    (2026-09-14: eight Propria root docs reported as unexpected)."""
+    out, i = "^", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out += "(?:.*/)?"; i += 3; continue
+        if pattern.startswith("**", i):
+            out += ".*"; i += 2; continue
+        ch = pattern[i]
+        out += "[^/]*" if ch == "*" else "[^/]" if ch == "?" else re.escape(ch)
+        i += 1
+    return re.compile(out + "$")
+
+
 def _matches(relative: str, source: SourceSpec) -> bool:
-    def match(pattern: str) -> bool:
-        return fnmatch.fnmatchcase(relative, pattern) or (
-            pattern.startswith("**/") and fnmatch.fnmatchcase(relative, pattern[3:])
-        )
-    included = any(match(pattern) for pattern in source.included_patterns)
-    excluded = any(match(pattern) for pattern in source.excluded_patterns)
+    included = any(_glob_re(pattern).match(relative) for pattern in source.included_patterns)
+    excluded = any(_glob_re(pattern).match(relative) for pattern in source.excluded_patterns)
     return included and not excluded
 
 
@@ -67,10 +80,13 @@ def snapshot_sources() -> tuple[tuple[SourceDocument, ...], str]:
             relative = path.relative_to(source.root).as_posix()
             if not _matches(relative, source):
                 continue
-            body = _fold_non_bmp(path.read_text(encoding="utf-8"))
+            # Decode the bytes exactly as the flow's FileLike does: no newline
+            # translation. Path.read_text() folded CRLF to LF and mismatched 58
+            # hashes on 2026-09-14. The path is folded like the body (emoji names).
+            body = _fold_non_bmp(path.read_bytes().decode("utf-8"))
             rows.append(SourceDocument(
                 project_id=source.project_id,
-                source_path=source.canonical_prefix + relative,
+                source_path=_fold_non_bmp(source.canonical_prefix + relative),
                 content_hash=hashlib.sha256(body.encode("utf-8")).hexdigest(),
             ))
     rows.sort(key=lambda row: row.source_path)
@@ -89,7 +105,9 @@ async def verify_projection(expected: tuple[SourceDocument, ...]) -> dict:
 
     db = await sq.connect("docs", "probata", "docs")
     try:
-        result = await db.query("SELECT source_path, content_hash FROM document;")
+        # Hand-registered rows that were retracted/superseded keep their source_path;
+        # they are not pipeline identities and must not count as unexpected.
+        result = await db.query("SELECT source_path, content_hash FROM document WHERE status NOT IN ['retracted', 'superseded'];")
     finally:
         await db.close()
     while isinstance(result, list) and len(result) == 1 and isinstance(result[0], list):
@@ -128,7 +146,7 @@ async def retire_unexpected_projection(expected: tuple[SourceDocument, ...]) -> 
     prefixes = tuple(sorted({row.source_path.split("/", 1)[0] + "/" for row in expected}))
     db = await sq.connect("docs", "probata", "docs")
     try:
-        result = await db.query("SELECT VALUE source_path FROM document;")
+        result = await db.query("SELECT VALUE source_path FROM document WHERE status NOT IN ['retracted', 'superseded'];")
         while isinstance(result, list) and len(result) == 1 and isinstance(result[0], list):
             result = result[0]
         observed = {str(path) for path in (result if isinstance(result, list) else [])
