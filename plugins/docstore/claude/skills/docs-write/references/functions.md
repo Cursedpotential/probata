@@ -42,6 +42,23 @@ fn::docs_supersede(
 ) -> object  -- { new: record<document>, old: record<document> }
 ```
 
+## fn::docs_retract
+
+```
+fn::docs_retract(
+  $id: record<document>,
+  $reason: string
+) -> object  -- { ok, id, original_content_hash, content_hash } | { ok: true, unchanged: true } | { ok: false, error: "not_found" }
+```
+
+Retires a row and **releases its `content_hash`** (the `document_hash` index
+is UNIQUE with no status predicate). Use it when a hand-registered row
+carries the same bytes as a file the CocoIndex pipeline owns; the pipeline
+row cannot land until the hash is released. Original digest is preserved in
+`retracted_reason`; a `decision_log` row (`document_retracted`) is appended;
+nothing is deleted. Rule (owner, 2026-09-14): do not hand-register files the
+pipeline owns in the first place.
+
 ## ASSERT lists to satisfy before calling
 
 - `$doc_type` ∈ `["blueprint","infrastructure","decision","todo","handoff","review","reference"]`

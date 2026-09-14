@@ -247,6 +247,35 @@ DEFINE FUNCTION OVERWRITE fn::docs_supersede(
 } COMMENT "Edge + status flip only: new->supersedes->old, old.status = superseded." PERMISSIONS FULL;
 
 -- ---------------------------------------------------------------------
+-- fn::docs_retract — retire a document row and RELEASE its content_hash.
+-- `document_hash` is an unconditional UNIQUE index on content_hash, so a
+-- hand-registered row that carries the same bytes as a file the CocoIndex
+-- pipeline owns blocks the pipeline's own row (seen 2026-09-14, multi-root
+-- run). The original digest is kept in retracted_reason; the released hash
+-- is deterministic and cannot collide with a real digest. Nothing deleted.
+-- Defined live by consignatio-d6 on 2026-09-14 (owner: "resolve that issue
+-- for once"); recorded here as the source of truth by Claude Code · Fable 5.1.
+-- ---------------------------------------------------------------------
+DEFINE FUNCTION OVERWRITE fn::docs_retract(
+  $id: record<document>,
+  $reason: string
+) {
+  LET $doc = (SELECT * FROM ONLY $id);
+  IF $doc = NONE { RETURN { ok: false, error: "not_found", id: $id } };
+  IF $doc.status = "retracted" {
+    RETURN { ok: true, id: $id, unchanged: true, content_hash: $doc.content_hash }
+  };
+  LET $orig = $doc.content_hash;
+  LET $released = crypto::sha256($orig + ":retracted:" + <string> $id);
+  UPDATE $id SET
+    status = "retracted",
+    retracted_reason = $reason + " | original_content_hash=" + $orig,
+    content_hash = $released;
+  CREATE decision_log SET subject = $id, actor = "system", action = "document_retracted", rationale = $reason;
+  RETURN { ok: true, id: $id, original_content_hash: $orig, content_hash: $released };
+} COMMENT "Retire a document row and release its content_hash (original digest kept in retracted_reason; decision_log row appended). Nothing deleted." PERMISSIONS FULL;
+
+-- ---------------------------------------------------------------------
 -- fn::decision_amend — append-only decision_log row plus optional close
 -- of documents. $subject is the source_path of "the decision document";
 -- when a document exists at that path (doc_type = "decision"), each
