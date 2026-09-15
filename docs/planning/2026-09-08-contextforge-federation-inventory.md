@@ -431,3 +431,110 @@ console is federated, not replaced).
   - `probata/modules/vestigia/traceiq-rebuild/.mcp.json`'s actual intended shape — it parsed as
     a single malformed key, not a real server map; out of scope for this task (vestigia has its
     own AGENTS.md) but worth a note to whoever owns that nested repo.
+
+## 8. Execution status — 2026-09-14 night
+
+> _Byline: Claude Code · Sonnet 5 · 2026-09-14 — this section records what was actually done
+> against live ContextForge tonight, following §3–§6 of this inventory under owner authorization
+> ("Everything is supposed to be federated... including the Propria Docstore MCP", 23:05 EDT).
+> Unlike §1–§7 above, this section is not read-only — it reports real state changes._
+
+**Registered gateways (7 total on ContextForge v1.0.4, ovh-app :4444):** `coolify-write`
+(pre-existing), `propria-docstore-docs`, `propria-docstore-memory`, `context7`, `agno-docs`,
+`n8n-docs`, `cloudflare-docs`. All `reachable: true`.
+
+**Virtual servers built (2):**
+- `propria-docs` (id `be14a066c1cc4c9b8985eaf748d22a40`) — docs + memory MCP, 28 tools.
+- `dev-docs` (id `e6bf594590134686a2f10990c244f97b`) — context7 + agno-docs + n8n-docs +
+  cloudflare-docs, 10 tools.
+
+Both verified live: tailnet `initialize` + `tools/list`, and publicly at
+`https://mcp.mitechconsult.com/servers/<id>/mcp` — 401 with no token, 200 with a ContextForge
+admin token.
+
+**Fixed as part of federation, not just registered:**
+- Propria Docstore memory MCP (`surreal-case` container, actually on **ovh-files
+  100.91.190.107:8471**, not ovh-app as earlier briefed) was rejecting every non-loopback `Host`
+  header (SurrealDB 3.2's MCP DNS-rebinding guard). Added `SURREAL_MCP_ALLOWED_HOSTS` via Coolify
+  env + redeploy. Confirmed live 200 afterward.
+- `legal-workspace`'s `legal-api` app had a stale/placeholder `CF_JWT_SECRET_KEY` (21 chars, not
+  matching ContextForge's real 64-char secret its own auth middleware is supposed to reuse).
+  Corrected via Coolify env + redeploy. Note: this app turned out **not** to be
+  `family-court-console` — it has no `/mcp` route at all (confirmed against its own OpenAPI
+  spec) — but the fix was harmless and correct regardless, since its `ContextForgeAuthMiddleware`
+  really was misconfigured.
+
+**§3/§4 MOVE items not completed tonight, with reasons (not silently dropped):**
+- `family-court-console` — genuinely not deployed anywhere yet, contrary to what its own
+  prepared assets imply. The real MCP server is the local stdio plugin
+  `~/.claude/local-plugins/plugins/family-court-toolkit/mcp-app` (Node, already built with
+  `MCP_TRANSPORT=http` support and a production `Dockerfile.cloud`, per an owner ruling recorded
+  2026-09-07 that it "runs in the cloud as its own app"). `probata/deploy/family-court-console.yaml`
+  already exists for this, but it is **only staged, never committed**, and its referenced build
+  source `deploy/docker/family-court-console/src/` was **never synced**
+  (`scripts/sync_family_court_console.sh` was never run) — and this shared clone is
+  `main...origin/main [ahead 2, behind 60]`. Created the Coolify app (`family-court-console`,
+  uuid `sokv65ibdq2y8xdaqmd6p4rq`, ovh-files) and set all 4 required env vars (including a fresh
+  `MCP_BEARER_TOKEN`) so it deploys the moment the compose file + synced source land on
+  `origin/main`; did not attempt the sync/commit/push myself given the shared-branch divergence.
+- `tavily`, `courtlistener` — registration attempted, both 401; no credential for either found in
+  `~/.secrets` or `~/.claude.json`. Not federated.
+- `cloudflare-api`/`bindings`/`builds`/`observability` — individually tested; all 401, genuine
+  per-user interactive OAuth, cannot be federated with a static server-side credential as
+  originally flagged in §7. `cloudflare-docs` (the fifth Cloudflare entry) needs no auth and was
+  registered + added to `dev-docs`; no separate `cloud-infra` server was built since nothing else
+  qualified for it.
+- `n8n-mcp` (self-hosted, `https://n8n.mitechconsult.com/mcp-server/http`) — times out on both 80
+  and 443 to its public IP from ovh-app, while general internet egress from ovh-app is fine. This
+  reads as that host's own firewall, not a ContextForge or credential problem, and coincides with
+  concurrent firewall/DNS hardening work by other agents in tonight's session. Not registered;
+  not touched.
+- `agentos` — this is the retired **AgentOS MCP door** from ADR-0046, which the working tree
+  already carries an uncommitted 2026-09-09 banner for: `**SUPERSEDED** by D-107 (2026-08-29) —
+  this ADR's mechanism ("the AgentOS MCP door") is retired completely`. No live agentos
+  container/app exists on ovh-app or ovh-files. Confirms §7's "could not determine" note by
+  resolving it: there is nothing left to query.
+
+**Doc drift confirmed (ADR-0046):** `docs/adr/0046-universal-mcp-exposure-contract.md` already
+carries the correct supersession banner (added 2026-09-09, uncommitted in this shared tree) — the
+"14 SBV tools + Graphiti virtual server" claim lives only in the superseded body text below that
+banner. Live ContextForge tonight shows 0 Graphiti registration and no SBV-named virtual server,
+consistent with the retirement, not a new contradiction. Did not add a second correction on top
+of the existing uncommitted banner to avoid clobbering whatever session parked that edit.
+
+**Client configs with a federated equivalent now available, not yet repointed (owner instruction:
+list only, don't change):** see the MCP-federation entry in
+`Consignatio/docs/URGENT-TODO.md` (2026-09-14 night change log) for the exact URL each client
+entry should move to.
+
+---
+
+> _Addendum · Claude Code · Sonnet 5 · 2026-09-15 04:44-09:15 EDT — owner order "yea move it":
+> federate octopoda off the desktop, per the same standing rule. Full detail (deploy failures,
+> data migration, verification transcript, incidental transcript-only secret exposures) is in
+> `Consignatio/docs/URGENT-TODO.md` under "Federate octopoda"; this is the summary for the
+> gateway/virtual-server registry kept in this doc._
+
+**Registered gateways: now 8 total** (the 7 above, plus `octopoda` — id
+`1950ce52b9f54a988e831260b5d051d9`, `http://100.72.169.40:8095/mcp`, STREAMABLEHTTP,
+`reachable: true`, 29 tools).
+
+**Virtual servers built: now 3** (the 2 above, plus `agent-memory` — id
+`a14b17330a3d432e8eb1a87369b8af8c`, all 29 octopoda tools). Verified live: tailnet
+`initialize`/`tools/list` with token → 200; public `https://mcp.mitechconsult.com/servers/<id>/mcp`
+→ 401 no token, 200 with token; a real `remember`/`recall`/`forget` round trip on a disposable
+test key (deleted after, no residual test data per the test-data-never-canonical rule).
+
+**New Coolify app:** `octopoda` (uuid `gwsmgd0sbqd9aheysa9g7xh4`) on ovh-app, project
+agno-platform/production, built from `probata` `deploy/octopoda.yaml` +
+`deploy/docker/octopoda/` (new files, commits `1a1280f`/`3741e62` on `main`). Runs
+octopoda==3.3.4's FastMCP server natively over streamable-HTTP (no ContextForge translate
+wrapper needed) via a thin `run_http.py` entrypoint, since that package only ships a stdio
+`main()`. Bound `100.72.169.40:8095`, persistent volume for the migrated local SQLite store.
+
+**Client repoint done (unlike the "list only" pass above — this one the owner explicitly
+authorized the repoint for):** desktop Claude Code user-scope `octopoda` moved from local stdio
+(`C:/Users/matts/.venvs/octopoda`) to the `agent-memory` virtual server over the tailnet, bearer
+token from `~/.secrets/contextforge.env` (`OCTOPODA_CF_CLIENT_TOKEN`, newly minted — the
+pre-existing `CF_MCP_CLIENT_TOKEN` 401'd). `claude mcp get octopoda` → Connected. Local venv kept
+in place as fallback, untouched.
