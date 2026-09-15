@@ -70,21 +70,16 @@ services:
       - /data/probata/volumes/fileflows/common:/app/common      # DockerMods shared installs
       - /data/probata/volumes/fileflows/media:/media            # browser start dir (default /media)
       - /srv/r2/casebible-sorted:/media/casebible-sorted:ro     # existing R2 rclone mount (read-only)
-      # rslave propagation: these are FUSE mountpoints (rclone) that can be
-      # remounted while the container runs; rprivate (the default) would keep
-      # showing the stale empty directory until a container restart.
-      - type: bind
-        source: /srv/openlist                                   # OpenList WebDAV (rclone-openlist.service) — owner choice B, 2026-09-15 01:29
-        target: /media/openlist
-        read_only: true
-        bind:
-          propagation: rslave
-      - type: bind
-        source: /srv/b2                                         # direct B2 mount — NOT chosen (option A); empty unless someone mounts it
-        target: /media/b2
-        read_only: true
-        bind:
-          propagation: rslave
+      # These two are FUSE mountpoints (rclone). ~~Long-syntax binds with
+      # `bind: propagation: rslave` were tried 2026-09-15 (commit 08bca3c)~~ —
+      # Coolify re-renders volumes to short syntax and DROPS the propagation
+      # flag (verified in /data/coolify/applications/<uuid>/docker-compose.yaml),
+      # so the container sees whatever is mounted at container start. Safeguard:
+      # rclone-openlist.service is ordered Before=docker.service, so the mount is
+      # up before any container starts at boot. If the mount is restarted by hand
+      # while the container runs, restart the container (Coolify) afterwards.
+      - /srv/openlist:/media/openlist:ro                        # OpenList WebDAV (rclone-openlist.service) — owner choice B, 2026-09-15 01:29
+      - /srv/b2:/media/b2:ro                                    # direct B2 mount — NOT chosen (option A); empty unless someone mounts it
       - /var/run/docker.sock:/var/run/docker.sock               # Docker Siblings
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/ >/dev/null || exit 1"]
