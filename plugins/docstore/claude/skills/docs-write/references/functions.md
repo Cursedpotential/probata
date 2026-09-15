@@ -100,3 +100,20 @@ run: { function: "fn::docs_new_version", args: [document:xyz, "<revised body>", 
    functions.** They belong to the ingestion pipeline; a document written
    through `fn::docs_register` has no chunks or embeddings until ingest
    runs over it.
+
+## Tags (required on submission — owner 2026-09-14)
+
+Files: front matter `tags: [ui-components, shadcn]` or `<!-- tags: a, b -->`;
+the pipeline stores them in `document.tags` (lower-kebab, de-duplicated).
+File-less notes/handoffs: same comment in the body, then
+
+```
+fn::docs_set_tags($id: record<document>, $tags: array<string>, $actor: string)
+  -> {ok, id, unchanged, tags}      -- content/hash untouched; decision_log "tags_set"
+fn::docs_tagged($tag: string, $query: option<string>, $domain: option<string>, $k: option<int>)
+  -> [{id, source_path, title, doc_type, domains, tags, status, project, score?, excerpt?}]
+```
+
+Old files: run `python scripts/docstore/tags_backfill.py` (reads each registry
+root's files, computes tags, writes only changed rows via fn::docs_set_tags;
+no re-embedding). Files without author tags stay untagged.

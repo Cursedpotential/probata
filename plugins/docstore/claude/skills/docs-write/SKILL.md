@@ -6,9 +6,20 @@ allowed-tools: mcp__plugin_propria_docstore_docs__run mcp__plugin_propria_docsto
 
 # Docs write
 
-Definition of done for this skill is a **store record id**, not a saved
-file. A file on disk that never got registered is exactly the drift this
-plugin exists to prevent.
+**Scope (owner 2026-09-14):** files under a Docstore registry root (Probata
+`docs/**`, Consignatio, Legal-desktop, family-court, vestigia, Propria root docs)
+are indexed by the CocoIndex pipeline. **Never hand-register those** with
+`fn::docs_register` — the `document.content_hash` UNIQUE index makes a hand row
+collide with the pipeline's own row and fail the run. This skill is for
+file-less notes and records only.
+
+**Tags are required when submitting (owner 2026-09-14 21:06).** For a file:
+front matter `tags: [topic, ...]` or `<!-- tags: topic, ... -->` in the body;
+the pipeline carries them into `document.tags`. For a file-less note: put the
+same comment in `$body` AND call `fn::docs_set_tags($id, $tags, $actor)` right
+after `fn::docs_register`. Query by tag with `fn::docs_tagged`.
+
+Definition of done for a file-less note is a **store record id with tags**.
 
 ## New document
 
@@ -45,6 +56,7 @@ already exists (e.g. registered separately) and now needs to replace
 ## Definition of done
 
 - A record id was returned, not just a file write.
+- `tags` is non-empty (`fn::docs_get` shows them); no untagged submissions.
 - `doc_type` and `domains` are set from the real D-156 lists (see
   `references/functions.md`), never left to defaults you didn't check.
 - If this replaces something, the `supersedes` edge exists and the old row

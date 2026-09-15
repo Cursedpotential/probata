@@ -409,6 +409,37 @@ def embed_safe(text: str) -> str:
     return _DATA_PREFIX_RE.sub("text: data:", text, count=1) if _DATA_PREFIX_RE.match(text) else text
 
 
+_TAG_TOKEN_RE = re.compile(r"[^a-z0-9]+")
+_FRONT_MATTER_RE = re.compile(r"\A﻿?---\r?\n(.*?)\r?\n---", re.S)
+_TAGS_COMMENT_RE = re.compile(r"<!--\s*tags:\s*([^>]*?)\s*-->", re.I)
+
+
+def extract_tags(body: str, limit: int = 32) -> list[str]:
+    """Author tags the pipeline carries into document.tags (owner 2026-09-14: 'tag or
+    label things so they pop up when searching or working on UI components').
+    Sources, both optional: YAML front matter `tags: [a, b]` or a dash list, and an
+    HTML comment `<!-- tags: a, b -->` anywhere in the body. Lower-kebab, de-duplicated."""
+    found: list[str] = []
+    fm = _FRONT_MATTER_RE.match(body)
+    if fm:
+        block = fm.group(1)
+        m = re.search(r"(?m)^tags:\s*\[(.*?)\]\s*$", block)
+        if m:
+            found += [t.strip().strip("'\"") for t in m.group(1).split(",")]
+        else:
+            m = re.search(r"(?m)^tags:\s*$((?:\r?\n\s*-\s*.*)+)", block)
+            if m:
+                found += [ln.split("-", 1)[1].strip().strip("'\"") for ln in m.group(1).splitlines() if "-" in ln]
+    for m in _TAGS_COMMENT_RE.finditer(body):
+        found += [t.strip() for t in m.group(1).split(",")]
+    out: list[str] = []
+    for raw in found:
+        tag = _TAG_TOKEN_RE.sub("-", raw.lower()).strip("-")
+        if tag and tag not in out:
+            out.append(tag)
+    return out[:limit]
+
+
 def fold_non_bmp(text: str) -> str:
     """Replace non-BMP characters with their Unicode name, e.g. "🟡" ->
     ":large_yellow_circle:".
@@ -725,7 +756,7 @@ async def process_file(
             body=body,
             doc_type=meta.doc_type,
             project="probata",
-            tags=[],
+            tags=extract_tags(body),
             domains=list(meta.domains),
             status=meta.status,
             confidence=DEFAULT_CONFIDENCE,
@@ -783,7 +814,7 @@ async def process_project_file(
             body=body,
             doc_type=meta.doc_type,
             project=project_id,
-            tags=[],
+            tags=extract_tags(body),
             domains=list(meta.domains),
             status=meta.status,
             confidence=DEFAULT_CONFIDENCE,

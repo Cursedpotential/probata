@@ -44,7 +44,7 @@ DEFINE FUNCTION OVERWRITE fn::docs_search(
 
   -- BM25 over document title/body, scope predicates inline.
   LET $text_hits = (
-    SELECT id, source_path, title, doc_type, domains, status,
+    SELECT id, source_path, title, doc_type, domains, tags, status,
            (search::score(1) + search::score(2)) AS score,
            (search::highlight("<<", ">>", 2)
              OR search::highlight("<<", ">>", 1)) AS excerpt
@@ -247,6 +247,60 @@ DEFINE FUNCTION OVERWRITE fn::docs_supersede(
   UPDATE $old SET status = "superseded";
   RETURN { new: $new, old: $old };
 } COMMENT "Edge + status flip only: new->supersedes->old, old.status = superseded." PERMISSIONS FULL;
+
+-- ---------------------------------------------------------------------
+-- fn::docs_tagged — documents carrying an author tag (front matter `tags:` or a
+-- `<!-- tags: a, b -->` comment, carried by the pipeline into document.tags).
+-- Owner 2026-09-14: "tag or label things so they pop up when needed, searching,
+-- or working on UI components". $query narrows by BM25. Every status.
+-- ---------------------------------------------------------------------
+DEFINE FUNCTION OVERWRITE fn::docs_tagged(
+  $tag: string,
+  $query: option<string>,
+  $domain: option<string>,
+  $k: option<int>
+) {
+  LET $k_eff = $k ?? 20;
+  LET $tag_n = string::lowercase($tag);
+  IF $query = NONE {
+    RETURN (
+      SELECT id, source_path, title, doc_type, domains, tags, status, project
+      FROM document
+      WHERE $tag_n INSIDE tags AND ($domain = NONE OR $domain INSIDE domains)
+      ORDER BY title LIMIT $k_eff
+    )
+  };
+  RETURN (
+    SELECT id, source_path, title, doc_type, domains, tags, status, project,
+           (search::score(1) + search::score(2)) AS score,
+           (search::highlight("<<", ">>", 2) OR search::highlight("<<", ">>", 1)) AS excerpt
+    FROM document
+    WHERE (title @1@ $query OR body @2@ $query)
+      AND $tag_n INSIDE tags AND ($domain = NONE OR $domain INSIDE domains)
+    ORDER BY score DESC LIMIT $k_eff
+  );
+} COMMENT "Documents carrying an author tag; optional BM25 query and domain scope; every status." PERMISSIONS FULL;
+
+-- ---------------------------------------------------------------------
+-- fn::docs_set_tags — governed metadata write: replace a document's tags.
+-- Used by the tags backfill (old docs whose front matter/comment tags are not
+-- yet in the store) and by skills after fn::handoff_write / fn::docs_register.
+-- Content, hash, status untouched; decision_log row appended.
+-- ---------------------------------------------------------------------
+DEFINE FUNCTION OVERWRITE fn::docs_set_tags(
+  $id: record<document>,
+  $tags: array<string>,
+  $actor: string
+) {
+  LET $doc = (SELECT * FROM ONLY $id);
+  IF $doc = NONE { RETURN { ok: false, error: "not_found", id: $id } };
+  LET $norm = array::distinct($tags.map(|$t: string| string::lowercase(string::trim($t))));
+  IF $doc.tags = $norm { RETURN { ok: true, id: $id, unchanged: true, tags: $norm } };
+  UPDATE $id SET tags = $norm;
+  CREATE decision_log SET subject = $id, actor = $actor, action = "tags_set",
+    from = array::join($doc.tags, ","), to = array::join($norm, ",");
+  RETURN { ok: true, id: $id, unchanged: false, tags: $norm };
+} COMMENT "Replace document.tags (normalized, de-duplicated); logs tags_set. Content and hash untouched." PERMISSIONS FULL;
 
 -- ---------------------------------------------------------------------
 -- fn::docs_retract — retire a document row and RELEASE its content_hash.

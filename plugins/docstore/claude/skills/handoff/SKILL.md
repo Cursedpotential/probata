@@ -12,6 +12,12 @@ retired for this store (design doc §2/§8 item 8). A handoff is a
 
 ## Write it
 
+**Tags are required (owner 2026-09-14 21:06).** Put `<!-- tags: topic, ... -->`
+as the first line of `$body` (lanes, surfaces, systems, e.g. `docstore,
+multi-root, intake`), then after the write call
+`fn::docs_set_tags($id, $tags, $actor)` with the same list so the row is
+queryable via `fn::docs_tagged` immediately.
+
 Call `docstore_handoff_write` with `handoff: {title, body, domains}`. The
 dedicated tool invokes only `fn::handoff_write`, validates bounded typed input,
 and reads the resulting record and any superseded handoff back before returning.
