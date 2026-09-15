@@ -24,6 +24,18 @@ class SourceDocument:
     content_hash: str
 
 
+def decode_markdown(raw: bytes) -> str:
+    """Decode a markdown source deterministically. Strict UTF-8 first; if that fails
+    the file is treated as Windows-1252 (the encoding of the six Family Court Console
+    sources that tripped the 2026-09-14 run), with replacement for anything left.
+    Valid UTF-8 files decode byte-identically to before, so their hashes do not change.
+    Shared by flow_docs, the CDC verifier and tags_backfill so hashes stay consistent."""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252", errors="replace")
+
+
 def _fold_non_bmp(value: str) -> str:
     """Mirror flow_docs.fold_non_bmp without importing the CocoIndex graph."""
     folded: list[str] = []
@@ -102,7 +114,7 @@ def snapshot_sources() -> tuple[tuple[SourceDocument, ...], str]:
             # Decode the bytes exactly as the flow's FileLike does: no newline
             # translation. Path.read_text() folded CRLF to LF and mismatched 58
             # hashes on 2026-09-14. The path is folded like the body (emoji names).
-            body = _fold_non_bmp(path.read_bytes().decode("utf-8"))
+            body = _fold_non_bmp(decode_markdown(path.read_bytes()))
             rows.append(SourceDocument(
                 project_id=source.project_id,
                 source_path=_fold_non_bmp(source.canonical_prefix + relative),

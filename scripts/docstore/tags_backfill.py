@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from source_registry import load_sources  # noqa: E402
-from cdc_verify import _fold_non_bmp, _matches, _slug  # noqa: E402
+from cdc_verify import _fold_non_bmp, _matches, _slug, decode_markdown  # noqa: E402
 
 # Mirror of flow_docs.extract_tags. Not imported: importing flow_docs runs the flow's
 # module-level environment setup, which a metadata script must never trigger.
@@ -70,7 +70,7 @@ async def main(dry_run: bool) -> int:
             rel = path.relative_to(source.root).as_posix()
             if not _matches(rel, source):
                 continue
-            body = _fold_non_bmp(path.read_bytes().decode("utf-8", errors="replace"))
+            body = _fold_non_bmp(decode_markdown(path.read_bytes()))
             tags = extract_tags(body)
             if tags:
                 wanted[_slug(_fold_non_bmp(source.canonical_prefix + rel))] = tags

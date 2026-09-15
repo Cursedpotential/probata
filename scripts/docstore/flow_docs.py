@@ -108,6 +108,7 @@ from cocoindex.resources.chunk import Chunk
 from cocoindex.resources.file import FileLike, PatternFilePathMatcher
 from numpy.typing import NDArray
 from source_registry import SourceSpec, load_sources
+from cdc_verify import decode_markdown
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 PROJECT_REGISTRY_PATH = (
@@ -736,7 +737,7 @@ async def process_file(
     if meta is None and source_path.startswith("docs/private/"):
         # docs/private is gitignored on purpose; it is never indexed.
         return
-    body = fold_non_bmp(await file.read_text(encoding="utf-8"))
+    body = fold_non_bmp(decode_markdown(await file.read()))
     if meta is None:
         # No mapping row -- typically a document written after the CSV was
         # generated. Skipping made every new handoff and TODO invisible to recall
@@ -802,7 +803,7 @@ async def process_project_file(
     # an emoji hit the same surrogate-pair parse error in source_path that the body fold
     # already prevents. Stable ids come from slug(), which strips non-alphanumerics anyway.
     source_path = fold_non_bmp(canonical_prefix + file.file_path.path.as_posix())
-    body = fold_non_bmp(await file.read_text(encoding="utf-8"))
+    body = fold_non_bmp(decode_markdown(await file.read()))
     meta = _METAS.get(source_path) or _auto_meta(source_path, body, default_domains)
     doc_id = slug(source_path)
     doc_table.declare_record(
