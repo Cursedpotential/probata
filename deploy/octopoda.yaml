@@ -40,7 +40,7 @@
 
 services:
   octopoda:
-    build: ./docker/octopoda
+    build: ./deploy/docker/octopoda
     container_name: octopoda
     restart: unless-stopped
     environment:
