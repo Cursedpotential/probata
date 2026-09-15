@@ -115,6 +115,8 @@ def snapshot_sources() -> tuple[tuple[SourceDocument, ...], str]:
             # translation. Path.read_text() folded CRLF to LF and mismatched 58
             # hashes on 2026-09-14. The path is folded like the body (emoji names).
             body = _fold_non_bmp(decode_markdown(path.read_bytes()))
+            if not body.strip():
+                continue  # the flow skips empty files; keep the expected set identical
             rows.append(SourceDocument(
                 project_id=source.project_id,
                 source_path=_fold_non_bmp(source.canonical_prefix + relative),

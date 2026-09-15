@@ -738,6 +738,9 @@ async def process_file(
         # docs/private is gitignored on purpose; it is never indexed.
         return
     body = fold_non_bmp(decode_markdown(await file.read()))
+    if not body.strip():
+        print(f"docstore: SKIP empty {file.file_path.path.as_posix()}", flush=True)
+        return
     if meta is None:
         # No mapping row -- typically a document written after the CSV was
         # generated. Skipping made every new handoff and TODO invisible to recall
@@ -764,7 +767,9 @@ async def process_file(
         )
     )
 
-    clean = normalize_for_search(strip_data_uris(body))
+    # fold AFTER ftfy: fix_text repairs mojibake into real (non-BMP) emoji, which then
+    # reached chunk rows as surrogate pairs (2026-09-14 run, .remember logs).
+    clean = fold_non_bmp(normalize_for_search(strip_data_uris(body)))
     chunks = _splitter.split(
         clean,
         CHUNK_SIZE,
@@ -804,6 +809,9 @@ async def process_project_file(
     # already prevents. Stable ids come from slug(), which strips non-alphanumerics anyway.
     source_path = fold_non_bmp(canonical_prefix + file.file_path.path.as_posix())
     body = fold_non_bmp(decode_markdown(await file.read()))
+    if not body.strip():
+        print(f"docstore: SKIP empty {file.file_path.path.as_posix()}", flush=True)
+        return
     meta = _METAS.get(source_path) or _auto_meta(source_path, body, default_domains)
     doc_id = slug(source_path)
     doc_table.declare_record(
@@ -821,7 +829,9 @@ async def process_project_file(
             confidence=DEFAULT_CONFIDENCE,
         )
     )
-    clean = normalize_for_search(strip_data_uris(body))
+    # fold AFTER ftfy: fix_text repairs mojibake into real (non-BMP) emoji, which then
+    # reached chunk rows as surrogate pairs (2026-09-14 run, .remember logs).
+    clean = fold_non_bmp(normalize_for_search(strip_data_uris(body)))
     chunks = _splitter.split(
         clean,
         CHUNK_SIZE,
