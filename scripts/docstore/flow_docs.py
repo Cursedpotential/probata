@@ -101,6 +101,16 @@ import cocoindex as coco
 import ftfy
 import psutil
 from cocoindex.connectors import localfs, surrealdb
+
+# The SurrealDB Python SDK bounds every RPC reply at 30 s (`_RPC_RECV_TIMEOUT`, module
+# constant read at call time). The connector writes ONE file's chunk rows (2048-dim vectors)
+# in ONE transaction, so a 2-3 MB document exceeds 30 s on RocksDB; the SDK then drops the
+# socket, reconnects unauthenticated, and every later statement fails with "Anonymous
+# access not allowed" (run ad5a5ced, 2026-09-14: 3 closes, 296 anonymous failures).
+# Byline: Claude Code · Fable 5.1 · 2026-09-14.
+import surrealdb.connections.async_ws as _surreal_async_ws
+
+_surreal_async_ws._RPC_RECV_TIMEOUT = float(os.environ.get("DOCSTORE_SURREAL_RPC_TIMEOUT_S", "600"))
 from cocoindex.connectors.surrealdb import SurrealType
 from cocoindex.ops.litellm import LiteLLMEmbedder
 from cocoindex.ops.text import RecursiveSplitter
