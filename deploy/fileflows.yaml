@@ -27,14 +27,15 @@
 #   install -d /data/probata/volumes/fileflows/{data,logs,temp,common,media}
 #   /srv/r2/casebible-sorted is the existing read-only rclone mount (R2).
 #
-# ADDITIONAL VOLUMES (B2): not mounted yet. Options for the owner —
-#   A) rclone mount of the b2s3/b2native-full remote (read-only, --vfs-cache-mode
-#      minimal) at /srv/b2 — direct, but every library scan is a B2 listing call;
-#   B) rclone/davfs2 mount of OpenList's WebDAV (https://files.tilapia-skilift.ts.net/dav)
-#      at /srv/openlist — one abstraction for everything OpenList already serves;
-#   C) no mount: FileFlows only sees what gets copied into ./media.
-# The compose already binds /srv/b2 and /srv/openlist under /media so choosing
-# A or B later needs only the mount unit, not a redeploy. Both dirs exist (empty).
+# ADDITIONAL VOLUMES (B2): owner chose B on 2026-09-15 01:29 ("b i think unless
+# we can write an s3 endpoint plugin" — FileFlows has no S3/WebDAV library
+# source; libraries are filesystem paths). `rclone-openlist.service` on ovh-files
+# mounts OpenList's WebDAV (http://100.91.190.107:5244/dav, remote `openlist` in
+# /root/.config/rclone/rclone.conf) read-only at /srv/openlist, so /media/openlist
+# in the container shows b2/, gdrive/, onedrive/, r2/, … exactly as OpenList does.
+#   ~~A) direct rclone mount of the B2 remote at /srv/b2~~ not chosen (every
+#      library scan would be B2 listing calls); the bind stays, empty.
+#   C) copy-in to ./media still works for one-offs.
 #
 # Coolify env required:
 #   BIND_IP=100.91.190.107
@@ -69,8 +70,21 @@ services:
       - /data/probata/volumes/fileflows/common:/app/common      # DockerMods shared installs
       - /data/probata/volumes/fileflows/media:/media            # browser start dir (default /media)
       - /srv/r2/casebible-sorted:/media/casebible-sorted:ro     # existing R2 rclone mount (read-only)
-      - /srv/b2:/media/b2:ro                                    # B2 route, mount unit pending (option A)
-      - /srv/openlist:/media/openlist:ro                        # OpenList WebDAV route, pending (option B)
+      # rslave propagation: these are FUSE mountpoints (rclone) that can be
+      # remounted while the container runs; rprivate (the default) would keep
+      # showing the stale empty directory until a container restart.
+      - type: bind
+        source: /srv/openlist                                   # OpenList WebDAV (rclone-openlist.service) — owner choice B, 2026-09-15 01:29
+        target: /media/openlist
+        read_only: true
+        bind:
+          propagation: rslave
+      - type: bind
+        source: /srv/b2                                         # direct B2 mount — NOT chosen (option A); empty unless someone mounts it
+        target: /media/b2
+        read_only: true
+        bind:
+          propagation: rslave
       - /var/run/docker.sock:/var/run/docker.sock               # Docker Siblings
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/ >/dev/null || exit 1"]
