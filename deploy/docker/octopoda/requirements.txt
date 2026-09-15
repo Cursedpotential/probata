@@ -1,0 +1,5 @@
+# octopoda MCP server deps — pinned per owner order 2026-09-15 (mcp 2.0 removed
+# mcp.server.fastmcp, which synrix_runtime.api.mcp_server imports; keep <2).
+# Byline: Claude Code · Sonnet 5 · 2026-09-15
+octopoda==3.3.4
+mcp>=1.2,<2

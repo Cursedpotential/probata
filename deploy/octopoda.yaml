@@ -1,0 +1,66 @@
+# =============================================================================
+# OCTOPODA MCP — shared agent memory (memory, search, loop detection, goals,
+# messaging, decisions, snapshots — 28 tools). Owner order 2026-09-15 04:44:
+# "yea move it" — federate every movable MCP server through ContextForge on
+# the VPS instead of running it as a desktop stdio process.
+#
+# Own Coolify "Docker Compose" app `octopoda` on ovh-app (server
+# fmuao9enq3nxk8qw5hqjzzce, tailnet 100.72.169.40), project agno-platform,
+# environment production. Repo Cursedpotential/probata @ main, compose file
+# /deploy/octopoda.yaml. Build context ./deploy/docker/octopoda.
+#
+# TRANSPORT: octopoda==3.3.4 (synrix_runtime.api.mcp_server) only ships a
+# stdio entrypoint; run_http.py imports its FastMCP object directly and runs
+# it over streamable-HTTP on $PORT (default 8095) at /mcp — see that file's
+# docstring for the host/port/transport-security details.
+#
+# DATA: OCTOPODA_DATA_DIR=/data maps to the container's local-SQLite store
+# (synrix.db under /data). Bind-mounted to a persistent host volume so the
+# desktop's ~/.synrix/data/synrix.db copy (backed up before first deploy) is
+# not lost on redeploy/restart.
+#
+# SECURITY: bound tailnet-only via BIND_IP; reached ONLY by ContextForge on
+# the same box (registered as CF gateway `octopoda`, virtual server
+# `agent-memory`). ContextForge fronts it with bearer-token auth — this
+# container itself has no auth layer, so never bind it to 0.0.0.0/public.
+#
+# Coolify env required:
+#   BIND_IP=100.72.169.40
+# Coolify Watch Paths: deploy/octopoda.yaml, deploy/docker/octopoda/**
+#
+# Port registry: http family (8000-8099), port 8095 picked live 2026-09-15
+# (8000/8010/8070/8085/8090/8091/8099 already taken). NOT recorded in
+# deploy/service-port-registry.json — owner note: "the shared checkout has
+# diverged", so recorded here and in Consignatio docs/URGENT-TODO.md and
+# Probata docs/planning/2026-09-08-contextforge-federation-inventory.md §8
+# instead.
+#
+# Byline: Claude Code · Sonnet 5 · 2026-09-15
+# =============================================================================
+
+services:
+  octopoda:
+    build: ./docker/octopoda
+    container_name: octopoda
+    restart: unless-stopped
+    environment:
+      OCTOPODA_API_KEY: ${OCTOPODA_API_KEY:-local}
+      OCTOPODA_DATA_DIR: /data
+      PORT: "8095"
+    ports:
+      - "${BIND_IP:-127.0.0.1}:8095:8095"   # streamable-HTTP /mcp — tailnet-only
+    volumes:
+      - /data/probata/volumes/octopoda:/data   # persistent synrix.db (SQLite local mode)
+    healthcheck:
+      # TCP-connect probe — /mcp only answers POSTs, so a plain HTTP GET probes 4xx.
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1',8095),5).close()"]
+      interval: 30s
+      start_period: 15s
+      timeout: 10s
+      retries: 3
+    networks:
+      - probata
+
+networks:
+  probata:
+    external: true
