@@ -448,6 +448,7 @@ _METAS, _MAPPING_FINGERPRINT = _load_mapping()
 # First matching prefix wins; filename keywords decide for anything else.
 _AUTO_RULES = (
     ("docs/adr/", "decision"),
+    ("docs/decisions/", "decision"),  # decisions skill writes here too (Fable 5.1, 2026-09-14)
     ("docs/handoffs/", "handoff"),
     ("docs/COMPACT-SUMMARY", "handoff"),
     ("docs/reviews/", "review"),
@@ -849,7 +850,7 @@ async def process_chunk_group(
 # ---------------------------------------------------------------------------
 
 
-@coco.fn(memo=True, version=7)
+@coco.fn(memo=True, version=8)
 async def process_file(
     file: FileLike,
     mapping_fingerprint: str,
@@ -927,7 +928,7 @@ async def process_file(
     await group_handle.ready()
 
 
-@coco.fn(memo=True, version=3)
+@coco.fn(memo=True, version=4)
 async def process_project_file(
     file: FileLike,
     project_id: str,
