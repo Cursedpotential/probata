@@ -25,6 +25,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from run_support import WorkerBusy, worker_lock, write_current_status, write_receipt, run_child
 from cdc_verify import retire_unexpected_projection, snapshot_sources, verify_projection
+from docs_lint import lint_summary_from_env
 
 
 class WorkerCancelled(RuntimeError):
@@ -40,6 +41,28 @@ def _rows(r):
     while isinstance(r, list) and len(r) == 1 and isinstance(r[0], list):
         r = r[0]
     return r if isinstance(r, list) else ([r] if r else [])
+
+
+def _status_payload(summary: dict, run_id: str) -> dict:
+    """write_receipt() has no size limit (one JSON file per sequence step), but
+    write_current_status() enforces a hard 64 KiB ceiling on the whole payload --
+    and lint's own findings[:200] alone serialises to ~38 KB on this corpus
+    (measured 2026-09-14 against the live 6-root registry). Left uncapped here,
+    a busy summary (ingest log path, health stats, cdc_attribution samples) could
+    push the combined status over 64 KiB and make write_current_status() raise
+    from inside _sync()'s `finally` block, replacing the real sync outcome with a
+    cryptic size error. The receipt keeps the full findings[:200]; the live
+    status gets a small, safely-bounded view of the same lint result."""
+    payload = {**summary, 'run_id': run_id}
+    lint = payload.get('lint')
+    if isinstance(lint, dict):
+        trimmed = dict(lint)
+        full_findings = lint.get('findings') or []
+        trimmed['findings'] = full_findings[:20]
+        trimmed['findings_truncated'] = bool(lint.get('findings_truncated')) or len(full_findings) > 20
+        trimmed['largest_files'] = (lint.get('largest_files') or [])[:5]
+        payload['lint'] = trimmed
+    return payload
 
 
 def _run(script: str, timeout: int, log_path: pathlib.Path) -> dict:
@@ -109,6 +132,11 @@ def _sync() -> int:
                      'tracking_rebuild':rebuild_tracking,
                      'source_count':len(source_snapshot), 'source_digest_before':source_digest,
                      'cdc_verified':False}
+    # Lint findings are recorded, never fatal: the flow already skips empties and
+    # fails closed on hash collisions on its own. This is so a degraded/failed run's
+    # receipt can explain WHY (e.g. an ENC001/DUP001 the flow's own guards then hit)
+    # without a second pass over the source tree.
+    summary['lint'] = lint_summary_from_env()
     sequence = 0
     def record():
         nonlocal sequence
@@ -118,7 +146,7 @@ def _sync() -> int:
     record()  # A durable start is required before any child is launched.
     try:
         # The current status must also be durable before expensive work begins.
-        write_current_status(STATUS, {**summary, 'run_id': run_id})
+        write_current_status(STATUS, _status_payload(summary, run_id))
         if rebuild_tracking:
             state_db = pathlib.Path(os.environ.get('DOCSTORE_COCOINDEX_DB', '')).resolve(strict=False)
             if not state_db.is_absolute() or state_db.parent != STATUS.parent.resolve(strict=False):
@@ -178,7 +206,7 @@ def _sync() -> int:
     finally:
         summary["seconds"] = round(time.time() - t0)
         summary['receipt_path'] = str(record())
-        write_current_status(STATUS, {**summary, 'run_id': run_id})
+        write_current_status(STATUS, _status_payload(summary, run_id))
         print(json.dumps(summary, default=str))
 
 

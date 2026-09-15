@@ -43,6 +43,37 @@ def _strings(value: object, field: str, *, empty: bool = False) -> tuple[str, ..
     return tuple(item.strip() for item in value)
 
 
+def _parse_blocked_patterns(payload: dict) -> tuple[str, ...]:
+    """Top-level `blocked_patterns`: merged into EVERY root's excluded_patterns so
+    flow, verifier, projection builder and lint all block the same paths from one
+    list. Absent key: backward compatible, () (owner directive 2026-09-14). Present
+    but malformed: fails closed (raises), same as every other registry field --
+    a typo here must not silently under-block."""
+    if "blocked_patterns" not in payload:
+        return ()
+    return _strings(payload.get("blocked_patterns"), "blocked_patterns", empty=True)
+
+
+def _load_registry_payload(registry_path: Path) -> tuple[dict, bytes]:
+    path = registry_path.resolve(strict=True)
+    raw = path.read_bytes()
+    if len(raw) > MAX_REGISTRY_BYTES:
+        raise ValueError("Docstore source registry exceeds 256 KiB")
+    payload = json.loads(raw)
+    if not isinstance(payload, dict) or payload.get("schema") != "propria-docstore-source-registry-v1":
+        raise ValueError("Unsupported Docstore source registry schema")
+    return payload, raw
+
+
+def load_blocked_patterns(registry_path: Path | None) -> tuple[str, ...]:
+    """Read just the top-level blocked_patterns array, for callers (docs_lint's
+    BLOCK001) that want it without a full load_sources() call. No registry: ()."""
+    if registry_path is None:
+        return ()
+    payload, _raw = _load_registry_payload(registry_path)
+    return _parse_blocked_patterns(payload)
+
+
 def load_sources(
     registry_path: Path | None,
     legacy_docs_root: Path,
@@ -64,13 +95,8 @@ def load_sources(
         )
         return (legacy,), "legacy-probata-docs-v1"
 
-    path = registry_path.resolve(strict=True)
-    raw = path.read_bytes()
-    if len(raw) > MAX_REGISTRY_BYTES:
-        raise ValueError("Docstore source registry exceeds 256 KiB")
-    payload = json.loads(raw)
-    if not isinstance(payload, dict) or payload.get("schema") != "propria-docstore-source-registry-v1":
-        raise ValueError("Unsupported Docstore source registry schema")
+    payload, raw = _load_registry_payload(registry_path)
+    blocked_patterns = _parse_blocked_patterns(payload)
     root_value = payload.get("monorepo_root")
     if not isinstance(root_value, str) or not Path(root_value).is_absolute():
         raise ValueError("monorepo_root must be absolute")
@@ -116,7 +142,10 @@ def load_sources(
             canonical_prefix=prefix,
             domains=_strings(entry.get("domains"), "domains"),
             included_patterns=included,
-            excluded_patterns=_strings(entry.get("excluded_patterns", []), "excluded_patterns", empty=True),
+            excluded_patterns=(
+                _strings(entry.get("excluded_patterns", []), "excluded_patterns", empty=True)
+                + blocked_patterns
+            ),
             ingestion_status=ingestion,
         ))
 

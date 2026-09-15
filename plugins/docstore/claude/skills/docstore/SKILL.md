@@ -41,7 +41,9 @@ about docs or decisions, query it. Before you write, know which lane you are in.
 ## 3. Where things are
 
 - Worker: Coolify app `probata-docstore-worker` (ovh-files); source `Probata/probata/scripts/docstore/` (`flow_docs.py`, `cdc_verify.py`, `tags_backfill.py`, `schema/*.surql`). Deploy branch `codex/docstore-operational-repair-20260913`; pushes to `scripts/docstore/**` or `docs/**` auto-redeploy and cancel a run in flight.
-- Registry of the six roots: `Propria/docs/docstore-source-registry.json`; the worker reads a pushed projection at `/exchange/sources` (rebuild + re-push after doc changes outside Probata until automated).
+- Registry of the six roots: `Propria/docs/docstore-source-registry.json` (also carries the top-level `blocked_patterns` list, merged into every root by `source_registry.py`); the worker reads a pushed projection at `/exchange/sources` (rebuild + re-push after doc changes outside Probata until automated).
+- `scripts/docstore/build_projection.py` — normalization: builds that `/exchange/sources` projection from the registry (decode/fold/dedupe/omit-empty, same logic the flow uses); dry run by default, `--push` to scp+swap it in. See `docs/docstore/LINT-AND-PROJECTION.md`.
+- `scripts/docstore/docs_lint.py` — the linter: ENC001/EMPTY001/DUP001/PATH001/BLOCK001 (errors), TAGS001/BYLINE001/NBMP001/JUNK001/DATAURI001 (warnings), SIZE001 (dual). Runs standalone (`--registry` or `--paths`) and inside the worker's pre-run snapshot, recorded as `lint: {errors, warnings, findings[:200], largest_files}` in the run receipt. See `docs/docstore/LINT-AND-PROJECTION.md`.
 - Store: SurrealDB `probata/docs` (`document`, `chunk`, `chunk_of`, `decision_log`, `todo`, `adr`, `docstore_flag`). Functions: `list functions` on the docs server.
 - Sub-skills: `docs` (read), `docs-write`, `decisions`, `handoff`, `todo`, `query`, `reconcile`, `memory`.
 
