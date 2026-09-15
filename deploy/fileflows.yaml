@@ -1,0 +1,110 @@
+# =============================================================================
+# FILEFLOWS — media/file processing flows (ffmpeg, ImageMagick, DockerMods) for
+# the Intake lane. Owner 2026-09-15 01:11: "I WANT THIS INSTALLED... CUSTOM COMPOSE";
+# server type, tag latest, Docker Siblings yes, TZ America/Detroit, every
+# directory a bind mount, additional volumes = B2 via OpenList/WebDAV mount on
+# the VPS (see ADDITIONAL VOLUMES below).
+#
+# Own Coolify "Docker Compose" app on ovh-files (server cn89l8801u8gsginw1rxq5qt,
+# tailnet 100.91.190.107 — data locality: the R2 mount, OpenList and the B2
+# remotes live there), project agno-platform, environment production.
+# Repo Cursedpotential/probata @ main, compose file /deploy/fileflows.yaml.
+# Same shape as deploy/metabase.yaml (tailnet-bound port, absolute bind mounts,
+# Traefik+Authentik labels pre-wired but traefik.enable=false).
+#
+# Source of truth for the settings: https://fileflows.com/docs/installation/docker
+# (fetched 2026-09-15): internal port 5000; env TZ / PUID / PGID (both optional —
+# empty = container default user, which is root; left unset here because every
+# bind mount is root-owned and Docker Siblings needs the root-owned socket
+# anyway); TempPath (fast disk); ServerUrl (only used by remote Agents/Nodes;
+# set to the tailnet name so a future node can find the server); Docker
+# Siblings = docker.sock mount + TempPathHost (the SAME temp dir as seen from
+# the host, so sibling containers can mount it). Image tags: latest (owner's
+# choice; "stable" exists if latest misbehaves). Image verified live
+# 2026-09-15: Ubuntu 26.04, runs as root, ships curl+wget (healthcheck below).
+#
+# HOST-PREP (done 2026-09-15 by Claude Code · Fable 5.1):
+#   install -d /data/probata/volumes/fileflows/{data,logs,temp,common,media}
+#   /srv/r2/casebible-sorted is the existing read-only rclone mount (R2).
+#
+# ADDITIONAL VOLUMES (B2): not mounted yet. Options for the owner —
+#   A) rclone mount of the b2s3/b2native-full remote (read-only, --vfs-cache-mode
+#      minimal) at /srv/b2 — direct, but every library scan is a B2 listing call;
+#   B) rclone/davfs2 mount of OpenList's WebDAV (https://files.tilapia-skilift.ts.net/dav)
+#      at /srv/openlist — one abstraction for everything OpenList already serves;
+#   C) no mount: FileFlows only sees what gets copied into ./media.
+# The compose already binds /srv/b2 and /srv/openlist under /media so choosing
+# A or B later needs only the mount unit, not a redeploy. Both dirs exist (empty).
+#
+# Coolify env required:
+#   BIND_IP=100.91.190.107
+# Coolify Watch Paths: deploy/fileflows.yaml
+#
+# Port registry: product code 76, portal family, canonical_backend_port 9076.
+# Tailscale Service svc:fileflows serves http://100.91.190.107:9076 ->
+# https://fileflows.tilapia-skilift.ts.net (tailnet only; the public
+# fileflows.int.mitechconsult.com route is pre-wired but NOT opened).
+#
+# Byline: Claude Code · Fable 5.1 · 2026-09-15
+# =============================================================================
+
+services:
+  fileflows:
+    image: revenz/fileflows:${FILEFLOWS_IMAGE_TAG:-latest}
+    container_name: fileflows
+    restart: unless-stopped
+    cpus: ${FILEFLOWS_CPUS:-4}
+    mem_limit: ${FILEFLOWS_MEM:-6g}
+    ports:
+      - "${BIND_IP:-127.0.0.1}:9076:5000"   # http://100.91.190.107:9076 — tailnet-only
+    environment:
+      TZ: America/Detroit
+      TempPath: /temp
+      TempPathHost: /data/probata/volumes/fileflows/temp   # Docker Siblings: host path of /temp
+      ServerUrl: https://fileflows.tilapia-skilift.ts.net   # used by remote Agents/Nodes only
+    volumes:
+      - /data/probata/volumes/fileflows/data:/app/Data          # config + database — back this up
+      - /data/probata/volumes/fileflows/logs:/app/Logs
+      - /data/probata/volumes/fileflows/temp:/temp              # flow scratch (TempPath)
+      - /data/probata/volumes/fileflows/common:/app/common      # DockerMods shared installs
+      - /data/probata/volumes/fileflows/media:/media            # browser start dir (default /media)
+      - /srv/r2/casebible-sorted:/media/casebible-sorted:ro     # existing R2 rclone mount (read-only)
+      - /srv/b2:/media/b2:ro                                    # B2 route, mount unit pending (option A)
+      - /srv/openlist:/media/openlist:ro                        # OpenList WebDAV route, pending (option B)
+      - /var/run/docker.sock:/var/run/docker.sock               # Docker Siblings
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+    networks:
+      - probata
+    labels:
+      # ---- gethomepage docker-label tile (owner: "add homepage tags")
+      - homepage.group=Intake
+      - homepage.name=FileFlows
+      - homepage.icon=fileflows.png
+      - homepage.href=https://fileflows.tilapia-skilift.ts.net
+      - homepage.description=Media and file processing flows (ffmpeg, ImageMagick, DockerMods)
+      # ---- route prepared, NOT open (mirrors deploy/metabase.yaml)
+      - traefik.enable=false
+      - traefik.docker.network=probata
+      - traefik.http.routers.fileflows.rule=Host(`fileflows.int.mitechconsult.com`)
+      - traefik.http.routers.fileflows.entrypoints=https
+      - traefik.http.routers.fileflows.tls=true
+      - traefik.http.routers.fileflows.tls.certresolver=letsencrypt
+      - traefik.http.routers.fileflows.service=fileflows
+      - traefik.http.routers.fileflows.middlewares=fileflows-authentik
+      - traefik.http.services.fileflows.loadbalancer.server.port=5000
+      - 'traefik.http.middlewares.fileflows-authentik.forwardauth.address=http://authentik-server:9000/outpost.goauthentik.io/auth/traefik'
+      - traefik.http.middlewares.fileflows-authentik.forwardauth.trustForwardHeader=true
+      - 'traefik.http.middlewares.fileflows-authentik.forwardauth.authResponseHeaders=X-authentik-username,X-authentik-groups,X-authentik-entitlements,X-authentik-email,X-authentik-name,X-authentik-uid,X-authentik-jwt,X-authentik-meta-jwks,X-authentik-meta-outpost,X-authentik-meta-provider,X-authentik-meta-app,X-authentik-meta-version'
+      - coolify.traefik.middlewares=fileflows-authentik
+
+  # Tailnet hostname: served by ovh-files' own tailscaled as a Tailscale Service
+  # (`tailscale serve --service=svc:fileflows`), like svc:files / svc:llm-probe.
+
+networks:
+  probata:
+    external: true

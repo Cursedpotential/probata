@@ -2,10 +2,38 @@
   "schema_version": 1,
   "tailnet_dns_suffix": ".tilapia-skilift.ts.net",
   "families": {
-    "postgres": {"prefix": "54", "range": [5400, 5499], "client_port": 5432},
-    "surreal": {"prefix": "84", "range": [8400, 8499], "client_port": 443},
-    "http": {"prefix": "80", "range": [8000, 8099], "client_port": 443},
-    "portal": {"prefix": "90", "range": [9000, 9099], "client_port": 443}
+    "postgres": {
+      "prefix": "54",
+      "range": [
+        5400,
+        5499
+      ],
+      "client_port": 5432
+    },
+    "surreal": {
+      "prefix": "84",
+      "range": [
+        8400,
+        8499
+      ],
+      "client_port": 443
+    },
+    "http": {
+      "prefix": "80",
+      "range": [
+        8000,
+        8099
+      ],
+      "client_port": 443
+    },
+    "portal": {
+      "prefix": "90",
+      "range": [
+        9000,
+        9099
+      ],
+      "client_port": 443
+    }
   },
   "products": {
     "probata": {
@@ -31,7 +59,9 @@
         {
           "family": "http",
           "canonical_backend_port": 8072,
-          "transitional_backend_ports": [8474],
+          "transitional_backend_ports": [
+            8474
+          ],
           "service": "svc:docstore-api",
           "client_endpoint": "https://docstore-api.tilapia-skilift.ts.net"
         }
@@ -56,6 +86,18 @@
           "canonical_backend_port": 9074,
           "service": "svc:metabase",
           "client_endpoint": "https://metabase.tilapia-skilift.ts.net"
+        }
+      ]
+    },
+    "fileflows": {
+      "code": "76",
+      "endpoints": [
+        {
+          "family": "portal",
+          "canonical_backend_port": 9076,
+          "service": "svc:fileflows",
+          "client_endpoint": "https://fileflows.tilapia-skilift.ts.net",
+          "note": "Coolify compose app on ovh-files (deploy/fileflows.yaml), container port 5000, tailnet-bound 100.91.190.107:9076. Added 2026-09-15 (Claude Code, Fable 5.1)."
         }
       ]
     }
