@@ -49,9 +49,11 @@ import asyncio
 import json
 import os
 import pathlib
+import queue
 import re
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -770,7 +772,14 @@ class HttpMcp:
 
 
 class StdioMcp:
-    """Minimal stdio MCP client for the local `control` server."""
+    """Minimal stdio MCP client for the local `control` server.
+
+    Reads on a background thread into a queue. A plain
+    `self.proc.stdout.readline()` BLOCKS with no timeout, so a deadline loop
+    around it never fires - one slow control tool hung the whole matrix for
+    many minutes even with a 60s budget (measured twice). The queue makes the
+    timeout real.
+    """
 
     def __init__(self, command: str, args: list[str], env: dict):
         self.proc = subprocess.Popen(
@@ -780,6 +789,32 @@ class StdioMcp:
             cwd=str(REPO),
         )
         self._id = 0
+        self._q: "queue.Queue[str | None]" = queue.Queue()
+        self._reader = threading.Thread(target=self._pump, daemon=True)
+        self._reader.start()
+        # stderr MUST be drained. Left as an undrained PIPE it fills at ~64KB,
+        # the server then blocks writing to it and answers nothing more - that
+        # wedged 12 consecutive control tools at "timeout after 60s (no reply)".
+        # DEVNULL is not usable here: on Windows it made Popen fail with
+        # OSError [Errno 22] Invalid argument, so drain it on a thread instead.
+        self._errdrain = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._errdrain.start()
+
+    def _drain_stderr(self):
+        try:
+            for _ in self.proc.stderr:
+                pass
+        except Exception:
+            pass
+
+    def _pump(self):
+        try:
+            for line in self.proc.stdout:
+                self._q.put(line)
+        except Exception:
+            pass
+        finally:
+            self._q.put(None)  # EOF sentinel
 
     def _rpc(self, method: str, params: dict | None = None, notify: bool = False,
              timeout: float = 120.0):
@@ -792,9 +827,15 @@ class StdioMcp:
         if notify:
             return None
         deadline = time.time() + timeout
-        while time.time() < deadline:
-            line = self.proc.stdout.readline()
-            if not line:
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                return {"error": {"message": f"timeout after {timeout}s (no reply)"}}
+            try:
+                line = self._q.get(timeout=min(remaining, 5.0))
+            except queue.Empty:
+                continue
+            if line is None:
                 return {"error": {"message": "server closed stdout"}}
             line = line.strip()
             if not line:
@@ -805,7 +846,6 @@ class StdioMcp:
                 continue
             if m.get("id") == self._id:
                 return m
-        return {"error": {"message": f"timeout after {timeout}s"}}
 
     def initialize(self):
         r = self._rpc("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
@@ -816,7 +856,9 @@ class StdioMcp:
     def tools_list(self):
         return self._rpc("tools/list")
 
-    def call(self, name: str, args: dict, timeout: float = 180.0):
+    def call(self, name: str, args: dict, timeout: float = 60.0):
+        # 60s, not 180s: one slow control tool must not stall the whole matrix.
+        # A timeout is recorded as a FAIL with its own message, never silently.
         return self._rpc("tools/call", {"name": name, "arguments": args}, timeout=timeout)
 
     def close(self):
@@ -834,7 +876,7 @@ CONTROL_READONLY = {
     "docstore_health": {},
     "docstore_capabilities": {},
     "docstore_stats": {},
-    "docstore_flags": {},
+    "docstore_flags": {"domain": "docs"},
     "docstore_run_current": {},
     "docstore_run_list": {},
     "docstore_cdc_runs": {},
@@ -842,22 +884,30 @@ CONTROL_READONLY = {
     "docstore_project_sources": {},
     "docstore_graph_schema": {},
     "docstore_surrealist": {},
-    "docstore_revision_state": {"key": "docs/PROJECT_CANON.md"},
+    # document_key is a RECORD ID (^(document|adr|note):...), not a source path
+    "docstore_revision_state": {"document_key": "document:docs_project_canon_md"},
     "docstore_attribution_verify": {},
-    "docstore_index_plan": {"scope": "selected"},
-    "docstore_search": {"query": "catalog"},
-    "coco_docstore_search": {"query": "catalog"},
-    "docstore_get": {"doc_id": "document:docs_project_canon_md"},
-    "docstore_graph": {},
+    # paths are relative to DOCSTORE_SOURCE_ROOT (the docs dir), no "docs/" prefix
+    "docstore_index_plan": {"paths": ["PROJECT_CANON.md"]},
+    "docstore_search": {"query": "catalog", "domain": "docs"},
+    # coco_docstore_search and docstore_flags both REQUIRE domain; docstore_graph
+    # requires an exact record id (schemas read from the live tools/list).
+    "coco_docstore_search": {"query": "catalog", "domain": "docs", "status": "all"},
+    "docstore_get": {"record_id": "document:docs_project_canon_md"},
+    "docstore_graph": {"record_id": "document:docs_project_canon_md"},
     "docstore_reconcile_query": {"query": "catalog"},
-    "docstore_related_updates": {"source_path": "docs/PROJECT_CANON.md"},
-    "docstore_verify_index": {"paths": ["docs/PROJECT_CANON.md"]},
-    "docstore_selected_update_plan": {},
-    "docstore_reconcile_packet": {},
-    "docstore_graph_query_preview": {"query": "SELECT * FROM document LIMIT 1"},
+    "docstore_related_updates": {"term": "catalog"},
+    "docstore_verify_index": {"paths": ["PROJECT_CANON.md"]},
+    "docstore_reconcile_packet": {"query": "catalog"},
 }
 # Mutating / long-running control tools: listed, schema-checked, NOT invoked.
 CONTROL_NO_INVOKE = {
+    # Requires a structured SelectedUpdatePlan object that only a real
+    # reconcile flow produces; schema-checked rather than fabricated.
+    "docstore_selected_update_plan",
+    # Executes a caller-supplied graph query; schema-checked, never invoked
+    # (it stalled the matrix for minutes on a trivial SELECT).
+    "docstore_graph_query_preview",
     "docstore_index_full", "docstore_index_selected", "docstore_index_execute",
     "docstore_cancel_run", "docstore_run_cancel", "docstore_compact",
     "docstore_set_flags", "docstore_capture_revision", "docstore_approve_revision",
@@ -964,12 +1014,13 @@ def test_mcp():
                 "info": {"target": "db"},
                 "list": {"kind": "functions"},
                 "query": {"query": "RETURN 1;"},
-                "select": {"table": "document", "limit": 1} if sname == "docs"
-                else {"table": "memory", "limit": 1},
+                "select": {"target": "document", "limit": 1} if sname == "docs"
+                else {"target": "memory", "limit": 1},
                 "run": {"function": "fn::docs_search",
                         "args": ["catalog", None, None, None, None, 3]} if sname == "docs"
                 else {"function": "math::sum", "args": [[1, 2]]},
-                "use": {"namespace": "probata", "database": "docs"} if sname == "docs" else None,
+                "use": {"namespace": "probata", "database": "docs"} if sname == "docs"
+                else {"namespace": "fct", "database": "case"},
             }
             mutating = {"create", "insert", "upsert", "update", "delete", "relate",
                         "gql", "graphql"}
@@ -1194,9 +1245,12 @@ async def test_skill_queries(inventory: pathlib.Path, live_fns: set[str],
             record(item, kindname, form, ok,
                    "" if ok else f"documents {n} args but fn::{bare} takes {req}-{total}",
                    f"arity {n} within {req}-{total}" if ok else "")
-            # A concrete mcp-call is additionally replayed through the real MCP.
+            # A concrete mcp-call is additionally replayed through the real MCP -
+            # but only for READ-ONLY functions. Replaying a documented write
+            # example really writes: the first version of this harness created a
+            # live `todo` row from the fn::todo_open example in functions.md.
             if ok and kindname == "mcp-call" and docs_mcp and "$" not in text \
-               and not NOTATION.search(text):
+               and bare not in WRITE_FNS and not NOTATION.search(text):
                 margs = re.search(r"args\"?\s*:\s*(\[.*\])", text, re.DOTALL)
                 if margs:
                     try:

@@ -2,14 +2,18 @@
   "mcpServers": {
     "control": {
       "command": "E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/control/.venv/Scripts/python.exe",
-      "args": ["E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/control/cli.py", "serve"],
+      "args": [
+        "E:/AI_Workspace/Projects/Propria/Probata/probata/plugins/docstore/control/cli.py",
+        "serve"
+      ],
       "env": {
         "DOCSTORE_CONTROL_ENV_FILE": "${DOCSTORE_CONTROL_ENV_FILE:-C:/Users/matts/.secrets/probata-docstore.env}",
         "DOCSTORE_PROJECT_REGISTRY": "E:/AI_Workspace/Projects/Propria/docs/docstore-source-registry.json",
         "TEMP": "E:/AI_Workspace/.intake-dev/temp",
         "TMP": "E:/AI_Workspace/.intake-dev/temp",
         "PYTHONDONTWRITEBYTECODE": "1",
-        "FASTMCP_CHECK_FOR_UPDATES": "off"
+        "FASTMCP_CHECK_FOR_UPDATES": "off",
+        "DOCSTORE_SOURCE_ROOT": "${DOCSTORE_SOURCE_ROOT:-E:/AI_Workspace/Projects/Propria/Probata/probata/docs}"
       }
     },
     "docs": {
@@ -25,7 +29,9 @@
       "type": "http",
       "url": "${MEMORY_MCP_URL:-http://100.91.190.107:8471/mcp}",
       "headers": {
-        "Authorization": "Basic ${MEMORY_BASIC_AUTH}"
+        "Authorization": "Basic ${MEMORY_BASIC_AUTH}",
+        "surreal-ns": "probata_memory",
+        "surreal-db": "memory"
       }
     }
   }

@@ -27,8 +27,13 @@ STATE_DIR="${CLAUDE_PLUGIN_ROOT}/.state"
 mkdir -p "$STATE_DIR" 2>/dev/null || true
 FLAG="$STATE_DIR/last_search_${SESSION_ID:-nosession}.flag"
 
+# The plugin's real tool prefix is mcp__plugin_propria-docstore_<server>__ with
+# a HYPHEN in the plugin name (verified live 2026-09-16 by calling the tools).
+# This matcher only listed the underscore spelling, so it never matched a single
+# docstore tool call and the search-tracking flag was always written as 0. The
+# legacy/underscore patterns are kept so an older install still matches.
 case "$TOOL_NAME" in
-  mcp__plugin_propria_docstore_control__*|mcp__plugin_propria_docstore_docs__*|mcp__plugin_propria_docstore_memory__*|mcp__docs__*|mcp__memory__*)
+  mcp__plugin_propria-docstore_control__*|mcp__plugin_propria-docstore_docs__*|mcp__plugin_propria-docstore_memory__*|mcp__plugin_propria_docstore_control__*|mcp__plugin_propria_docstore_docs__*|mcp__plugin_propria_docstore_memory__*|mcp__docs__*|mcp__memory__*)
     printf '1' > "$FLAG" 2>/dev/null || true
     ;;
   *)
