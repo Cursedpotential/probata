@@ -75,6 +75,14 @@ jobs:
         run: |
           set -euo pipefail
           bun install
+          # vite's scss preprocessor (used by packages/interface's
+          # QuickPreview one-dark.scss) needs sass-embedded, which no
+          # package.json in this workspace declares as of the pinned
+          # commit (build fails otherwise: "Preprocessor dependency
+          # sass-embedded not found" -- hit live 2026-09-16, run
+          # 35090921970). Add it explicitly; bun's workspace hoisting
+          # makes it resolvable from apps/web's vite build.
+          bun add -D sass-embedded
           bun run build
           test -d dist && echo "apps/web/dist built: $(du -sh dist | cut -f1)"
 
