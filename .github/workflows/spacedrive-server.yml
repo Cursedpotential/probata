@@ -70,19 +70,47 @@ jobs:
         with:
           bun-version: "1.3.0"
 
+      - name: Patch packages/ts-client — @tanstack/react-query required, not optional
+        working-directory: spacedrive-src
+        run: |
+          set -euo pipefail
+          # Vite's resolve.ts (tryNodeResolve) special-cases an import ONLY
+          # when the IMPORTER's nearest package.json lists the bare specifier
+          # in both peerDependencies AND peerDependenciesMeta[<name>].optional
+          # -- when that's true it returns the synthetic
+          # `__vite-optional-peer-dep:<id>:<pkg>` module (empty exports in a
+          # production build) INSTEAD of attempting normal resolution, not as
+          # a fallback after a failed one. Runs 35091382439/35092105916/
+          # 35092935671 all failed identically ("QueryClient is not exported
+          # by __vite-optional-peer-dep:@tanstack/react-query:@sd/ts-client")
+          # whether install was scoped to apps/web, run from the repo root,
+          # or given a `bun add ... --cwd packages/ts-client` afterwards --
+          # because none of that removes the optional:true flag that trips
+          # this special case in the first place. Fix at the source: drop
+          # `optional` from ts-client's peerDependenciesMeta and add it as a
+          # real dependency, matching the version packages/interface already
+          # uses, before the one-and-only `bun install` below.
+          python3 - <<'PY'
+          import json, pathlib
+          p = pathlib.Path("packages/ts-client/package.json")
+          data = json.loads(p.read_text())
+          data.setdefault("dependencies", {})["@tanstack/react-query"] = "^5.90.7"
+          meta = data.get("peerDependenciesMeta") or {}
+          if "@tanstack/react-query" in meta:
+              meta["@tanstack/react-query"].pop("optional", None)
+              if not meta["@tanstack/react-query"]:
+                  del meta["@tanstack/react-query"]
+          data["peerDependenciesMeta"] = meta
+          p.write_text(json.dumps(data, indent=2) + "\n")
+          PY
+          grep -A2 '"@tanstack/react-query"' packages/ts-client/package.json
+
       - name: Install workspace deps (bun install at repo root)
         working-directory: spacedrive-src
         run: |
           set -euo pipefail
           # Installing from the workspace root (not just apps/web/) so bun
-          # hoists every packages/* workspace member consistently. Run
-          # 35091382439 (install scoped to apps/web only) failed later in
-          # the vite build with "QueryClient is not exported by
-          # __vite-optional-peer-dep:@tanstack/react-query:@sd/ts-client"
-          # -- @sd/ts-client declares @tanstack/react-query as an optional
-          # peerDependency that only packages/interface (not apps/web)
-          # lists directly, so a scoped install left it unresolved for
-          # vite's optional-peer-dep plugin.
+          # hoists every packages/* workspace member consistently.
           bun install
           # vite's scss preprocessor (used by packages/interface's
           # QuickPreview one-dark.scss) needs sass-embedded, which no
@@ -90,20 +118,8 @@ jobs:
           # commit (run 35090921970: "Preprocessor dependency
           # sass-embedded not found").
           bun add -D sass-embedded --cwd apps/web
-          # packages/ts-client declares @tanstack/react-query only as an
-          # OPTIONAL peerDependency (peerDependenciesMeta.optional=true).
-          # Vite's optional-peer-dep virtual module resolves it via plain
-          # Node resolution starting at the IMPORTING file's own package
-          # (packages/ts-client), which bun's isolated/nested install
-          # layout does not populate for an optional peer no workspace
-          # member forces -- even though @sd/interface depends on it as a
-          # real (non-peer) dependency elsewhere in the graph. Run
-          # 35092105916 (root install, still failed the same way) proves
-          # hoisting alone doesn't fix it. Add it directly to ts-client so
-          # it gets a real, locally-resolvable node_modules entry; pin the
-          # same range packages/interface already uses so both resolve to
-          # one instance.
-          bun add "@tanstack/react-query@^5.90.7" --cwd packages/ts-client
+          ls -la node_modules/@tanstack/react-query 2>&1 || true
+          ls -la packages/ts-client/node_modules/@tanstack/react-query 2>&1 || true
 
       - name: Build apps/web (produces apps/web/dist for the Dockerfile)
         working-directory: spacedrive-src/apps/web
