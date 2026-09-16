@@ -275,6 +275,54 @@ def _install_reauth_on_reconnect() -> str:
 
 
 _REAUTH_PATCH = _install_reauth_on_reconnect()
+
+
+# WEBSOCKET KEEPALIVE (fixed 2026-09-16, Claude Code - Opus 5).
+#
+# THE ACTUAL CAUSE of the "WebSocket connection closed" that killed every full
+# run on one file. The SDK opens its socket with
+#     websockets.connect(url, max_size=None, subprotocols=["cbor"])
+# and passes NO ping settings, so the `websockets` library defaults apply:
+# ping_interval=20, ping_timeout=20 (verified on websockets 17.0.1). The
+# library sends a ping every 20 s and, if the pong does not come back within
+# 20 s, CLOSES THE CONNECTION ITSELF. While a document's chunks are being
+# embedded (NIM is ~10 s per request) the server is committing a large
+# transaction and this process's event loop is saturated, so a pong is late
+# and the client hangs up on itself mid-transaction.
+#
+# That is why the failure was immovable: it is client-side, so it survived
+# pointing the worker straight at SurrealDB instead of the ts.net proxy
+# (67 s), restarting surreal-docs to free 10.8 GiB with swap 100% full (66 s),
+# and dropping DOCSTORE_CHUNK_BATCH_ROWS from 64 to 12 (68 s) - all measured.
+#
+# FIX: keep sending pings (they keep NAT/proxies from reaping an idle socket)
+# but stop treating a slow pong as a dead connection - ping_timeout=None. This
+# adds no retry and changes no write semantics; it only stops the client from
+# severing a healthy, busy connection. Both knobs are env-overridable.
+def _install_ws_keepalive() -> str:
+    ws_mod = getattr(_surreal_async_ws, "websockets", None)
+    if ws_mod is None or not hasattr(ws_mod, "connect"):
+        return "skipped: SDK does not expose websockets.connect"
+    orig_connect = ws_mod.connect
+
+    interval_raw = os.environ.get("DOCSTORE_WS_PING_INTERVAL_S", "20").strip()
+    timeout_raw = os.environ.get("DOCSTORE_WS_PING_TIMEOUT_S", "").strip()
+    interval = None if interval_raw.lower() in ("", "none", "0") else float(interval_raw)
+    # Default deliberately None: never kill a busy connection over a late pong.
+    timeout = None if timeout_raw.lower() in ("", "none", "0") else float(timeout_raw)
+
+    def connect(*args, **kwargs):
+        kwargs.setdefault("ping_interval", interval)
+        kwargs.setdefault("ping_timeout", timeout)
+        return orig_connect(*args, **kwargs)
+
+    ws_mod.connect = connect
+    return f"installed (ping_interval={interval}, ping_timeout={timeout})"
+
+
+_WS_KEEPALIVE_PATCH = _install_ws_keepalive()
+print(f"docstore: surreal reauth patch {_REAUTH_PATCH}; ws keepalive {_WS_KEEPALIVE_PATCH}",
+      flush=True)
 from cocoindex.connectors.surrealdb import SurrealType
 from cocoindex.ops.litellm import LiteLLMEmbedder
 from cocoindex.ops.text import RecursiveSplitter
