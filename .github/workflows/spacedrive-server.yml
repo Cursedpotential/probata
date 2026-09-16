@@ -158,6 +158,37 @@ jobs:
           PY
           grep -n "id=apt-" apps/server/Dockerfile
 
+          # Run 35094776549 (apt-lock + Cargo.toml fixes both held, reached
+          # the actual cargo compile) failed building libheif-sys: "The
+          # system library `libheif` required by crate `libheif-sys` was not
+          # found... pkg-config --libs --cflags libheif 'libheif >= 1.17'".
+          # Debian bookworm (this Dockerfile's base image) ships libheif
+          # 1.15.x, below the >=1.17 floor libheif-sys enforces -- and the
+          # sibling spacedrive-gate Dockerfile on ovh-files independently
+          # verified this exact gap live on 2026-09-14 (that Dockerfile
+          # exists specifically to work around it for a prebuilt binary).
+          # Debian trixie carries libheif 1.19.8 and ffmpeg 7.1.5 as one
+          # consistent set (confirmed live via packages.debian.org
+          # 2026-09-16: libavcodec61, libavformat61, libavutil59,
+          # libswscale8, libheif1 1.19.8-1+deb13u1). Move both build stages
+          # from bookworm-slim to trixie-slim and rename the runtime
+          # stage's exact-SONAME package names to match trixie's actual
+          # sonames (dev packages need no renaming, Debian doesn't
+          # soname-suffix those).
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("apps/server/Dockerfile")
+          text = p.read_text()
+          assert text.count("FROM debian:bookworm-slim") == 2, text.count("FROM debian:bookworm-slim")
+          text = text.replace("FROM debian:bookworm-slim", "FROM debian:trixie-slim")
+          old_runtime_libs = "\tlibavcodec59 \\\n\tlibavformat59 \\\n\tlibavutil57 \\\n\tlibswscale6 \\\n\tlibheif1 \\\n"
+          new_runtime_libs = "\tlibavcodec61 \\\n\tlibavformat61 \\\n\tlibavutil59 \\\n\tlibswscale8 \\\n\tlibheif1 \\\n"
+          assert old_runtime_libs in text, "runtime lib block not found, check Dockerfile formatting"
+          text = text.replace(old_runtime_libs, new_runtime_libs)
+          p.write_text(text)
+          PY
+          grep -n "FROM debian\|libavcodec\|libavformat\|libavutil\|libswscale\|libheif" apps/server/Dockerfile
+
       - name: Patch root Cargo.toml — drop workspace members not in the build context
         working-directory: spacedrive-src
         run: |
