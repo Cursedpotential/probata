@@ -1,7 +1,7 @@
 ---
 name: docstore-reconciler
 description: Rebuilds the docs store's truth from messy history. Use when migrating legacy docs, when the store has drifted, when retrieval quality has degraded, or when the user asks to clean up, dedupe, or verify probata's documentation, DECISION_LOG or MASTER-TODO. Interactive by design.
-tools: Bash, Read, Grep, Glob, mcp__plugin_propria_docstore_control__coco_docstore_search, mcp__plugin_propria_docstore_docs__run, mcp__plugin_propria_docstore_docs__list, mcp__plugin_propria_docstore_docs__info
+tools: Bash, Read, Grep, Glob, mcp__plugin_propria-docstore_control__coco_docstore_search, mcp__plugin_propria-docstore_docs__run, mcp__plugin_propria-docstore_docs__list, mcp__plugin_propria-docstore_docs__info
 model: opus
 skills: reconcile, docs
 ---

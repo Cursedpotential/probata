@@ -191,6 +191,90 @@ from cocoindex.connectors import localfs, surrealdb
 import surrealdb.connections.async_ws as _surreal_async_ws
 
 _surreal_async_ws._RPC_RECV_TIMEOUT = float(os.environ.get("DOCSTORE_SURREAL_RPC_TIMEOUT_S", "600"))
+
+
+# Raising the timeout above made the socket drop RARER; it did not make the
+# recovery CORRECT. When the socket does drop (a 2-3 MB document, a slow
+# RocksDB commit, a proxy hiccup), the SDK transparently reconnects but does
+# NOT replay the authentication or the namespace/database selection, so every
+# later statement on that connection fails "Anonymous access not allowed" and
+# the whole run dies - runs 17567c42/f745dac3/ad5a5ced/5a0b4213 (2026-09-15)
+# and c7421349/3d894018 (2026-09-16) all died exactly this way, always with a
+# WebSocket close as the FIRST error and anonymous failures after it.
+#
+# Fix (2026-09-16, Claude Code - Opus 5): remember the last successful signin()
+# and use() on the connection object and replay them after any reconnect, so a
+# dropped socket costs one round trip instead of the run. Deliberately
+# defensive - a different SDK version must degrade to the old behaviour, never
+# break worker startup.
+def _install_reauth_on_reconnect() -> str:
+    """Re-auth is hooked at the PUBLIC connect(), by socket identity.
+
+    Two earlier hook points were tried against the live store and rejected:
+      * _connect_locked - DEADLOCKS. _send() calls connect(), which holds a
+        non-reentrant asyncio.Lock around _connect_locked; replaying signin()
+        inside it re-enters that lock (signin -> _send -> connect) and the
+        process hangs forever instead of recovering.
+      * _send - NEVER SEES THE ERROR. "Anonymous access not allowed" is raised
+        while PARSING the reply (builders._check_response /
+        _statement_values), after _send has already returned successfully.
+    connect() is called at the top of every _send, and returns with the lock
+    released. Comparing the socket object identity against the one we last
+    authenticated detects a silent reconnect and lets us re-signin BEFORE the
+    statement goes out - so the caller never sees the anonymous failure at all.
+    """
+    cls = getattr(_surreal_async_ws, "AsyncWsSurrealConnection", None)
+    if cls is None or not all(hasattr(cls, m) for m in ("signin", "use", "connect")):
+        return "skipped: SDK shape not recognised"
+
+    orig_signin = cls.signin
+    orig_use = cls.use
+    orig_connect = cls.connect
+
+    async def signin(self, vars, session_id=None):
+        result = await orig_signin(self, vars, session_id=session_id)
+        # Store only what replay needs. Never logged, never printed.
+        self._docstore_auth = (vars, session_id)
+        self._docstore_sock = getattr(self, "socket", None)
+        return result
+
+    async def use(self, namespace, database, session_id=None):
+        result = await orig_use(self, namespace, database, session_id=session_id)
+        self._docstore_scope = (namespace, database, session_id)
+        return result
+
+    async def connect(self, url=None):
+        await orig_connect(self, url)
+        auth = getattr(self, "_docstore_auth", None)
+        # Nothing to replay before the first signin, and the replay's own
+        # signin/use call connect() again - guard against re-entry.
+        if auth is None or getattr(self, "_docstore_reauthing", False):
+            return
+        sock = getattr(self, "socket", None)
+        if sock is None or sock is getattr(self, "_docstore_sock", None):
+            return  # same socket: still authenticated
+        self._docstore_reauthing = True
+        try:
+            await orig_signin(self, auth[0], session_id=auth[1])
+            scope = getattr(self, "_docstore_scope", None)
+            if scope is not None:
+                await orig_use(self, scope[0], scope[1], session_id=scope[2])
+            self._docstore_sock = sock
+            print("docstore: surreal socket reconnected; auth and namespace replayed",
+                  flush=True)
+        except Exception as exc:
+            print(f"docstore: surreal reauth after reconnect FAILED: "
+                  f"{type(exc).__name__}", flush=True)
+        finally:
+            self._docstore_reauthing = False
+
+    cls.signin = signin
+    cls.use = use
+    cls.connect = connect
+    return "installed"
+
+
+_REAUTH_PATCH = _install_reauth_on_reconnect()
 from cocoindex.connectors.surrealdb import SurrealType
 from cocoindex.ops.litellm import LiteLLMEmbedder
 from cocoindex.ops.text import RecursiveSplitter
@@ -445,7 +529,26 @@ _METAS, _MAPPING_FINGERPRINT = _load_mapping()
 
 
 # Path rules for documents that have no mapping row (Claude Code - Opus 5 - 2026-09-10).
-# First matching prefix wins; filename keywords decide for anything else.
+# First matching fragment wins; filename keywords decide for anything else.
+#
+# FIXED 2026-09-16 (Claude Code - Opus 5), two bugs that together misclassified
+# every decision outside the Probata repo as "reference":
+#   1. `docs/decisions/` was missing entirely - only `docs/adr/` was listed,
+#      even though the docstore skill tells authors to write decisions in
+#      `docs/decisions/` OR `docs/adr/`.
+#   2. matching used source_path.startswith(prefix). In the multi-root
+#      projection a path is prefixed with the project's canonical_prefix
+#      (`consignatio/docs/decisions/x.md`, `advocatio/docs/adr/y.md`), so
+#      startswith("docs/adr/") only ever matched the ONE project whose prefix
+#      is literally `docs` (probata). Every other repo fell through to the
+#      filename-keyword branch and became "reference" unless its filename
+#      happened to contain "DECISION".
+# The consequence was not cosmetic: fn::decision_amend looks up
+# `doc_type = "decision"` at the source_path, so it returned no_subject_record
+# for correctly-placed decision files and no supersedes edge was ever written.
+# Matching is now on a path SEGMENT anywhere in the path, so it is
+# project-prefix agnostic. 20 decision/ADR rows were reclassified by the first
+# run after this fix (verified live).
 _AUTO_RULES = (
     ("docs/adr/", "decision"),
     ("docs/decisions/", "decision"),  # decisions skill writes here too (Fable 5.1, 2026-09-14)
@@ -459,13 +562,20 @@ _AUTO_RULES = (
     ("docs/blueprint/", "blueprint"),
     ("docs/plans/", "blueprint"),
 )
+# `docs/planning/` deliberately stays OUT of _AUTO_RULES: it is the default for
+# that directory only AFTER the filename keywords have had their say, so
+# `docs/planning/2026-09-08-TODO.md` keeps doc_type "todo" rather than becoming
+# a blueprint. Same precedence as before this fix, now project-prefix agnostic.
+_PLANNING_FRAGMENT = "/docs/planning/"
 
 
 def _auto_meta(
     source_path: str, body: str, default_domains: tuple[str, ...] = ("docs",)
 ) -> DocMeta:
     name = source_path.rsplit("/", 1)[-1].upper()
-    doc_type = next((t for prefix, t in _AUTO_RULES if source_path.startswith(prefix)), None)
+    # Leading "/" so a fragment only ever matches at a segment boundary.
+    probe = "/" + source_path.replace("\\", "/").lstrip("/")
+    doc_type = next((t for frag, t in _AUTO_RULES if ("/" + frag) in probe), None)
     if doc_type is None:
         for keyword, kind in (("TODO", "todo"), ("DECISION", "decision"), ("HANDOFF", "handoff"),
                               ("INFRASTRUCTURE", "infrastructure")):
@@ -473,7 +583,7 @@ def _auto_meta(
                 doc_type = kind
                 break
         else:
-            doc_type = "blueprint" if source_path.startswith("docs/planning/") else "reference"
+            doc_type = "blueprint" if _PLANNING_FRAGMENT in probe else "reference"
     title = next((line[2:].strip() for line in body.splitlines() if line.startswith("# ")), "") or source_path
     return DocMeta(source_path, title[:300], doc_type, default_domains, "unverified")
 

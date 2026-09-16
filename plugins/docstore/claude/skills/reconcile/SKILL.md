@@ -1,7 +1,7 @@
 ---
 name: reconcile
 description: Audit the probata docs store for stale, duplicated, contradictory or orphaned records; rebuild the truth with the user's adjudication. Use when the store has drifted, retrieval quality degraded, migrating a messy legacy docs directory, or the user asks to clean up, dedupe, or verify probata's docs/DECISION_LOG/MASTER-TODO.
-allowed-tools: Bash Read Grep Glob mcp__plugin_propria_docstore_control__coco_docstore_search mcp__plugin_propria_docstore_docs__run mcp__plugin_propria_docstore_docs__list
+allowed-tools: Bash Read Grep Glob mcp__plugin_propria-docstore_control__coco_docstore_search mcp__plugin_propria-docstore_docs__run mcp__plugin_propria-docstore_docs__list
 ---
 
 # Reconcile

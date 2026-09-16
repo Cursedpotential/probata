@@ -1,0 +1,842 @@
+{
+  "skills": [
+    {
+      "name": "decisions",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/decisions/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list"
+      ]
+    },
+    {
+      "name": "docs",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "mcp__plugin_propria-docstore_control__docstore_flags",
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list",
+        "mcp__plugin_propria-docstore_docs__info",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "mcp__plugin_propria-docstore_control__docstore_flags",
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list",
+        "mcp__plugin_propria-docstore_docs__info"
+      ]
+    },
+    {
+      "name": "docs-write",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs-write/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list"
+      ]
+    },
+    {
+      "name": "docstore",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__query",
+        "mcp__plugin_propria-docstore_docs__list",
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "mcp__plugin_propria-docstore_control__docstore_health",
+        "mcp__plugin_propria-docstore_control__docstore_index_full",
+        "mcp__plugin_propria-docstore_control__docstore_verify_index",
+        "mcp__plugin_propria-docstore_control__docstore_flags",
+        "mcp__plugin_propria-docstore_control__docstore_set_flags",
+        "mcp__plugin_propria-docstore_control__docstore_handoff_write",
+        "mcp__plugin_propria-docstore_control__docstore_project_sources",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__query",
+        "mcp__plugin_propria-docstore_docs__list",
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "mcp__plugin_propria-docstore_control__docstore_health",
+        "mcp__plugin_propria-docstore_control__docstore_index_full",
+        "mcp__plugin_propria-docstore_control__docstore_verify_index",
+        "mcp__plugin_propria-docstore_control__docstore_flags",
+        "mcp__plugin_propria-docstore_control__docstore_set_flags",
+        "mcp__plugin_propria-docstore_control__docstore_handoff_write",
+        "mcp__plugin_propria-docstore_control__docstore_project_sources"
+      ]
+    },
+    {
+      "name": "handoff",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/handoff/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_control__docstore_handoff_write",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "mcp__plugin_propria-docstore_control__docstore_handoff_write",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_control__docstore_handoff_write",
+        "mcp__plugin_propria-docstore_control__docstore_get"
+      ]
+    },
+    {
+      "name": "memory",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/memory/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_memory__run",
+        "mcp__plugin_propria-docstore_memory__list",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_memory__run",
+        "mcp__plugin_propria-docstore_memory__list"
+      ]
+    },
+    {
+      "name": "propria-search",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/propria-search/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "mcp__plugin_propria-docstore_control__docstore_flags",
+        "Bash",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_control__docstore_get",
+        "mcp__plugin_propria-docstore_control__docstore_flags"
+      ]
+    },
+    {
+      "name": "query",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/query/SKILL.md",
+      "allowed_tools": [
+        "Bash",
+        "Read"
+      ],
+      "mcp_tools_referenced": []
+    },
+    {
+      "name": "reconcile",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/reconcile/SKILL.md",
+      "allowed_tools": [
+        "Bash",
+        "Read",
+        "Grep",
+        "Glob",
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list"
+      ]
+    },
+    {
+      "name": "todo",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/todo/SKILL.md",
+      "allowed_tools": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list",
+        "Read"
+      ],
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "docstore",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/commands/docstore.md",
+      "mcp_tools_referenced": []
+    },
+    {
+      "name": "memory",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/commands/memory.md",
+      "mcp_tools_referenced": []
+    },
+    {
+      "name": "recall-adr",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/commands/recall-adr.md",
+      "mcp_tools_referenced": []
+    },
+    {
+      "name": "recall-doc",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/commands/recall-doc.md",
+      "mcp_tools_referenced": []
+    },
+    {
+      "name": "update-adr",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/commands/update-adr.md",
+      "mcp_tools_referenced": []
+    }
+  ],
+  "agents": [
+    {
+      "name": "docstore-librarian",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/agents/docstore-librarian.md",
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list",
+        "mcp__plugin_propria-docstore_docs__info"
+      ]
+    },
+    {
+      "name": "docstore-reconciler",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/agents/docstore-reconciler.md",
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_control__coco_docstore_search",
+        "mcp__plugin_propria-docstore_docs__run",
+        "mcp__plugin_propria-docstore_docs__list",
+        "mcp__plugin_propria-docstore_docs__info"
+      ]
+    },
+    {
+      "name": "memory-curator",
+      "path": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/agents/memory-curator.md",
+      "mcp_tools_referenced": [
+        "mcp__plugin_propria-docstore_memory__run",
+        "mcp__plugin_propria-docstore_memory__list",
+        "mcp__plugin_propria-docstore_memory__info"
+      ]
+    }
+  ],
+  "surql_statements": [
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/decisions/SKILL.md",
+      "line": 17,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::decision_amend\", args: [$subject_source_path, $banner_text, $closes_doc_ids_or_none] }",
+      "fn": "fn::decision_amend",
+      "arg_forms": [
+        "$subject_source_path",
+        "$banner_text",
+        "$closes_doc_ids_or_none"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/decisions/SKILL.md",
+      "line": 30,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::current_decisions\", args: [$project] }",
+      "fn": "fn::current_decisions",
+      "arg_forms": [
+        "$project"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/decisions/SKILL.md",
+      "line": 31,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_search\", args: [$query, NONE, \"decision\", NONE, \"active\", 10] }",
+      "fn": "fn::docs_search",
+      "arg_forms": [
+        "$query",
+        "NONE",
+        "\"decision\"",
+        "NONE",
+        "\"active\"",
+        "10"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/decisions/references/functions.md",
+      "line": 55,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::decision_amend\",\n       args: [\"docs/decisions/D-160-docstore-plugin-scope.md\",\n              \"D-160: plugin ships without forced main-thread agent; deny-by-settings replaced by agent-level tool allowlists.\",\n              [document:old_scope_note, document:draft_settings_plan]] }",
+      "fn": "fn::decision_amend",
+      "arg_forms": [
+        "\"docs/decisions/D-160-docstore-plugin-scope.md\"",
+        "\"D-160: plugin ships without forced main-thread agent; deny-by-settings replaced by agent-level tool allowlists.\"",
+        "[document:old_scope_note, document:draft_settings_plan]"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs-write/SKILL.md",
+      "line": 27,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_register\",\n       args: [$source_path, $title, $doc_type, $domains, $status, $body, $authored_at_or_none] }",
+      "fn": "fn::docs_register",
+      "arg_forms": [
+        "$source_path",
+        "$title",
+        "$doc_type",
+        "$domains",
+        "$status",
+        "$body",
+        "$authored_at_or_none"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs-write/SKILL.md",
+      "line": 38,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_new_version\", args: [$old_id, $new_body, $new_title_or_none] }",
+      "fn": "fn::docs_new_version",
+      "arg_forms": [
+        "$old_id",
+        "$new_body",
+        "$new_title_or_none"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs-write/SKILL.md",
+      "line": 49,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_supersede\", args: [$new_id, $old_id] }",
+      "fn": "fn::docs_supersede",
+      "arg_forms": [
+        "$new_id",
+        "$old_id"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs-write/references/functions.md",
+      "line": 75,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_register\",\n       args: [\n         \"docs/design/2026-09-09-docstore-memory-plugin-design.md\",\n         \"The docstore + memory plugin\",\n         \"blueprint\",\n         [\"probata\",\"docs\",\"memory\"],\n         \"active\",\n         \"<full body text>\",\n         \"2026-09-09T06:35:00Z\"\n       ] }",
+      "fn": "fn::docs_register",
+      "arg_forms": [
+        "\"docs/design/2026-09-09-docstore-memory-plugin-design.md\"",
+        "\"The docstore + memory plugin\"",
+        "\"blueprint\"",
+        "[\"probata\",\"docs\",\"memory\"]",
+        "\"active\"",
+        "\"<full body text>\"",
+        "\"2026-09-09T06:35:00Z\""
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs-write/references/functions.md",
+      "line": 87,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_new_version\", args: [document:xyz, \"<revised body>\", NONE] }",
+      "fn": "fn::docs_new_version",
+      "arg_forms": [
+        "document:xyz",
+        "\"<revised body>\"",
+        "NONE"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 88,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_search\",\n       args: [\"docstore plugin progressive disclosure\", NONE, \"blueprint\", \"docs\", \"active\", 10] }",
+      "fn": "fn::docs_search",
+      "arg_forms": [
+        "\"docstore plugin progressive disclosure\"",
+        "NONE",
+        "\"blueprint\"",
+        "\"docs\"",
+        "\"active\"",
+        "10"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 91,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_get\", args: [document:abc123] }",
+      "fn": "fn::docs_get",
+      "arg_forms": [
+        "document:abc123"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 93,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_get\", args: [<id from superseded_by[0]>] }",
+      "fn": "fn::docs_get",
+      "arg_forms": [
+        "<id from superseded_by[0]>"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 114,
+      "kind": "fn_call",
+      "text": "run fn::docs_search [\"no migrations ever snapshot rebuild\", null, \"decision\", null, \"active\", 3]",
+      "fn": "fn::docs_search",
+      "arg_forms": [
+        "\"no migrations ever snapshot rebuild\"",
+        "null",
+        "\"decision\"",
+        "null",
+        "\"active\"",
+        "3"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 124,
+      "kind": "fn_call",
+      "text": "run fn::docs_search [\"docstore ingest mapping\", {\"$ql\": \"NONE\"}, {\"$ql\": \"NONE\"}, {\"$ql\": \"NONE\"}, \"active\", 3]",
+      "fn": "fn::docs_search",
+      "arg_forms": [
+        "\"docstore ingest mapping\"",
+        "{\"$ql\": \"NONE\"}",
+        "{\"$ql\": \"NONE\"}",
+        "{\"$ql\": \"NONE\"}",
+        "\"active\"",
+        "3"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 124,
+      "kind": "fn_call",
+      "text": "run fn::docs_search [\"docstore ingest mapping\"]",
+      "fn": "fn::docs_search",
+      "arg_forms": [
+        "\"docstore ingest mapping\""
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 124,
+      "kind": "fn_call",
+      "text": "run type::is_none [{\"$ql\": \"NONE\"}]",
+      "fn": null,
+      "arg_forms": [
+        "{\"$ql\": \"NONE\"}"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docs/references/functions.md",
+      "line": 124,
+      "kind": "fn_call",
+      "text": "run type::is_none [null]",
+      "fn": null,
+      "arg_forms": [
+        "null"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 19,
+      "kind": "fn_call",
+      "text": "fn::docs_search(query, NONE, doc_type|NONE, domain|NONE, status|NONE, k)",
+      "fn": "fn::docs_search",
+      "arg_forms": [
+        "query",
+        "NONE",
+        "doc_type|NONE",
+        "domain|NONE",
+        "status|NONE",
+        "k"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 19,
+      "kind": "fn_call",
+      "text": "fn::docs_get(id)",
+      "fn": "fn::docs_get",
+      "arg_forms": [
+        "id"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 19,
+      "kind": "fn_call",
+      "text": "fn::current_decisions(project)",
+      "fn": "fn::current_decisions",
+      "arg_forms": [
+        "project"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 19,
+      "kind": "fn_call",
+      "text": "docs_search(..., \"decision\", ...)",
+      "fn": "fn::docs_search",
+      "arg_forms": [
+        "...",
+        "\"decision\"",
+        "..."
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 20,
+      "kind": "fn_call",
+      "text": "fn::docs_tagged(tag, query|NONE, domain|NONE, k|NONE)",
+      "fn": "fn::docs_tagged",
+      "arg_forms": [
+        "tag",
+        "query|NONE",
+        "domain|NONE",
+        "k|NONE"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 22,
+      "kind": "fn_call",
+      "text": "fn::docs_register(...)",
+      "fn": "fn::docs_register",
+      "arg_forms": [
+        "..."
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 22,
+      "kind": "fn_call",
+      "text": "fn::docs_set_tags(id, tags, actor)",
+      "fn": "fn::docs_set_tags",
+      "arg_forms": [
+        "id",
+        "tags",
+        "actor"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 24,
+      "kind": "fn_call",
+      "text": "fn::decision_amend(source_path, banner, closes|NONE)",
+      "fn": "fn::decision_amend",
+      "arg_forms": [
+        "source_path",
+        "banner",
+        "closes|NONE"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 25,
+      "kind": "fn_call",
+      "text": "fn::docs_new_version(old_id, body, title|NONE)",
+      "fn": "fn::docs_new_version",
+      "arg_forms": [
+        "old_id",
+        "body",
+        "title|NONE"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 26,
+      "kind": "fn_call",
+      "text": "fn::docs_retract(id, reason)",
+      "fn": "fn::docs_retract",
+      "arg_forms": [
+        "id",
+        "reason"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 27,
+      "kind": "fn_call",
+      "text": "fn::todo_open(item, priority, domains, source|NONE)",
+      "fn": "fn::todo_open",
+      "arg_forms": [
+        "item",
+        "priority",
+        "domains",
+        "source|NONE"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 27,
+      "kind": "fn_call",
+      "text": "fn::open_work(project)",
+      "fn": "fn::open_work",
+      "arg_forms": [
+        "project"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 27,
+      "kind": "fn_call",
+      "text": "fn::todo_close(id, evidence)",
+      "fn": "fn::todo_close",
+      "arg_forms": [
+        "id",
+        "evidence"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/docstore/SKILL.md",
+      "line": 30,
+      "kind": "fn_call",
+      "text": "fn::provenance(record)",
+      "fn": "fn::provenance",
+      "arg_forms": [
+        "record"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/handoff/SKILL.md",
+      "line": 18,
+      "kind": "fn_call",
+      "text": "fn::docs_set_tags($id, $tags, $actor)",
+      "fn": "fn::docs_set_tags",
+      "arg_forms": [
+        "$id",
+        "$tags",
+        "$actor"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/handoff/references/functions.md",
+      "line": 25,
+      "kind": "raw_query",
+      "text": "SELECT id FROM document\nWHERE doc_type = \"handoff\" AND status = \"active\"\n  AND array::len(array::intersect(domains, $domains)) > 0\nLIMIT 1",
+      "fn": null,
+      "arg_forms": []
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/handoff/references/functions.md",
+      "line": 41,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::handoff_write\",\n       args: [\n         \"docstore plugin build — 2026-09-09\",\n         \"<full HANDOFF v2 body: STATUS, BUILD_STATUS, UNRESOLVED, ...>\",\n         [\"docs\",\"memory\",\"probata\"]\n       ] }",
+      "fn": "fn::handoff_write",
+      "arg_forms": [
+        "\"docstore plugin build — 2026-09-09\"",
+        "\"<full HANDOFF v2 body: STATUS, BUILD_STATUS, UNRESOLVED, ...>\"",
+        "[\"docs\",\"memory\",\"probata\"]"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/memory/SKILL.md",
+      "line": 17,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::remember\",\n       args: [{ kind: $kind, claim: $claim, detail: $detail_or_none,\n                 scope: $scope, agent: $agent, confidence: $confidence,\n                 evidence: $evidence_or_none }] }",
+      "fn": "fn::remember",
+      "arg_forms": [
+        "{ kind: $kind, claim: $claim, detail: $detail_or_none, scope: $scope, agent: $agent, confidence: $confidence, evidence: $evidence_or_none }"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/memory/SKILL.md",
+      "line": 31,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::recall\", args: [$query, $vec_or_none, $scope, $k] }",
+      "fn": "fn::recall",
+      "arg_forms": [
+        "$query",
+        "$vec_or_none",
+        "$scope",
+        "$k"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/memory/SKILL.md",
+      "line": 40,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::supersede_memory\", args: [$old_id, $new_payload] }",
+      "fn": "fn::supersede_memory",
+      "arg_forms": [
+        "$old_id",
+        "$new_payload"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/memory/SKILL.md",
+      "line": 41,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::forget\", args: [$id, $reason] }",
+      "fn": "fn::forget",
+      "arg_forms": [
+        "$id",
+        "$reason"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/query/SKILL.md",
+      "line": 24,
+      "kind": "raw_query",
+      "text": "SELECT * FROM todo LIMIT 5;",
+      "fn": null,
+      "arg_forms": []
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/query/SKILL.md",
+      "line": 25,
+      "kind": "raw_query",
+      "text": "SELECT * FROM decision_log LIMIT 3;",
+      "fn": null,
+      "arg_forms": []
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/query/SKILL.md",
+      "line": 25,
+      "kind": "raw_query",
+      "text": "SELECT * FROM supersedes LIMIT 3;",
+      "fn": null,
+      "arg_forms": []
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/query/SKILL.md",
+      "line": 26,
+      "kind": "raw_query",
+      "text": "SELECT doc_type, status FROM document;",
+      "fn": null,
+      "arg_forms": []
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/query/SKILL.md",
+      "line": 27,
+      "kind": "raw_query",
+      "text": "INFO FOR INDEX chunk_embedding ON chunk;",
+      "fn": null,
+      "arg_forms": []
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/reconcile/SKILL.md",
+      "line": 23,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::stale_candidates\", args: [\"90d\"] }",
+      "fn": "fn::stale_candidates",
+      "arg_forms": [
+        "\"90d\""
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/reconcile/SKILL.md",
+      "line": 35,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::docs_new_version\", args: [$old_id, $revised_body_or_same, NONE] }",
+      "fn": "fn::docs_new_version",
+      "arg_forms": [
+        "$old_id",
+        "$revised_body_or_same",
+        "NONE"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/reconcile/SKILL.md",
+      "line": 36,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::decision_amend\", args: [$subject_path, $banner, $closes] }",
+      "fn": "fn::decision_amend",
+      "arg_forms": [
+        "$subject_path",
+        "$banner",
+        "$closes"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/reconcile/SKILL.md",
+      "line": 49,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::provenance\", args: [$record_id] }",
+      "fn": "fn::provenance",
+      "arg_forms": [
+        "$record_id"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/todo/SKILL.md",
+      "line": 16,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::todo_open\", args: [$item_text, $priority, $domains, $source_path_or_none] }",
+      "fn": "fn::todo_open",
+      "arg_forms": [
+        "$item_text",
+        "$priority",
+        "$domains",
+        "$source_path_or_none"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/todo/SKILL.md",
+      "line": 22,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::todo_close\", args: [$id, $evidence_text] }",
+      "fn": "fn::todo_close",
+      "arg_forms": [
+        "$id",
+        "$evidence_text"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/todo/SKILL.md",
+      "line": 31,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::open_work\", args: [$project] }",
+      "fn": "fn::open_work",
+      "arg_forms": [
+        "$project"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/todo/references/functions.md",
+      "line": 49,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::todo_open\",\n       args: [\"Wire SURREAL_MCP_ALLOWED_HOSTS on surreal-case before the memory plugin can reach it\",\n              1, [\"memory\",\"infra\"], \"docs/design/2026-09-09-docstore-memory-plugin-design.md\"] }",
+      "fn": "fn::todo_open",
+      "arg_forms": [
+        "\"Wire SURREAL_MCP_ALLOWED_HOSTS on surreal-case before the memory plugin can reach it\"",
+        "1",
+        "[\"memory\",\"infra\"]",
+        "\"docs/design/2026-09-09-docstore-memory-plugin-design.md\""
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/skills/todo/references/functions.md",
+      "line": 53,
+      "kind": "fn_call",
+      "text": "run: { function: \"fn::todo_close\",\n       args: [todo:abc123, \"surreal-case redeployed 2026-09-10, /mcp initialize succeeded from desktop over tailnet\"] }",
+      "fn": "fn::todo_close",
+      "arg_forms": [
+        "todo:abc123",
+        "\"surreal-case redeployed 2026-09-10, /mcp initialize succeeded from desktop over tailnet\""
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/commands/update-adr.md",
+      "line": 21,
+      "kind": "raw_query",
+      "text": "RETURN fn::decision_amend(\"<source_path>\", \"<banner>\", NONE);",
+      "fn": "fn::decision_amend",
+      "arg_forms": [
+        "\"<source_path>\"",
+        "\"<banner>\"",
+        "NONE"
+      ]
+    },
+    {
+      "source": "E:/AI_Workspace/Projects/Propria/_worktrees/docstore-lint/plugins/docstore/claude/commands/update-adr.md",
+      "line": 22,
+      "kind": "raw_query",
+      "text": "RETURN fn::provenance(document:<id>);",
+      "fn": "fn::provenance",
+      "arg_forms": [
+        "document:<id>"
+      ]
+    }
+  ]
+}

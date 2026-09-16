@@ -1,7 +1,7 @@
 ---
 name: propria-search
 description: Search Propria project context. Routes documentation, decisions, plans and handoffs to the universal CocoIndex and SurrealDB Docstore; routes code symbols and implementations to the current project's separate CCC index; searches both for design-versus-code questions.
-allowed-tools: mcp__plugin_propria_docstore_control__coco_docstore_search mcp__plugin_propria_docstore_control__docstore_get mcp__plugin_propria_docstore_control__docstore_flags Bash Read
+allowed-tools: mcp__plugin_propria-docstore_control__coco_docstore_search mcp__plugin_propria-docstore_control__docstore_get mcp__plugin_propria-docstore_control__docstore_flags Bash Read
 ---
 
 # Propria search

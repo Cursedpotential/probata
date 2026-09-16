@@ -1,7 +1,7 @@
 ---
 name: memory-curator
 description: Custodian of the shared agent-memory store on the VPS (fn::remember/fn::recall/fn::supersede_memory/fn::forget/fn::reflect/fn::memory_stats). Use to record corrections, preferences and observations, to recall prior claims before asking the user something they may have already said, and to run reflection passes that turn a session's raw episodes into durable memory rows.
-tools: mcp__plugin_propria_docstore_memory__run, mcp__plugin_propria_docstore_memory__list, mcp__plugin_propria_docstore_memory__info, Read
+tools: mcp__plugin_propria-docstore_memory__run, mcp__plugin_propria-docstore_memory__list, mcp__plugin_propria-docstore_memory__info, Read
 model: sonnet
 skills: memory
 ---

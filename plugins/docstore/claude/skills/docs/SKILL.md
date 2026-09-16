@@ -1,7 +1,7 @@
 ---
 name: docs
 description: Retrieve Propria blueprints, infrastructure notes, decisions, todos, handoffs and references from the universal CocoIndex and SurrealDB Docstore. Use first for documented decisions, plans, current state, ADRs, or open work; use the separate CCC index for implementation code.
-allowed-tools: mcp__plugin_propria_docstore_control__coco_docstore_search mcp__plugin_propria_docstore_control__docstore_get mcp__plugin_propria_docstore_control__docstore_flags mcp__plugin_propria_docstore_docs__run mcp__plugin_propria_docstore_docs__list mcp__plugin_propria_docstore_docs__info Read
+allowed-tools: mcp__plugin_propria-docstore_control__coco_docstore_search mcp__plugin_propria-docstore_control__docstore_get mcp__plugin_propria-docstore_control__docstore_flags mcp__plugin_propria-docstore_docs__run mcp__plugin_propria-docstore_docs__list mcp__plugin_propria-docstore_docs__info Read
 ---
 
 # Docs retrieval

@@ -17,16 +17,23 @@
 -- ---------------------------------------------------------------------
 DEFINE FUNCTION OVERWRITE fn::search_vec(
   $q: array<float>,
-  $project: option<string>,
-  $doc_type: option<string>
+  $project: option<string> | null,
+  $doc_type: option<string> | null
 ) {
+  -- NULL-TOLERANT OPTIONALS (2026-09-16). An MCP client speaking JSON sends
+  -- `null` for an omitted argument. Here a bare option<string> does not even
+  -- error -- it silently poisons the scope predicate, because `project = NULL`
+  -- matches nothing, so the caller gets ZERO ROWS instead of "unscoped".
+  -- Normalise NULL -> NONE before any predicate uses it.
+  LET $project_n  = IF $project == NULL { NONE } ELSE { $project };
+  LET $doc_type_n = IF $doc_type == NULL { NONE } ELSE { $doc_type };
   LET $fast = (
     SELECT id, text, heading, document, doc_type, project,
            vector::distance::knn() AS dist
     FROM chunk
     WHERE embedding <|20,128|> $q
-      AND ($project = NONE OR project = $project)
-      AND ($doc_type = NONE OR doc_type = $doc_type)
+      AND ($project_n = NONE OR project = $project_n)
+      AND ($doc_type_n = NONE OR doc_type = $doc_type_n)
     ORDER BY dist
   );
 
@@ -39,8 +46,8 @@ DEFINE FUNCTION OVERWRITE fn::search_vec(
     SELECT id, text, heading, document, doc_type, project,
            1 - vector::similarity::cosine(embedding, $q) AS dist
     FROM chunk
-    WHERE ($project = NONE OR project = $project)
-      AND ($doc_type = NONE OR doc_type = $doc_type)
+    WHERE ($project_n = NONE OR project = $project_n)
+      AND ($doc_type_n = NONE OR doc_type = $doc_type_n)
     ORDER BY dist
     LIMIT 20
   );
@@ -51,17 +58,21 @@ DEFINE FUNCTION OVERWRITE fn::search_vec(
 -- ---------------------------------------------------------------------
 DEFINE FUNCTION OVERWRITE fn::search_text(
   $terms: string,
-  $project: option<string>,
-  $doc_type: option<string>
+  $project: option<string> | null,
+  $doc_type: option<string> | null
 ) {
+  -- NULL-tolerant optionals (2026-09-16); see fn::search_vec for why NULL is
+  -- more dangerous than a coercion error here (silent zero rows).
+  LET $project_n  = IF $project == NULL { NONE } ELSE { $project };
+  LET $doc_type_n = IF $doc_type == NULL { NONE } ELSE { $doc_type };
   RETURN (
     SELECT id, text, heading, document, doc_type, project,
            search::score(1) AS score,
            search::highlight("<<", ">>", 1) AS excerpt
     FROM chunk
     WHERE text @1@ $terms
-      AND ($project = NONE OR project = $project)
-      AND ($doc_type = NONE OR doc_type = $doc_type)
+      AND ($project_n = NONE OR project = $project_n)
+      AND ($doc_type_n = NONE OR doc_type = $doc_type_n)
     ORDER BY score DESC
     LIMIT 20
   );
@@ -74,12 +85,16 @@ DEFINE FUNCTION OVERWRITE fn::search_text(
 DEFINE FUNCTION OVERWRITE fn::recall(
   $query: string,
   $q: array<float>,
-  $project: option<string>,
-  $doc_type: option<string>,
+  $project: option<string> | null,
+  $doc_type: option<string> | null,
   $agent: string
 ) {
-  LET $vec = fn::search_vec($q, $project, $doc_type);
-  LET $txt = fn::search_text($query, $project, $doc_type);
+  -- NULL-tolerant optionals (2026-09-16); normalised once here and passed on,
+  -- so the two inner searches receive NONE rather than NULL.
+  LET $project_n  = IF $project == NULL { NONE } ELSE { $project };
+  LET $doc_type_n = IF $doc_type == NULL { NONE } ELSE { $doc_type };
+  LET $vec = fn::search_vec($q, $project_n, $doc_type_n);
+  LET $txt = fn::search_text($query, $project_n, $doc_type_n);
 
   LET $fused = search::rrf([$vec, $txt], 12, 60);
 
@@ -88,7 +103,7 @@ DEFINE FUNCTION OVERWRITE fn::recall(
   CREATE retrieval SET
     query = $query,
     agent = $agent,
-    scope = { project: $project, doc_type: $doc_type },
+    scope = { project: $project_n, doc_type: $doc_type_n },
     hits  = $fused.map(|$h| $h.id),
     path  = $path;
 
@@ -137,12 +152,20 @@ DEFINE FUNCTION OVERWRITE fn::provenance($subject: record) {
 -- ---------------------------------------------------------------------
 -- fn::stale_candidates — what the reconciler should look at.
 -- ---------------------------------------------------------------------
-DEFINE FUNCTION OVERWRITE fn::stale_candidates($older_than: duration) {
+DEFINE FUNCTION OVERWRITE fn::stale_candidates($older_than: duration | string) {
+  -- STRING DURATIONS ACCEPTED (fixed 2026-09-16). JSON has no duration
+  -- literal, so the documented MCP call `run fn::stale_candidates ["90d"]`
+  -- failed with "Failed to coerce argument `$older_than`: Expected `duration`
+  -- but found `'90d'`" unless the caller knew the {"$ql": "90d"} sentinel.
+  -- Same class of defect as the NULL-vs-NONE optionals: the store's richer
+  -- scalar types have no JSON form, so the API accepts the string and casts.
+  LET $d = IF type::is_duration($older_than) { $older_than }
+           ELSE { <duration> $older_than };
   RETURN (
     SELECT id, title, doc_type, project, status, observed_at, age_days
     FROM document
     WHERE status = "active"
-      AND (observed_at < time::now() - $older_than)
+      AND (observed_at < time::now() - $d)
       AND array::len(<-derived_from<-adr) = 0
     ORDER BY observed_at ASC
     LIMIT 200

@@ -1,7 +1,7 @@
 ---
 name: docs-write
 description: Register a new probata document or publish a new version of an existing one in the SurrealDB docs store (blueprint/infrastructure/decision/todo/handoff/review/reference, domains probata/proffer/consignatio/advocatio/vestigia/indagatio/intake/workbench/knowledge/memory/infra/docs). Use whenever a Write/Edit under docs/** just happened (the PostToolUse hook flags it as unregistered), or when content needs to enter the store for the first time. Only the docstore-librarian agent writes.
-allowed-tools: mcp__plugin_propria_docstore_docs__run mcp__plugin_propria_docstore_docs__list Read
+allowed-tools: mcp__plugin_propria-docstore_docs__run mcp__plugin_propria-docstore_docs__list Read
 ---
 
 # Docs write

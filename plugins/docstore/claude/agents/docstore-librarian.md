@@ -1,7 +1,7 @@
 ---
 name: docstore-librarian
 description: The docs store's custodian. Use for every read from or write to the probata document store (blueprint/infrastructure/decision/todo/handoff/review/reference), the DECISION_LOG, or the MASTER-TODO register. Other agents hand this agent text and get back a record id. Use proactively whenever a task references project docs, prior decisions, open work, or "what did we decide".
-tools: mcp__plugin_propria_docstore_docs__run, mcp__plugin_propria_docstore_docs__list, mcp__plugin_propria_docstore_docs__info, Read
+tools: mcp__plugin_propria-docstore_docs__run, mcp__plugin_propria-docstore_docs__list, mcp__plugin_propria-docstore_docs__info, Read
 model: sonnet
 skills: docs, docs-write, decisions, todo, handoff
 ---

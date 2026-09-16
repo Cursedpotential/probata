@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: Write a session handoff into the probata SurrealDB docs store (doc_type "handoff") instead of a loose file. Use before /compact, before /clear, at the end of a work session, when the PreCompact hook fires, or when the user says "handoff", "write a handoff", "save state for next session".
-allowed-tools: mcp__probata_docstore__docstore_handoff_write mcp__probata_docstore__docstore_get mcp__plugin_propria_docstore_control__docstore_handoff_write mcp__plugin_propria_docstore_control__docstore_get Read
+allowed-tools: mcp__plugin_propria-docstore_control__docstore_handoff_write mcp__plugin_propria-docstore_control__docstore_get Read
 ---
 
 # Handoff
