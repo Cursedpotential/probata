@@ -128,6 +128,36 @@ jobs:
           bun run build
           test -d dist && echo "apps/web/dist built: $(du -sh dist | cut -f1)"
 
+      - name: Patch apps/server/Dockerfile — disambiguate apt cache mount IDs
+        working-directory: spacedrive-src
+        run: |
+          set -euo pipefail
+          # Run 35093583222 failed at "apt-get update" in the builder stage:
+          # "Could not get lock /var/lib/apt/lists/lock. It is held by
+          # process 0". BuildKit runs independent stages (the `builder`
+          # stage and the final runtime stage) concurrently when possible;
+          # both stages' RUN instructions use
+          # `--mount=type=cache,target=/var/lib/apt` (and .../apt/cache)
+          # with no explicit `id=`, so BuildKit gives them the SAME cache
+          # mount (keyed by target path) and they raced for the real
+          # /var/lib/apt/lists/lock file inside it. Upstream's own CI
+          # (server.yml) never hits this because it builds with
+          # buildah/podman, not `docker buildx build`. Give each stage its
+          # own cache id so they no longer share a mount.
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("apps/server/Dockerfile")
+          text = p.read_text()
+          old = "RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt \\"
+          builder = "RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-builder --mount=type=cache,target=/var/lib/apt,id=apt-lib-builder \\"
+          runtime = "RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-runtime --mount=type=cache,target=/var/lib/apt,id=apt-lib-runtime \\"
+          assert text.count(old) == 2, f"expected exactly 2 occurrences, found {text.count(old)}"
+          text = text.replace(old, builder, 1)
+          text = text.replace(old, runtime, 1)
+          p.write_text(text)
+          PY
+          grep -n "id=apt-" apps/server/Dockerfile
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
