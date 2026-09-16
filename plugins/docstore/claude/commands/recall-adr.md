@@ -8,6 +8,6 @@ allowed-tools: Bash, Read
 
 ADR / decision recall for: $ARGUMENTS
 
-!`C:/Users/matts/.local/bin/python3.exe "${CLAUDE_PLUGIN_ROOT}/../../scripts/docstore/recall.py" adr $ARGUMENTS 2>&1`
+!`C:/Users/matts/.local/bin/python3.exe "E:/AI_Workspace/Projects/Propria/Probata/probata/scripts/docstore/recall.py" adr $ARGUMENTS 2>&1`
 
 Show the table exactly as printed. Then at most three bullets naming the governing decision and its path. Superseded ADRs are hidden by default; if the answer may be an older ruling, rerun with `--status all` and say which one supersedes it. If the top score is under 0.3, say there is no strong match.

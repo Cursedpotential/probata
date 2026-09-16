@@ -8,6 +8,6 @@ allowed-tools: Bash, Read
 
 Docstore recall (any document type) for: $ARGUMENTS
 
-!`C:/Users/matts/.local/bin/python3.exe "${CLAUDE_PLUGIN_ROOT}/../../scripts/docstore/recall.py" doc $ARGUMENTS 2>&1`
+!`C:/Users/matts/.local/bin/python3.exe "E:/AI_Workspace/Projects/Propria/Probata/probata/scripts/docstore/recall.py" doc $ARGUMENTS 2>&1`
 
 Show the table exactly as printed. Then at most three bullets: which result answers the question, with its path. If the top score is under 0.3, say the store has no strong match rather than stretching a weak one. Add `--why` to see the matching passage, `--status all` to include superseded documents.

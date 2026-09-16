@@ -86,11 +86,13 @@ than `$older_than`. Reconciler's sweep list, not for routine retrieval.
 
 ```
 run: { function: "fn::docs_search",
-       args: ["docstore plugin progressive disclosure", NONE, "blueprint", "docs", "active", 10] }
--- inspect hits, then for the top hit:
-run: { function: "fn::docs_get", args: [document:abc123] }
+       args: ["docstore plugin progressive disclosure", {"$ql": "NONE"}, "blueprint", "docs", "active", 10] }
+-- inspect hits, then for the top hit (record ids ALWAYS go through the $ql sentinel over MCP —
+-- a bare `document:abc123` string fails with "Failed to coerce argument `$id`: Expected
+-- `record<document>` but found 'document:abc123'", reproduced live 2026-09-16):
+run: { function: "fn::docs_get", args: [{"$ql": "document:abc123"}] }
 -- if status == "superseded":
-run: { function: "fn::docs_get", args: [<id from superseded_by[0]>] }
+run: { function: "fn::docs_get", args: [{"$ql": "<id from superseded_by[0]>"}] }
 ```
 
 ## Gotchas
@@ -108,6 +110,18 @@ run: { function: "fn::docs_get", args: [<id from superseded_by[0]>] }
    includes superseded/retracted rows unless `$status` is passed explicitly.
 4. **A superseded hit is not an answer.** Always traverse `superseded_by`
    before reporting content from a superseded document.
+5. **`"all"` is NOT a valid `$status` value for `fn::docs_search`/`fn::docs_tagged`
+   over the raw MCP `run` tool.** The function only tests
+   `$status_f = NONE OR status = $status_f`; a literal `"all"` string filters
+   for `status = "all"`, which no row has, and silently returns an empty
+   array — no error (reproduced live 2026-09-16: `fn::docs_search("docstore",
+   ..., "all", 5)` returned `[]` against a store with 1184 documents and 15
+   titles matching "docstore", while the same call with `{"$ql": "NONE"}` for
+   `$status` returned 5 real hits). Pass `{"$ql": "NONE"}` for "every status"
+   through `run`, never the string `"all"`. The control-server tools
+   `docstore_search`/`coco_docstore_search` are different: their `status`
+   parameter is a plain string enum that DOES accept `"all"` literally — do
+   not carry that habit over to the raw `fn::` functions.
 
 ## Optional arguments over MCP: the `$ql` sentinel (corrected 2026-09-09 07:22 EDT)
 

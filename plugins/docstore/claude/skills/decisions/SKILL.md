@@ -17,6 +17,12 @@ decision_log`.
 run: { function: "fn::decision_amend", args: [$subject_source_path, $banner_text, $closes_doc_ids_or_none] }
 ```
 
+`$closes_doc_ids_or_none` is a real value, not a source path: each id in that
+array must go through the `$ql` sentinel over MCP `run` —
+`[{"$ql": "document:abc"}, {"$ql": "document:def"}]`, or `{"$ql": "NONE"}` to
+close nothing. A bare `document:abc` string fails to coerce (reproduced live
+2026-09-16).
+
 `$subject` is the **source_path** of a document with `doc_type = "decision"`
 (e.g. a `D-<n>` decision document). If one exists there, `$closes` docs get
 `RELATE decision->supersedes->doc` + flipped to `superseded` in the same

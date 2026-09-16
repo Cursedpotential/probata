@@ -42,7 +42,7 @@ Agents: `docstore-librarian` (Sonnet, the only writer), `docstore-reconciler` (O
 
 - `SessionStart` → `bin/preflight.sh`: pings both `/health`; loud failure, no filesystem fallback.
 - `UserPromptSubmit` → `bin/read-gate.sh`: the read-gate reminder, suppressed when the last tool call was already a store search (state under `.state/`).
-- `PostToolUse` on `Write|Edit` under `docs/**` → `bin/flag-doc-write.sh`: "unregistered until `docs_register` or `docs_new_version` runs".
+- `PostToolUse` on `Write|Edit` under `docs/**` → `bin/flag-doc-write.sh`: reminds that the CocoIndex pipeline indexes the file on its next run — corrected 2026-09-16, the message no longer reads as an instruction to hand-call `docs_register`/`docs_new_version` on a pipeline-owned file (that collides on the `UNIQUE content_hash` index).
 - `PreCompact` → `bin/precompact-marker.sh`: writes a marker the next `SessionStart` reads (PreCompact cannot inject context).
 
 ## Tool boundary

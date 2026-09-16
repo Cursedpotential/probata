@@ -66,8 +66,10 @@ run: { function: "fn::docs_register",
          "2026-09-09T06:35:00Z"
        ] }
 -- returns {ok:false, error:"duplicate_active_document", existing_id: document:xyz}
---   if this path is already registered and active -> use fn::docs_new_version instead:
-run: { function: "fn::docs_new_version", args: [document:xyz, "<revised body>", NONE] }
+--   if this path is already registered and active -> use fn::docs_new_version instead.
+--   Record ids ALWAYS go through the $ql sentinel over MCP — a bare `document:xyz` string
+--   fails to coerce to record<document> (reproduced live 2026-09-16):
+run: { function: "fn::docs_new_version", args: [{"$ql": "document:xyz"}, "<revised body>", {"$ql": "NONE"}] }
 ```
 
 ## Gotchas

@@ -37,9 +37,14 @@ broader scope pulls in more, not less.
 ## Supersede / retract
 
 ```
-run: { function: "fn::supersede_memory", args: [$old_id, $new_payload] }
-run: { function: "fn::forget", args: [$id, $reason] }
+run: { function: "fn::supersede_memory", args: [{"$ql": "memory:<old id>"}, $new_payload] }
+run: { function: "fn::forget", args: [{"$ql": "memory:<id>"}, $reason] }
 ```
+
+Record ids over MCP `run` always go through the `$ql` sentinel
+(`{"$ql": "memory:abc"}`), never a bare `memory:abc` string — a bare string
+fails to coerce to the record type (reproduced live 2026-09-16, same bug as
+`fn::docs_get`).
 
 Never overwrite, never delete — `forget` sets `status: "retracted"` with a
 reason and keeps the row queryable.

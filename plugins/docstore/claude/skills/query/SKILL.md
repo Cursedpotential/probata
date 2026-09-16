@@ -15,16 +15,23 @@ datetimes → `2026-09-10 11:03:38`, embeddings → `<vec 2048>`, bodies →
 DuckDB's typed, width-capped table. One-off scripts that print raw SDK
 objects are not allowed: they flood context and hide the numbers.
 
-## Run it (from the repo root)
+## Run it (absolute path — works from any cwd, not just the repo root)
 
 Interpreter: `C:/Users/matts/.local/bin/python3.exe` (has `surrealdb[embedded]` and `duckdb`).
+Script: `E:/AI_Workspace/Projects/Propria/Probata/probata/scripts/docstore/sq.py` — always the
+absolute path. `${CLAUDE_PLUGIN_ROOT}` points at the installed plugin cache
+(`~/.claude/plugins/cache/casebible-local/propria-docstore/<version>`), not this repo, so a
+relative `scripts/docstore/sq.py` or a `${CLAUDE_PLUGIN_ROOT}/../../scripts/...` path only
+resolves by accident when the agent's cwd happens to be the repo root. Verified live
+2026-09-16 from `C:/Users/matts` (a neutral cwd).
 
 ```bash
 PY=C:/Users/matts/.local/bin/python3.exe
-$PY scripts/docstore/sq.py "SELECT * FROM todo LIMIT 5;"
-$PY scripts/docstore/sq.py "SELECT * FROM decision_log LIMIT 3; SELECT * FROM supersedes LIMIT 3;"
-$PY scripts/docstore/sq.py "SELECT doc_type, status FROM document;" --sql "SELECT doc_type, status, count(*) n FROM r GROUP BY ALL ORDER BY n DESC"
-$PY scripts/docstore/sq.py "INFO FOR INDEX chunk_embedding ON chunk;"        # cloud is the default target
+SQ=E:/AI_Workspace/Projects/Propria/Probata/probata/scripts/docstore/sq.py
+$PY "$SQ" "SELECT * FROM todo LIMIT 5;"
+$PY "$SQ" "SELECT * FROM decision_log LIMIT 3; SELECT * FROM supersedes LIMIT 3;"
+$PY "$SQ" "SELECT doc_type, status FROM document;" --sql "SELECT doc_type, status, count(*) n FROM r GROUP BY ALL ORDER BY n DESC"
+$PY "$SQ" "INFO FOR INDEX chunk_embedding ON chunk;"        # cloud is the default target
 ```
 
 ## Options

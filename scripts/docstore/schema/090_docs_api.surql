@@ -357,23 +357,37 @@ DEFINE FUNCTION OVERWRITE fn::todo_close($id: record<todo>, $evidence: string) {
 } COMMENT "Closes a todo as done with evidence appended to detail; closed_at comes from the todo_close_stamp EVENT." PERMISSIONS FULL;
 
 -- ---------------------------------------------------------------------
--- fn::handoff_write — new active handoff document; supersedes the
--- previous active handoff whose domains overlap $domains (if any),
--- using the same new->supersedes->old + status-flip semantics as
--- fn::docs_new_version (reimplemented inline because the new document's
+-- fn::handoff_write — new active handoff document. Fixed 2026-09-15/16
+-- (owner: two real handoffs were clobbered because the old LIMIT-1
+-- "any overlapping domain" match superseded one arbitrary active handoff
+-- with ANY shared domain — e.g. an Intake handoff superseded a
+-- B2-consolidation handoff (document:al3a33z0sm0w635lkaxg) that merely
+-- shared the 'consignatio' domain, leaving a second overlapping handoff
+-- untouched). Fix: an explicit optional 4th arg $supersedes wins when
+-- given; otherwise it supersedes every ACTIVE handoff whose domain SET
+-- equals $domains exactly (order/duplicates ignored) — a strictly
+-- narrower default than "any overlap", so 3-arg callers keep working
+-- (fixed the same new->supersedes->old + status-flip semantics as
+-- fn::docs_new_version, reimplemented inline because the new document's
 -- title/domains are caller-given here, not inherited from $old).
+-- Applied live to the docs SurrealDB 2026-09-15/16 (verified via
+-- INFO FOR DB — this source now matches); see
+-- Consignatio/docs/ops/docstore-handoff-write-fix-2026-09-15.surql.
 -- ---------------------------------------------------------------------
 DEFINE FUNCTION OVERWRITE fn::handoff_write(
   $title: string,
   $body: string,
-  $domains: array<string>
+  $domains: array<string>,
+  $supersedes: none | array<record<document>> | null
 ) {
-  LET $prev = (
-    SELECT id FROM document
+  LET $explicit = IF $supersedes == NULL { [] } ELSE { $supersedes ?? [] };
+  LET $wanted = array::sort::asc(array::distinct($domains));
+  LET $same_set = (
+    SELECT VALUE id FROM document
     WHERE doc_type = "handoff" AND status = "active"
-      AND array::len(array::intersect(domains, $domains)) > 0
-    LIMIT 1
+      AND array::sort::asc(array::distinct(domains)) = $wanted
   );
+  LET $prev = IF array::len($explicit) > 0 { $explicit } ELSE { $same_set };
 
   LET $slug = string::lowercase(string::replace($title, " ", "-"));
   LET $path = "handoff://" + $slug + "/" + <string>rand::uuid();
@@ -389,12 +403,16 @@ DEFINE FUNCTION OVERWRITE fn::handoff_write(
     authored_at  = time::now();
   LET $new_id = $new.id;
 
-  LET $prev_id = IF array::len($prev) > 0 { $prev[0].id } ELSE { NONE };
-  LET $superseded = IF $prev_id != NONE {
-    RELATE $new_id->supersedes->$prev_id SET at = time::now();
-    UPDATE $prev_id SET status = "superseded";
-    $prev_id
-  } ELSE { NONE };
+  FOR $p IN $prev {
+    IF $p != $new_id AND (SELECT VALUE doc_type FROM ONLY $p) = "handoff" {
+      RELATE $new_id->supersedes->$p SET at = time::now();
+      UPDATE $p SET status = "superseded";
+    };
+  };
 
-  RETURN { id: $new_id, superseded: $superseded };
-} COMMENT "New active handoff doc; supersedes the previous active handoff with overlapping domains, if any." PERMISSIONS FULL;
+  RETURN {
+    id: $new_id,
+    superseded: $prev,
+    match: IF array::len($explicit) > 0 { "explicit" } ELSE { "same_domain_set" }
+  };
+} COMMENT "New active handoff doc. Supersedes $supersedes when given (explicit list); otherwise every active handoff whose domain SET equals $domains exactly. Until 2026-09-15 it superseded ONE arbitrary handoff with ANY overlapping domain (LIMIT 1), which clobbered other lanes." PERMISSIONS FULL;

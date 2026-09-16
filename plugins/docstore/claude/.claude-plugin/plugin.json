@@ -3,7 +3,7 @@
   "name": "propria-docstore",
   "displayName": "Propria Docstore",
   "description": "Universal Propria documentation retrieval, notes, decisions, revisions, CDC verification, project registry, graph resources, and memory access. Isolated from codebase CCC indexes.",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "author": {
     "name": "Matthew Salem",
     "email": "matt.salem85@gmail.com"
