@@ -189,6 +189,51 @@ jobs:
           PY
           grep -n "FROM debian\|libavcodec\|libavformat\|libavutil\|libswscale\|libheif" apps/server/Dockerfile
 
+          # Run 35095727753 (trixie base + apt-lock fixes both held, 8m23s
+          # in) failed building ffmpeg-sys-next: build.rs panicked --
+          # "The system library `libavfilter` required by crate
+          # `ffmpeg-sys-next` was not found" (pkg-config exit 1). The
+          # Dockerfile's apt lists only ever covered
+          # avcodec/avformat/avutil/swscale + libheif; ffmpeg-sys-next
+          # needs the FULL set FFmpeg ships as separate libraries:
+          # avfilter, avdevice, swresample, postproc too. Confirmed exact
+          # trixie binary package names live via packages.debian.org
+          # 2026-09-16 (source package `ffmpeg`, ffmpeg 7:7.1.5-0+deb13u1):
+          # runtime libavcodec61/libavdevice61/libavfilter10/libavformat61/
+          # libavutil59/libpostproc58/libswresample5/libswscale8, dev
+          # packages libav*-dev/libswresample-dev/libswscale-dev/
+          # libpostproc-dev (unsuffixed, same as before). Also add
+          # clang/libclang-dev: ffmpeg-sys-next uses bindgen against the
+          # FFmpeg C headers, which needs libclang even once pkg-config
+          # itself succeeds.
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("apps/server/Dockerfile")
+          text = p.read_text()
+
+          old_builder = "\tlibavcodec-dev \\\n\tlibavformat-dev \\\n\tlibavutil-dev \\\n\tlibswscale-dev \\\n\tlibheif-dev\n"
+          new_builder = (
+              "\tlibavcodec-dev \\\n\tlibavformat-dev \\\n\tlibavutil-dev \\\n"
+              "\tlibavfilter-dev \\\n\tlibavdevice-dev \\\n\tlibswscale-dev \\\n"
+              "\tlibswresample-dev \\\n\tlibpostproc-dev \\\n\tlibheif-dev \\\n"
+              "\tclang \\\n\tlibclang-dev\n"
+          )
+          assert old_builder in text, "builder dev-package block not found"
+          text = text.replace(old_builder, new_builder)
+
+          old_runtime = "\tlibavcodec61 \\\n\tlibavformat61 \\\n\tlibavutil59 \\\n\tlibswscale8 \\\n\tlibheif1 \\\n"
+          new_runtime = (
+              "\tlibavcodec61 \\\n\tlibavformat61 \\\n\tlibavutil59 \\\n"
+              "\tlibavfilter10 \\\n\tlibavdevice61 \\\n\tlibswscale8 \\\n"
+              "\tlibswresample5 \\\n\tlibpostproc58 \\\n\tlibheif1 \\\n"
+          )
+          assert old_runtime in text, "runtime package block not found"
+          text = text.replace(old_runtime, new_runtime)
+
+          p.write_text(text)
+          PY
+          cat apps/server/Dockerfile
+
       - name: Patch root Cargo.toml — drop workspace members not in the build context
         working-directory: spacedrive-src
         run: |
