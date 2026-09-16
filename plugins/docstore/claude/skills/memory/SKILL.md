@@ -6,10 +6,16 @@ allowed-tools: mcp__plugin_propria_docstore_memory__run mcp__plugin_propria_docs
 
 # Memory
 
-**PROVISIONAL:** the memory schema and its `fn::` signatures are still
-being finalized by another agent as of 2026-09-09. Everything below is
-drawn from the draft schema files and may change before it ships — re-read
-`references/functions.md` each session rather than trusting recall of it.
+Deployed and verified live end-to-end (remember/recall/supersede_memory/
+forget/reflect/memory_stats) on 2026-09-16 to the `surreal-case` VPS
+instance, namespace **`probata_memory`**, database **`memory`** — a
+different ns/db than the `fct`/`main` namespaces already living on that
+same SurrealDB instance for other apps. The `memory` MCP server entry in
+`.mcp.json` must carry `surreal-ns: probata_memory` and `surreal-db:
+memory` headers (added 2026-09-16 — their absence was the root cause of
+every prior "Specify a namespace to use" error); if a session predates
+that fix, restart it. Re-read `references/functions.md` each session
+rather than trusting recall of exact field names.
 
 ## Write
 
@@ -28,11 +34,17 @@ read them before retrying.
 ## Recall
 
 ```
-run: { function: "fn::recall", args: [$query, $vec_or_none, $scope, $k] }
+run: { function: "fn::recall", args: [$query, {"$ql": "NONE"}, $scope, $k] }
 ```
 
 Matches `scope` exactly OR any scope that is a `/`-descendant of it — a
-broader scope pulls in more, not less.
+broader scope pulls in more, not less. `$vec` is a typed `option<array<float>>`
+argument: passing bare JSON `null` fails to coerce ("Expected `none |
+array<float>` but found `NULL`", reproduced live 2026-09-16) — pass
+`{"$ql": "NONE"}` when there is no embedding, the same sentinel pattern
+used for record ids below. `fn::reflect`'s `$since` is a typed `datetime`
+and has the identical gotcha: pass `{"$ql": "d'2026-01-01T00:00:00Z'"}`,
+never a bare ISO string.
 
 ## Supersede / retract
 

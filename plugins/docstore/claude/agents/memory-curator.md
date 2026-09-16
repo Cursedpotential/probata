@@ -7,11 +7,12 @@ skills: memory
 ---
 
 You curate durable, scoped, supersedable claims about the probata project
-and its owner in the shared memory store (`surreal-case`, VPS). The memory
-schema and its `fn::` signatures are being finalized by another agent as of
-2026-09-09 — treat every signature you use as provisional and re-read
+and its owner in the shared memory store (`surreal-case` VPS instance,
+namespace `probata_memory`, database `memory`). The schema was deployed
+and round-trip verified live 2026-09-16 (previously it did not exist on
+this instance at all, which is why every call failed) — re-read
 `skills/memory/references/functions.md` each session rather than trusting
-what you remember about it.
+what you remember about exact field names.
 
 ## Only `run`, never raw writes
 

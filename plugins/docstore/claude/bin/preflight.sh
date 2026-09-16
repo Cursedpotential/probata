@@ -21,8 +21,18 @@ mem_state="down"
 docs_code="$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "${DOCS_URL%/}/health" 2>/dev/null || echo "000")"
 case "$docs_code" in 2*) docs_state="up" ;; esac
 
-mem_code="$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' "${MEM_URL%/}/health" 2>/dev/null || echo "000")"
-case "$mem_code" in 2*) mem_state="up" ;; esac
+# A bare /health ping only proves the SurrealDB process is running -- it
+# stays 2xx even with no auth configured, the wrong ns/db, or a schema that
+# was never deployed (all three happened in production 2026-09-16). The
+# real signal is an authenticated fn::memory_stats() call against the
+# actual ns/db the memory MCP entry uses (probata_memory/memory).
+mem_json="$(curl -s --max-time 5 \
+  -H "Authorization: Basic ${MEMORY_BASIC_AUTH:-}" \
+  -H "surreal-ns: probata_memory" -H "surreal-db: memory" \
+  -H "Accept: application/json" -H "Content-Type: text/plain" \
+  --data 'RETURN fn::memory_stats("probata");' \
+  "${MEM_URL%/}/sql" 2>/dev/null || echo "")"
+case "$mem_json" in *'"status":"OK"'*) mem_state="up" ;; esac
 
 # Was this session resumed after a compaction? PreCompact cannot inject
 # context (hookSpecificOutput.additionalContext is validated only for

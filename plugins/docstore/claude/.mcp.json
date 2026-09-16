@@ -26,7 +26,9 @@
       "type": "http",
       "url": "${MEMORY_MCP_URL:-http://100.91.190.107:8471/mcp}",
       "headers": {
-        "Authorization": "Basic ${MEMORY_BASIC_AUTH}"
+        "Authorization": "Basic ${MEMORY_BASIC_AUTH}",
+        "surreal-ns": "probata_memory",
+        "surreal-db": "memory"
       }
     }
   }

@@ -1,11 +1,15 @@
-# memory — function reference (PROVISIONAL)
+# memory — function reference
 
-Source: draft `080_memory.surql` / `085_memory_functions.surql` /
-`087_memory_access.surql`, being finalized by another agent in parallel
-with this build (2026-09-09). Everything in this file may still change —
-treat it as the best available draft, not a locked contract. Target store:
-`surreal-case` on the VPS, reached via the `memory` MCP server
-(`${MEMORY_MCP_URL:-http://100.91.190.107:8471/mcp}`).
+Source: `080_memory.surql` / `085_memory_functions.surql` /
+`087_memory_access.surql` (canonical copy: `probata/scripts/docstore/
+memory-schema-fallback/`, dated snapshot applied 2026-09-16 under
+`probata/scripts/docstore/schema/applied-2026-09-16-memory/`). Deployed
+and round-trip verified live 2026-09-16. Target store: `surreal-case` on
+the VPS, reached via the `memory` MCP server
+(`${MEMORY_MCP_URL:-http://100.91.190.107:8471/mcp}`), **namespace
+`probata_memory`, database `memory`** — the `.mcp.json` entry must send
+`surreal-ns`/`surreal-db` headers with those values (added 2026-09-16;
+their absence produced "Specify a namespace to use" on every call).
 
 ## fn::remember
 
@@ -90,9 +94,12 @@ by `DEFINE ACCESS` alone.
 
 ## Gotchas
 
-1. **Provisional.** The finalizing agent may rename fields or change the
-   conflict-check thresholds before this ships — diff this file against
-   the live schema before relying on exact field names in a script.
+1. **Typed optional/datetime args need the `$ql` sentinel, same as record
+   ids.** `fn::recall`'s `$vec` (`option<array<float>>`) and `fn::reflect`'s
+   `$since` (`datetime`) both fail to coerce from bare JSON (`null`, a plain
+   ISO string) over MCP `run` — reproduced live 2026-09-16. Pass
+   `{"$ql": "NONE"}` for no vector and `{"$ql": "d'2026-01-01T00:00:00Z'"}`
+   for a datetime.
 2. **K/EF are literal** (`<|5,40|>`, `<|20,40|>`) — same constraint as the
    docs store, never pass `$k` into the KNN operator itself.
 3. **`evidence` is a plain string, never a live record link** — memory rows
@@ -100,4 +107,12 @@ by `DEFINE ACCESS` alone.
    server; a stale doc turns the memory claim into something the
    `reconcile` skill should flag, not something to trust blindly.
 4. No `fn::` deletes anything, ever. `forget` retracts; `supersede_memory`
-   supersedes.
+   supersedes. (A hard `DELETE` is still possible via the generic `query`
+   tool for genuinely disposable test data — that is how the 2026-09-16
+   verification pass purged its QA rows — but no `fn::` function does this,
+   and normal agent use should never reach for it.)
+5. **The MCP session must select `probata_memory`/`memory`.** The server
+   also hosts unrelated `fct`/`main` namespaces for other apps on the same
+   VPS instance; a client without the `surreal-ns`/`surreal-db` headers (or
+   without an explicit `use` first) gets "Specify a namespace to use", not
+   an empty result — it is not silently reading the right store.
