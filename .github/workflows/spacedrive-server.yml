@@ -90,6 +90,20 @@ jobs:
           # commit (run 35090921970: "Preprocessor dependency
           # sass-embedded not found").
           bun add -D sass-embedded --cwd apps/web
+          # packages/ts-client declares @tanstack/react-query only as an
+          # OPTIONAL peerDependency (peerDependenciesMeta.optional=true).
+          # Vite's optional-peer-dep virtual module resolves it via plain
+          # Node resolution starting at the IMPORTING file's own package
+          # (packages/ts-client), which bun's isolated/nested install
+          # layout does not populate for an optional peer no workspace
+          # member forces -- even though @sd/interface depends on it as a
+          # real (non-peer) dependency elsewhere in the graph. Run
+          # 35092105916 (root install, still failed the same way) proves
+          # hoisting alone doesn't fix it. Add it directly to ts-client so
+          # it gets a real, locally-resolvable node_modules entry; pin the
+          # same range packages/interface already uses so both resolve to
+          # one instance.
+          bun add "@tanstack/react-query@^5.90.7" --cwd packages/ts-client
 
       - name: Build apps/web (produces apps/web/dist for the Dockerfile)
         working-directory: spacedrive-src/apps/web
