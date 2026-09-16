@@ -158,6 +158,55 @@ jobs:
           PY
           grep -n "id=apt-" apps/server/Dockerfile
 
+      - name: Patch root Cargo.toml — drop workspace members not in the build context
+        working-directory: spacedrive-src
+        run: |
+          set -euo pipefail
+          # Run 35093976607 (apt lock fix held) failed inside the builder
+          # stage's `cargo build`: "failed to load manifest for workspace
+          # member `/build/apps/mobile/modules/sd-mobile-core/core`... No
+          # such file or directory". Cargo eagerly loads the manifest for
+          # EVERY entry in [workspace].members when it loads the workspace,
+          # even ones excluded by `-p sd-server`. apps/server/Dockerfile
+          # only COPYs Cargo.toml/.lock, .cargo, core, crates, apps/server
+          # and apps/web/dist -- not apps/mobile, apps/cli or apps/tauri,
+          # which the root Cargo.toml still lists as active (uncommented)
+          # members. sd-server doesn't depend on those sibling apps, so
+          # comment them out of the copy of Cargo.toml used for this image
+          # build only (never touches the real repo).
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("Cargo.toml")
+          text = p.read_text()
+          drop = [
+              '"apps/mobile/modules/sd-mobile-core/core"',
+              '"apps/cli"',
+              '"apps/tauri/sd-tauri-core"',
+              '"apps/tauri/src-tauri"',
+              '"xtask"',
+          ]
+          lines = text.splitlines(keepends=True)
+          out = []
+          hits = {d: 0 for d in drop}
+          for line in lines:
+              stripped = line.strip()
+              matched = None
+              for d in drop:
+                  if stripped == f'{d},' or stripped == d:
+                      matched = d
+                      break
+              if matched:
+                  hits[matched] += 1
+                  indent = line[: len(line) - len(line.lstrip("\t"))]
+                  out.append(f"{indent}# {stripped}\n")
+              else:
+                  out.append(line)
+          missing = [d for d, n in hits.items() if n == 0]
+          assert not missing, f"member entries not found, check formatting: {missing}"
+          p.write_text("".join(out))
+          PY
+          sed -n '1,20p' Cargo.toml
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
