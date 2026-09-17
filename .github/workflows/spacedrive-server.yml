@@ -128,154 +128,213 @@ jobs:
           bun run build
           test -d dist && echo "apps/web/dist built: $(du -sh dist | cut -f1)"
 
-      - name: Patch apps/server/Dockerfile — disambiguate apt cache mount IDs
+      - name: Write apps/server/Dockerfile — cargo-chef caching + prior upstream-build fixes
         working-directory: spacedrive-src
         run: |
           set -euo pipefail
-          # Run 35093583222 failed at "apt-get update" in the builder stage:
-          # "Could not get lock /var/lib/apt/lists/lock. It is held by
-          # process 0". BuildKit runs independent stages (the `builder`
-          # stage and the final runtime stage) concurrently when possible;
-          # both stages' RUN instructions use
-          # `--mount=type=cache,target=/var/lib/apt` (and .../apt/cache)
-          # with no explicit `id=`, so BuildKit gives them the SAME cache
-          # mount (keyed by target path) and they raced for the real
-          # /var/lib/apt/lists/lock file inside it. Upstream's own CI
-          # (server.yml) never hits this because it builds with
-          # buildah/podman, not `docker buildx build`. Give each stage its
-          # own cache id so they no longer share a mount.
-          python3 - <<'PY'
-          import pathlib
-          p = pathlib.Path("apps/server/Dockerfile")
-          text = p.read_text()
-          old = "RUN --mount=type=cache,target=/var/cache/apt --mount=type=cache,target=/var/lib/apt \\"
-          builder = "RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-builder --mount=type=cache,target=/var/lib/apt,id=apt-lib-builder \\"
-          runtime = "RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-runtime --mount=type=cache,target=/var/lib/apt,id=apt-lib-runtime \\"
-          assert text.count(old) == 2, f"expected exactly 2 occurrences, found {text.count(old)}"
-          text = text.replace(old, builder, 1)
-          text = text.replace(old, runtime, 1)
-          p.write_text(text)
-          PY
-          grep -n "id=apt-" apps/server/Dockerfile
-
-          # Run 35094776549 (apt-lock + Cargo.toml fixes both held, reached
-          # the actual cargo compile) failed building libheif-sys: "The
-          # system library `libheif` required by crate `libheif-sys` was not
-          # found... pkg-config --libs --cflags libheif 'libheif >= 1.17'".
-          # Debian bookworm (this Dockerfile's base image) ships libheif
-          # 1.15.x, below the >=1.17 floor libheif-sys enforces -- and the
-          # sibling spacedrive-gate Dockerfile on ovh-files independently
-          # verified this exact gap live on 2026-09-14 (that Dockerfile
-          # exists specifically to work around it for a prebuilt binary).
-          # Debian trixie carries libheif 1.19.8 and ffmpeg 7.1.5 as one
-          # consistent set (confirmed live via packages.debian.org
-          # 2026-09-16: libavcodec61, libavformat61, libavutil59,
-          # libswscale8, libheif1 1.19.8-1+deb13u1). Move both build stages
-          # from bookworm-slim to trixie-slim and rename the runtime
-          # stage's exact-SONAME package names to match trixie's actual
-          # sonames (dev packages need no renaming, Debian doesn't
-          # soname-suffix those).
-          python3 - <<'PY'
-          import pathlib
-          p = pathlib.Path("apps/server/Dockerfile")
-          text = p.read_text()
-          assert text.count("FROM debian:bookworm-slim") == 2, text.count("FROM debian:bookworm-slim")
-          text = text.replace("FROM debian:bookworm-slim", "FROM debian:trixie-slim")
-          old_runtime_libs = "\tlibavcodec59 \\\n\tlibavformat59 \\\n\tlibavutil57 \\\n\tlibswscale6 \\\n\tlibheif1 \\\n"
-          new_runtime_libs = "\tlibavcodec61 \\\n\tlibavformat61 \\\n\tlibavutil59 \\\n\tlibswscale8 \\\n\tlibheif1 \\\n"
-          assert old_runtime_libs in text, "runtime lib block not found, check Dockerfile formatting"
-          text = text.replace(old_runtime_libs, new_runtime_libs)
-          p.write_text(text)
-          PY
-          grep -n "FROM debian\|libavcodec\|libavformat\|libavutil\|libswscale\|libheif" apps/server/Dockerfile
-
-          # Run 35095727753 (trixie base + apt-lock fixes both held, 8m23s
-          # in) failed building ffmpeg-sys-next: build.rs panicked --
-          # "The system library `libavfilter` required by crate
-          # `ffmpeg-sys-next` was not found" (pkg-config exit 1). The
-          # Dockerfile's apt lists only ever covered
-          # avcodec/avformat/avutil/swscale + libheif; ffmpeg-sys-next
-          # needs the FULL set FFmpeg ships as separate libraries:
-          # avfilter, avdevice, swresample, postproc too. Confirmed exact
-          # trixie binary package names live via packages.debian.org
-          # 2026-09-16 (source package `ffmpeg`, ffmpeg 7:7.1.5-0+deb13u1):
-          # runtime libavcodec61/libavdevice61/libavfilter10/libavformat61/
-          # libavutil59/libpostproc58/libswresample5/libswscale8, dev
-          # packages libav*-dev/libswresample-dev/libswscale-dev/
-          # libpostproc-dev (unsuffixed, same as before). Also add
-          # clang/libclang-dev: ffmpeg-sys-next uses bindgen against the
-          # FFmpeg C headers, which needs libclang even once pkg-config
-          # itself succeeds.
-          python3 - <<'PY'
-          import pathlib
-          p = pathlib.Path("apps/server/Dockerfile")
-          text = p.read_text()
-
-          old_builder = "\tlibavcodec-dev \\\n\tlibavformat-dev \\\n\tlibavutil-dev \\\n\tlibswscale-dev \\\n\tlibheif-dev\n"
-          new_builder = (
-              "\tlibavcodec-dev \\\n\tlibavformat-dev \\\n\tlibavutil-dev \\\n"
-              "\tlibavfilter-dev \\\n\tlibavdevice-dev \\\n\tlibswscale-dev \\\n"
-              "\tlibswresample-dev \\\n\tlibpostproc-dev \\\n\tlibheif-dev \\\n"
-              "\tclang \\\n\tlibclang-dev\n"
-          )
-          assert old_builder in text, "builder dev-package block not found"
-          text = text.replace(old_builder, new_builder)
-
-          old_runtime = "\tlibavcodec61 \\\n\tlibavformat61 \\\n\tlibavutil59 \\\n\tlibswscale8 \\\n\tlibheif1 \\\n"
-          new_runtime = (
-              "\tlibavcodec61 \\\n\tlibavformat61 \\\n\tlibavutil59 \\\n"
-              "\tlibavfilter10 \\\n\tlibavdevice61 \\\n\tlibswscale8 \\\n"
-              "\tlibswresample5 \\\n\tlibpostproc58 \\\n\tlibheif1 \\\n"
-          )
-          assert old_runtime in text, "runtime package block not found"
-          text = text.replace(old_runtime, new_runtime)
-
-          p.write_text(text)
-          PY
-
-          # Run 35097123213 (all of the above held; reached and compiled 700+
-          # crates in 3m48s) failed compiling a WORKSPACE crate, not a
-          # dependency: crates/task-system/src/system.rs:635 calls
-          # `Atomic::<usize>::fetch_update`, which current stable rustc
-          # reports as "will be deprecated in future version 1.99.0: renamed
-          # to `try_update`", and crates/task-system/src/lib.rs:87 carries a
-          # bare `#![forbid(deprecated_in_future)]` -- so the warning is a
-          # hard error. Seven upstream crates carry that same forbid
-          # (task-system, actors, crypto, ffmpeg, fda, images,
-          # media-metadata), so this is not a single-site problem.
+          # 2026-09-17 (Claude Code · Sonnet 5): owner GO "wire caching into the
+          # Spacedrive server CI build so rebuilds against a newer upstream commit
+          # don't cost the full ~22 min compile". The single-stage Dockerfile below
+          # (upstream's original, already patched here for trixie/ffmpeg/force-warn)
+          # recompiles EVERY dependency from scratch on every run: its one COPY of
+          # core/crates/apps/server precedes its one `cargo build` RUN, so any change
+          # to spacedrive_ref invalidates that RUN's Docker layer regardless of
+          # `cache-from`/`cache-to` on the build-push-action step below. The
+          # `RUN --mount=type=cache,target=/root/.cargo/registry` (and .../git,
+          # .../target) mounts don't help across CI runs either: BuildKit cache
+          # MOUNTS live only in the local builder's state directory and are not
+          # exported by `cache-to` (any backend) -- only real image LAYERS are.
           #
-          # Why the obvious fixes do NOT work here:
-          #   * `RUSTFLAGS=-A deprecated_in_future` -- `allow` from the
-          #     command line cannot lower a `forbid` written in the source;
-          #     forbid is specifically the level that refuses to be
-          #     overridden by -A/-W/-D.
-          #   * `RUSTFLAGS=--cap-lints=warn` -- caps lints for DEPENDENCIES
-          #     only (crates cargo considers non-local). sd-task-system is a
-          #     path member of this workspace, so it is never capped.
-          #   * pinning an older Rust -- upstream's rust-toolchain.toml says
-          #     `channel = "stable"` with no version, so there is no upstream
-          #     pin to honour; guessing a pre-lint stable release is a blind
-          #     search and risks breaking the 700 dependency crates that do
-          #     build on current stable.
+          # Fix: cargo-chef (https://github.com/LukeMathWalker/cargo-chef, "How to
+          # use" section of that README, fetched 2026-09-17) splits the build into a
+          # `planner` stage that runs `cargo chef prepare` to emit recipe.json -- a
+          # fingerprint of the dependency graph derived from Cargo.lock/Cargo.toml
+          # only, NOT of application source -- and a `builder` stage that runs
+          # `cargo chef cook` against that recipe BEFORE copying real source. The
+          # `cook` RUN becomes a ordinary, cacheable Docker layer: as long as
+          # recipe.json is byte-identical to a previous build (Cargo.lock/manifests
+          # unchanged), `cache-from` reuses it even though spacedrive_ref has moved
+          # to a newer commit, and only the final `cargo build` (fast: workspace
+          # crates only, deps already compiled) reruns. `cache-to`/`cache-from` moves
+          # from `type=gha` to `type=registry` (ghcr.io/cursedpotential/
+          # spacedrive-server:buildcache) per Docker's own registry-cache-backend
+          # docs (docs.docker.com/manuals/build/cache/backends/registry, "efficiently
+          # cache multi-stage builds in max mode") -- avoids competing with every
+          # other job in this repo for the shared 10 GB GHA actions-cache budget,
+          # which a `mode=max` export of a Rust `target/` directory would blow
+          # through quickly.
           #
-          # `--force-warn` is the one rustc flag documented to override a
-          # source-level forbid/deny ("overrides the level specified by any
-          # other means, including the `forbid` attribute"), and it applies
-          # to every crate in the graph, so one flag covers all seven. This
-          # changes only the lint LEVEL -- no upstream source is rewritten,
-          # and the emitted code is identical.
+          # This step now WRITES apps/server/Dockerfile in full (previously it was
+          # patched incrementally in place with string-replacement + assert guards).
+          # A cargo-chef stage split isn't expressible as a small text substitution
+          # on upstream's single-stage file, so every earlier fix (trixie-slim base
+          # for libheif >= 1.17, the full ffmpeg-sys-next library set, clang for its
+          # bindgen step, disambiguated apt cache-mount ids, --force-warn for the
+          # `forbid(deprecated_in_future)` workspace crates) is carried into the new
+          # file as literal content instead of a patch, with the same rationale kept
+          # as comments below. RUSTFLAGS is identical between the `cook` and final
+          # `build` steps (set once via ENV in the builder stage) so their fingerprint
+          # matches and `cook`'s cached layer isn't invalidated by the final build
+          # using different flags. `curl` is added to the runtime stage (queued by
+          # the prior CI agent 2026-09-16: the image shipped no curl/wget/nc, so
+          # Consignatio's spacedrive-gate compose healthcheck
+          # `curl -sf -u "$SD_AUTH" http://127.0.0.1:8080/health` could never
+          # succeed in-container) and a matching Dockerfile HEALTHCHECK is declared;
+          # a compose-level `healthcheck:` block still overrides it if declared.
           python3 - <<'PY'
           import pathlib
-          p = pathlib.Path("apps/server/Dockerfile")
-          text = p.read_text()
-          old = "SD_SKIP_WEB_BUILD=1 cargo build --release"
-          new = 'SD_SKIP_WEB_BUILD=1 RUSTFLAGS="--force-warn=deprecated_in_future --force-warn=deprecated" cargo build --release'
-          assert text.count(old) == 1, f"expected 1 cargo build invocation, found {text.count(old)}"
-          text = text.replace(old, new)
-          p.write_text(text)
-          PY
-          grep -n "force-warn" apps/server/Dockerfile
 
+          dockerfile = r"""# Spacedrive Server Docker Image (probata CI build)
+          #
+          # Generated in full by .github/workflows/spacedrive-server.yml (not a patch
+          # of upstream's apps/server/Dockerfile) so the cargo-chef dependency-caching
+          # stage split and every earlier upstream-build fix stay visible in one
+          # place. See that workflow step's comments for full rationale citations.
+          #
+          # Prerequisite: apps/web/dist/ must exist in the build context (produced by
+          # `bun install && bun run build` in apps/web/, done earlier in the workflow).
+
+          ARG RUST_BUILD_FLAGS="--force-warn=deprecated_in_future --force-warn=deprecated"
+
+          # ---- stage: base -- build deps + Rust + cargo-chef. No app source is
+          # COPYed here, so this stage's layers stay cache-hit across every build as
+          # long as this file itself doesn't change. ----
+          FROM debian:trixie-slim AS base
+
+          # id= disambiguates this cache mount from the runtime stage's identical
+          # target path below -- BuildKit runs independent stages concurrently when
+          # possible and gives unnamed cache mounts the same id (keyed by target
+          # path), which previously raced both stages for /var/lib/apt/lists/lock.
+          RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-builder --mount=type=cache,target=/var/lib/apt,id=apt-lib-builder \
+          	apt-get update && apt-get install -y \
+          	build-essential \
+          	curl \
+          	git \
+          	pkg-config \
+          	libssl-dev \
+          	ca-certificates \
+          	cmake \
+          	nasm \
+          	libavcodec-dev \
+          	libavformat-dev \
+          	libavutil-dev \
+          	libavfilter-dev \
+          	libavdevice-dev \
+          	libswscale-dev \
+          	libswresample-dev \
+          	libpostproc-dev \
+          	libheif-dev \
+          	clang \
+          	libclang-dev
+
+          RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          ENV PATH="/root/.cargo/bin:$PATH"
+          RUN cargo install cargo-chef --version 0.1.78 --locked
+
+          WORKDIR /build
+
+          # ---- stage: planner -- compute the dependency recipe. Its output
+          # (recipe.json) is a fingerprint of Cargo.lock/Cargo.toml, not of the .rs
+          # source also copied here (cargo-chef needs the real manifests, including
+          # any path-dependency Cargo.tomls, to resolve the workspace). ----
+          FROM base AS planner
+          COPY Cargo.toml Cargo.lock ./
+          COPY .cargo ./.cargo
+          COPY core ./core
+          COPY crates ./crates
+          COPY apps/server ./apps/server
+          RUN cargo chef prepare --recipe-path recipe.json
+
+          # ---- stage: builder -- cook dependencies (the caching layer), then build
+          # the real binary. ----
+          FROM base AS builder
+          ARG RUST_BUILD_FLAGS
+          ENV RUSTFLAGS="${RUST_BUILD_FLAGS}"
+
+          COPY --from=planner /build/recipe.json recipe.json
+          # THE caching layer: matching -p/--features to the final `cargo build`
+          # below so cook compiles the exact same dependency feature set. As long as
+          # recipe.json is unchanged from a previous build, cache-from reuses this
+          # layer instead of recompiling every dependency crate -- this is what
+          # survives a spacedrive_ref bump to a newer upstream commit.
+          RUN cargo chef cook --release --recipe-path recipe.json -p sd-server --features sd-core/heif,sd-core/ffmpeg
+
+          COPY Cargo.toml Cargo.lock ./
+          COPY .cargo ./.cargo
+          COPY core ./core
+          COPY crates ./crates
+          COPY apps/server ./apps/server
+          # Embedded web UI assets -- must be pre-built before `docker build` runs.
+          COPY apps/web/dist ./apps/web/dist
+
+          # SD_SKIP_WEB_BUILD tells build.rs to use the pre-built apps/web/dist
+          # instead of trying to run `bun run build` (bun isn't installed in this
+          # stage). Dependencies are already compiled by `cargo chef cook` above, so
+          # this only compiles the workspace's own crates.
+          RUN SD_SKIP_WEB_BUILD=1 cargo build --release -p sd-server --features sd-core/heif,sd-core/ffmpeg && \
+          	cp target/release/sd-server /usr/local/bin/sd-server
+
+          #--
+          # Runtime image
+          #--
+          FROM debian:trixie-slim
+
+          RUN --mount=type=cache,target=/var/cache/apt,id=apt-cache-runtime --mount=type=cache,target=/var/lib/apt,id=apt-lib-runtime \
+          	apt-get update && apt-get install -y \
+          	libssl3 \
+          	ca-certificates \
+          	curl \
+          	libavcodec61 \
+          	libavformat61 \
+          	libavutil59 \
+          	libavfilter10 \
+          	libavdevice61 \
+          	libswscale8 \
+          	libswresample5 \
+          	libpostproc58 \
+          	libheif1 \
+          	&& rm -rf /var/lib/apt/lists/*
+
+          # Create non-root user
+          RUN useradd -m -u 1000 spacedrive
+
+          # Copy binary
+          COPY --from=builder /usr/local/bin/sd-server /usr/bin/sd-server
+
+          # Environment
+          ENV DATA_DIR=/data \
+          	PORT=8080 \
+          	RUST_LOG=info,sd_core=debug
+
+          # Expose HTTP port
+          EXPOSE 8080
+
+          # Expose P2P port
+          EXPOSE 7373
+
+          # Volume for persistent data
+          VOLUME ["/data"]
+
+          # curl is installed above so this can run in-container. SD_AUTH/PORT are
+          # read from the container's own runtime environment at check time (shell
+          # form CMD expands them live, nothing is baked in at build time). A
+          # compose-level `healthcheck:` block still overrides this if declared --
+          # see Consignatio/Intake/docs/ops/2026-09-15-spacedrive-gate-docker-compose.yml
+          # for the existing (previously curl-less, now unblocked) definition.
+          HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=15s \
+          	CMD curl -sf -u "$SD_AUTH" "http://127.0.0.1:${PORT}/health" || exit 1
+
+          # Run as non-root user
+          USER spacedrive:spacedrive
+
+          # Start server
+          ENTRYPOINT ["/usr/bin/sd-server"]
+          CMD ["--data-dir", "/data"]
+          """
+
+          p = pathlib.Path("apps/server/Dockerfile")
+          p.write_text(dockerfile)
+          PY
           cat apps/server/Dockerfile
 
       - name: Patch root Cargo.toml — drop workspace members not in the build context
@@ -353,8 +412,18 @@ jobs:
             org.opencontainers.image.version=main-${{ steps.sd_commit.outputs.short_sha }}
             org.opencontainers.image.description=Spacedrive sd-server built from spacedriveapp/spacedrive main @ ${{ steps.sd_commit.outputs.full_sha }}
             io.propria.built-by=Cursedpotential/probata .github/workflows/spacedrive-server.yml
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # registry cache (not type=gha): mode=max exports every stage's
+          # layers, including the cargo-chef `cook` layer that lives only in
+          # the discarded `builder` stage -- without mode=max that layer
+          # would never be reused. A GHA-backed mode=max export of a Rust
+          # target/ directory competes with every other job in this repo for
+          # the shared 10 GB actions-cache budget and gets evicted quickly;
+          # ghcr.io has no such shared quota. Docs:
+          # docs.docker.com/manuals/build/cache/backends/registry ("It can
+          # efficiently cache multi-stage builds in max mode, instead of
+          # only the final stage").
+          cache-from: type=registry,ref=ghcr.io/cursedpotential/spacedrive-server:buildcache
+          cache-to: type=registry,ref=ghcr.io/cursedpotential/spacedrive-server:buildcache,mode=max
 
       - name: Summary
         run: |
