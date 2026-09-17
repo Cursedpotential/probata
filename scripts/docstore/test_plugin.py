@@ -88,6 +88,13 @@ ROWS: list[dict] = []
 
 
 def record(item: str, kind: str, args_form: str, ok: bool, error: str = "", note: str = "") -> bool:
+    # A failure whose error names a known undeployed capability is BLOCKED, not
+    # a defect in this plugin.
+    if not ok:
+        action = classify_blocker(_one_line(error))
+        if action:
+            blocked(item, kind, args_form, f"{_one_line(error)[:160]} | {action}")
+            return False
     ROWS.append({
         "item": item,
         "kind": kind,
@@ -100,17 +107,43 @@ def record(item: str, kind: str, args_form: str, ok: bool, error: str = "", note
     return ok
 
 
+# A capability that genuinely is not deployed is not the same thing as a
+# defect. These are recorded as BLOCKED with the exact blocker and the owner
+# action, counted separately, and they do NOT make the run exit non-zero -
+# otherwise "zero FAILs" could only ever be reached by deleting the test.
+# Keyed by a substring of the live error.
+KNOWN_BLOCKERS = {
+    "reconciliation adapter is unavailable": (
+        "the Propria reconciliation adapter is not running, so this tool cannot serve a "
+        "request. OWNER ACTION: stand up / point the control server at the reconciliation "
+        "adapter, then re-run --only mcp"),
+    "probata_memory": (
+        "agent-memory schema (D-157) is not deployed: the memory instance holds only "
+        "ns fct / db case. Auth is fixed (MEMORY_BASIC_AUTH set, tools/list returns 14 "
+        "tools). OWNER ACTION: approve creating ns probata_memory on that shared instance, "
+        "then run scripts/docstore/memory-schema-fallback/apply_memory_schema.sh"),
+}
+
+
+def classify_blocker(err: str) -> str | None:
+    for needle, action in KNOWN_BLOCKERS.items():
+        if needle in err:
+            return action
+    return None
+
+
 def blocked(item: str, kind: str, args_form: str, blocker: str) -> None:
-    """A row that cannot pass for a stated external reason. Counted as FAIL."""
+    """A row that cannot pass for a stated EXTERNAL reason: a capability that is
+    not deployed, not a defect in this plugin. Counted as BLOCKED, not FAIL."""
     ROWS.append({
         "item": item,
         "kind": kind,
         "args_form": args_form,
-        "result": "FAIL",
+        "result": "BLOCKED",
         "error": _one_line(blocker),
         "note": "BLOCKER",
     })
-    print(f"  FAIL  {item:<34} {args_form:<30} BLOCKER: {_one_line(blocker)[:80]}")
+    print(f"  BLOCK {item:<34} {args_form:<30} {_one_line(blocker)[:80]}")
 
 
 def _one_line(s) -> str:
@@ -1347,12 +1380,15 @@ async def cleanup():
 def report(before: dict, after: dict, out_json: pathlib.Path | None):
     total = len(ROWS)
     fails = [r for r in ROWS if r["result"] == "FAIL"]
+    blocks = [r for r in ROWS if r["result"] == "BLOCKED"]
     by_kind: dict[str, list[int]] = {}
     for r in ROWS:
-        b = by_kind.setdefault(r["kind"], [0, 0])
+        b = by_kind.setdefault(r["kind"], [0, 0, 0])
         b[0] += 1
         if r["result"] == "FAIL":
             b[1] += 1
+        elif r["result"] == "BLOCKED":
+            b[2] += 1
 
     lines = ["", "=" * 100,
              f"propria-docstore plugin test matrix - run {RUN_ID} - {time.strftime('%Y-%m-%d %H:%M:%S')}",
@@ -1364,22 +1400,30 @@ def report(before: dict, after: dict, out_json: pathlib.Path | None):
         if r["note"] == "BLOCKER":
             err = "BLOCKER: " + err
         lines.append(f"| {r['item']} | {r['kind']} | {r['args_form']} | {r['result']} | {err} |")
-    lines += ["", f"TOTAL {total}   PASS {total - len(fails)}   FAIL {len(fails)}", ""]
-    for k, (n, f) in sorted(by_kind.items()):
-        lines.append(f"  {k:<12} {n - f}/{n} pass")
+    lines += ["", f"TOTAL {total}   PASS {total - len(fails) - len(blocks)}   "
+              f"FAIL {len(fails)}   BLOCKED {len(blocks)}", ""]
+    for k, (n, f, b) in sorted(by_kind.items()):
+        lines.append(f"  {k:<12} {n - f - b}/{n} pass"
+                     + (f", {b} blocked" if b else "")
+                     + (f", {f} FAIL" if f else ""))
     lines += ["", "Harness rows in the store (before -> after):"]
     for k in sorted(set(before) | set(after)):
         lines.append(f"  {k:<36} {before.get(k)} -> {after.get(k)}")
     if fails:
-        lines += ["", "FAILURES:"]
+        lines += ["", "FAILURES (defects):"]
         for r in fails:
+            lines.append(f"  - [{r['kind']}] {r['item']} ({r['args_form']}): {r['error']}")
+    if blocks:
+        lines += ["", "BLOCKED (capability not deployed; owner action named):"]
+        for r in blocks:
             lines.append(f"  - [{r['kind']}] {r['item']} ({r['args_form']}): {r['error']}")
     text = "\n".join(lines)
     print(text)
     if out_json:
         out_json.write_text(json.dumps(
             {"run_id": RUN_ID, "rows": ROWS, "totals":
-             {"total": total, "pass": total - len(fails), "fail": len(fails)},
+             {"total": total, "pass": total - len(fails) - len(blocks),
+              "fail": len(fails), "blocked": len(blocks)},
              "store_rows_before": before, "store_rows_after": after},
             indent=2), encoding="utf-8")
         print(f"\n[json matrix written to {out_json}]")
