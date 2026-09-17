@@ -48,6 +48,12 @@ common:
     authorizationEnabled: true
   # Local disk object store (was: remote/R2 2026-08-12 -> 2026-08-23).
   storageType: local
+  # 2026-09-17: JSON shredding stats OFF. With storageType=local this nightly loads
+  # them via a remote-style path ("files/json_stats/...") through the LOCAL chunk
+  # manager -> "invalid local path" (segcore 2011) -> segment load retries forever,
+  # collection stuck Loading. Optional query acceleration only; rows are unaffected.
+  enabledJSONShredding: false
+  usingJSONShreddingForQuery: false
 
 # Segment / binlog store. Lives on the same volume as etcd + the WAL, i.e.
 # ~~/data/probata/volumes/milvus-memsearch~~ /data/probata/volumes/memsearch-milvus
