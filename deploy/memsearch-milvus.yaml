@@ -126,9 +126,15 @@ configs:
       quota-backend-bytes: 4294967296
       auto-compaction-mode: revision
       auto-compaction-retention: "1000"
-      # Single-member etcd: these only govern self-leadership stability under I/O stall.
-      heartbeat-interval: 1000
-      election-timeout: 10000
+      # ~~heartbeat-interval: 1000 / election-timeout: 10000~~ REVERTED to etcd defaults
+      # 2026-09-17 (Opus 5). On RESTART of a store that has data, a single member waits
+      # one election timeout before electing itself; Milvus's first read
+      # (by-dev/meta/session/id) lands in that leaderless gap, fails with
+      # "etcdserver: leader changed" ~7-10 s after etcd start, and Milvus panics (rc=134).
+      # Fresh stores self-elect at bootstrap, which is why every rebuild booted and every
+      # restart "corrupted". Evidence: Consignatio/docs/URGENT-TODO.md 2026-09-17 entry.
+      heartbeat-interval: 100
+      election-timeout: 1000
   user_yaml:
     content: |
       # Milvus config override — mounted at /milvus/configs/user.yaml
