@@ -1,0 +1,168 @@
+# =============================================================================
+# memsearch-milvus — the Milvus that backs memsearch (agent session memory) ONLY.
+# Byline: Claude Code · Opus 5 · 2026-09-17 — renamed from `deploy/data-vector.yaml`
+#          (owner 2026-09-17: "data-vector" said nothing; several vector stores exist).
+#          Mount committed to the live store, graceful-stop ordering, mmap on.
+# =============================================================================
+# 2026-09-17 (Opus 5) — WHY THIS FILE CHANGED
+#  - Coolify builds this app FROM THIS FILE IN GIT (build_pack=dockercompose,
+#    docker_compose_location=/deploy/memsearch-milvus.yaml). The 2026-09-10 v2 mount
+#    was edited on the host render and in an UNCOMMITTED working copy, never pushed,
+#    so every Coolify deploy silently reverted to the dead 09-07 volume. Never edit
+#    /data/coolify/applications/<uuid>/docker-compose.yaml on the host: commit here.
+#  - Live store renamed on the host: milvus-memsearch-v2 -> memsearch-milvus.
+#    Retired stores (moved to /data/probata/volumes/_stale/, not deleted):
+#    milvus (08-06..08-10) and milvus-memsearch (08-23..09-07).
+#  - Separate etcd was NOT adopted: owner-confirmed 09-07 that a separate etcd
+#    failed identically (docs/reviews/2026-09-07-milvus-etcd-corruption-incident-and-recovery.md).
+#    The failure class is ungraceful stop during flush, so this revision attacks
+#    the stop path instead (see stop_grace_period + gracefulStopTimeout below).
+#  - Incident log: Consignatio/docs/URGENT-TODO.md, "2026-09-17 ... Milvus outage".
+# =============================================================================
+# History (retained):
+# Byline: Claude Code · Kimi K3 (drift-fix) · 2026-08-12 — DOWN-deliberate marker added.
+# Byline: Claude Code · Fable 5 · 2026-08-12 — REBUILD for memsearch (S3/R2 + fresh etcd,
+#          Coolify-only / no-SSH, compose `configs:` for self-contained config).
+# Byline: Claude Code · Fable 5 · 2026-08-12 — image pinned to dated 3.0-20260811-7169df25-amd64
+#          (up-to-date, explicit amd64). Local MCP (claude-context) hits Milvus DIRECTLY over
+#          tailnet — bypasses ContextForge (web facade deferred).
+# NB 2026-08-12 (Kimi K3): this app was DOWN DELIBERATELY since 2026-08-10 (6th
+# embedded-etcd corruption). ~~Do NOT deploy/restart without owner sign-off.~~
+# SUPERSEDED 2026-08-12 (Fable 5): owner directed a FRESH REBUILD dedicated to
+# MEMSEARCH ONLY (the platform stays on Weaviate, ADR-0040). Deploy target ovh-files.
+# ~~R2 object store~~ backed out 2026-08-23 (storageType=local). R2 creds (MINIO_*)
+# remain as Coolify envs, UNUSED. BIND_IP is a Coolify app env var, not in git.
+# Split from compose.data.yaml 2026-06-25 so a Milvus crash-loop cannot take the
+# relational/graph/operational DBs down with it.
+# Config SOURCE OF TRUTH: deploy/docker/milvus/{embedEtcd,user}.yaml; the `configs:`
+# blocks below MUST mirror them (update both together).
+# =============================================================================
+
+services:
+  milvus:
+    # Dated nightly. Stable v3.0.1 exists (2026-09-09); move to it only after this
+    # store boots healthy and is backed up (nightly->3.0.1 readability unverified).
+    image: milvusdb/milvus:3.0-20260811-7169df25-amd64   # explicit amd64 tag — multi-arch manifest segfaults at jemalloc here
+    platform: linux/amd64
+    container_name: milvus
+    # ROOT CAUSE FIX 2026-08-23: the image's non-root user cannot write the
+    # root-owned bind mount ("failed to mkdir" -> panic rc=134). Upstream runs root too.
+    user: "0:0"
+    command: ["milvus", "run", "standalone"]
+    restart: unless-stopped
+    # 2026-09-10 (owner, HARD RULE): "It must always be shut down gracefully."
+    # 2026-09-17: Milvus's own dataNode.gracefulStopTimeout defaulted to 1800 s, far
+    # beyond the 120 s grace here, so a stop could SIGKILL mid-flush and corrupt the
+    # embedded etcd. Now: Milvus finishes within 240 s (user.yaml), Docker waits 300 s.
+    # NEVER `docker kill` / `docker restart`; stop with `docker stop -t 300`.
+    stop_grace_period: 300s
+    stop_signal: SIGTERM
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_USE_EMBED: "true"
+      ETCD_DATA_DIR: /var/lib/milvus/etcd
+      ETCD_CONFIG_PATH: /milvus/configs/embedEtcd.yaml
+      COMMON_STORAGETYPE: local
+      DEPLOY_MODE: STANDALONE
+      # FIX: image ships LD_PRELOAD=":/milvus/lib/libjemalloc.so" (leading colon → ld.so SIGSEGV). Clean paths:
+      LD_PRELOAD: /milvus/lib/libjemalloc.so
+      LD_LIBRARY_PATH: /milvus/lib
+    volumes:
+      # LIVE store (embedded etcd + Woodpecker WAL + segments). Renamed on the host
+      # 2026-09-17 from milvus-memsearch-v2 (created 2026-09-10, owner "fresh volume").
+      # Metadata backup: /data/probata/volumes/memsearch-milvus-meta-backup-20260917T0237.
+      # Rebuildable projection of ~/.memsearch/memory markdown if ever lost.
+      - /data/probata/volumes/memsearch-milvus:/var/lib/milvus
+    configs:
+      # LONG FORM required: short `- <name>` mounts at `/<name>`, but Milvus reads
+      # these from /milvus/configs/.
+      - source: embedEtcd_yaml
+        target: /milvus/configs/embedEtcd.yaml
+      - source: user_yaml
+        target: /milvus/configs/user.yaml
+    ports:
+      - "${BIND_IP:-127.0.0.1}:19530:19530"   # gRPC SDK — tailnet-only (BIND_IP=100.91.190.107 via Coolify env)
+      - "${BIND_IP:-127.0.0.1}:9091:9091"     # health
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]   # milvus image HAS curl
+      interval: 30s
+      start_period: 150s
+      timeout: 20s
+      retries: 3
+    networks:
+      - memsearch
+      - probata                # shared external net — cross-app docker DNS on ovh-files
+
+  attu:
+    image: zilliz/attu:v3.0.0-beta.6
+    platform: linux/amd64
+    container_name: attu
+    user: "0:0"          # same bind-mount ownership issue as milvus (/data/probata/volumes/attu)
+    restart: unless-stopped
+    environment:
+      MILVUS_ADDRESS: milvus:19530
+      ATTU_DB_PATH: /data/attu.db
+    volumes:
+      - /data/probata/volumes/attu:/data
+    ports:
+      - "${BIND_IP:-127.0.0.1}:3001:3000"     # Attu UI — tailnet-only
+    depends_on:
+      milvus:
+        condition: service_healthy
+    networks:
+      - memsearch
+      - probata
+
+# Milvus config, embedded as compose configs (no host bind-mount).
+# SOURCE OF TRUTH: deploy/docker/milvus/embedEtcd.yaml + deploy/docker/milvus/user.yaml.
+configs:
+  embedEtcd_yaml:
+    content: |
+      # Embedded etcd config — mounted at /milvus/configs/embedEtcd.yaml (ETCD_CONFIG_PATH).
+      # Byline: Claude Code · Opus 4.8 · 2026-06-13 (drift-fix 2026-08-12: heartbeat/election)
+      listen-client-urls: http://0.0.0.0:2379
+      advertise-client-urls: http://0.0.0.0:2379
+      quota-backend-bytes: 4294967296
+      auto-compaction-mode: revision
+      auto-compaction-retention: "1000"
+      # Single-member etcd: these only govern self-leadership stability under I/O stall.
+      heartbeat-interval: 1000
+      election-timeout: 10000
+  user_yaml:
+    content: |
+      # Milvus config override — mounted at /milvus/configs/user.yaml
+      # Byline: Claude Code · Opus 4.8 · 2026-06-13; Opus 5 · 2026-08-05; Fable 5 · 2026-08-12;
+      #         Opus 5 · 2026-09-17 (graceful stop + mmap).
+      # (1) Auth ON. (2) Object store = LOCAL disk. (3) Storage V3 (useLoonFFI) OFF.
+      # NOTE: common: must appear EXACTLY ONCE (a second common: drops authorizationEnabled).
+      common:
+        security:
+          authorizationEnabled: true
+        storageType: local
+      localStorage:
+        path: /var/lib/milvus/data
+      woodpecker:
+        meta:
+          type: etcd
+          prefix: woodpecker
+        storage:
+          type: local
+          rootPath: /var/lib/milvus/woodpecker
+      # 2026-09-17: finish shutdown inside the container's 300 s stop grace
+      # (upstream default 1800 s let Docker SIGKILL mid-flush).
+      dataNode:
+        gracefulStopTimeout: 240
+      queryNode:
+        gracefulStopTimeout: 240
+        # Keep loaded vectors/indexes out of resident RAM on the shared 22 GB box.
+        mmap:
+          vectorField: true
+          vectorIndex: true
+          scalarField: true
+          scalarIndex: true
+
+networks:
+  memsearch:
+  probata:
+    external: true          # pre-created on ovh-files (`docker network create probata`)

@@ -3,10 +3,12 @@
 # Updated: Claude Code · Opus 5 · 2026-08-05 (Storage V3)
 # Updated: Claude Code · Fable 5 · 2026-08-12 (S3/R2 object store for memsearch rebuild)
 # Updated: Claude Code · Opus 5 · 2026-08-23 (R2/S3 BACKED OUT -> local; Storage V3 off)
+# Updated: Claude Code · Opus 5 · 2026-09-17 (graceful stop 240 s + mmap; app renamed)
 #
 # THIS FILE IS THE HUMAN-READABLE SOURCE OF TRUTH. The live config is the
-# `configs: user_yaml:` block embedded in deploy/data-vector.yaml (no host
-# bind-mount, no SSH). The two MUST be updated together.
+# `configs: user_yaml:` block embedded in deploy/memsearch-milvus.yaml
+# (~~deploy/data-vector.yaml~~, renamed 2026-09-17; no host bind-mount, no SSH).
+# The two MUST be updated together.
 #
 # (1) Auth ON so the store isn't open to anyone who reaches 19530.
 #     Default credential after first boot: user "root", password "Milvus"
@@ -47,9 +49,9 @@ common:
   # Local disk object store (was: remote/R2 2026-08-12 -> 2026-08-23).
   storageType: local
 
-# Segment / binlog store. Lives on the same fresh volume as etcd + the WAL,
-# i.e. /data/probata/volumes/milvus-memsearch on the host. Back that path up —
-# since 2026-08-23 it is the ONLY copy of the memsearch vectors.
+# Segment / binlog store. Lives on the same volume as etcd + the WAL, i.e.
+# ~~/data/probata/volumes/milvus-memsearch~~ /data/probata/volumes/memsearch-milvus
+# on the host (2026-09-17). Back that path up — it is the ONLY copy of the vectors.
 localStorage:
   path: /var/lib/milvus/data
 
@@ -60,3 +62,17 @@ woodpecker:
   storage:
     type: local
     rootPath: /var/lib/milvus/woodpecker
+
+# 2026-09-17: finish shutdown inside the container's 300 s stop grace. Upstream
+# default is 1800 s, so Docker could SIGKILL mid-flush -> corrupt embedded etcd.
+dataNode:
+  gracefulStopTimeout: 240
+
+queryNode:
+  gracefulStopTimeout: 240
+  # Keep loaded vectors/indexes out of resident RAM on the shared 22 GB box.
+  mmap:
+    vectorField: true
+    vectorIndex: true
+    scalarField: true
+    scalarIndex: true
