@@ -144,3 +144,79 @@ to guess into a memoized code path.
 | Chunk rows per SurrealDB transaction | up to the entire file's chunk count (1,000+ observed) | at most `DOCSTORE_CHUNK_BATCH_ROWS` (default 64) |
 | Document row | its own `declare_record` call, always outside any chunk group | unchanged |
 | Chunks per group, concurrency | N/A (all chunks were one `coco.map` under `process_file`) | up to 64 per group, still concurrent via `coco.map` inside `process_chunk_group` |
+
+---
+
+## 2026-09-16 — measured live, and the two things that actually made a full run pass
+
+> _Byline: Claude Code · Opus 5 · 2026-09-16_
+
+The section above was written without contacting the VPS ("the worker was **not**
+run"). It has now been run. The transaction-size reasoning held, but it was **not**
+what was failing runs, and the batch size turned out to matter in the opposite
+direction. Recorded here because this is the same subsystem.
+
+### What was failing
+
+Six consecutive full runs died at a constant **65–68 s** with
+`ConnectionUnavailableError: WebSocket connection closed`, always on the largest
+*changed* document (`consignatio/docs/URGENT-TODO.md`): runs `c7421349`,
+`3d894018`, `bcb623bf`, `f7efca9c`, `9cce2454`, `d48aeaf7`.
+
+Ruled out by measurement, not by argument:
+
+| Suspected cause | Test | Result |
+|---|---|---|
+| ts.net proxy closing the socket | `SURREAL_DOCS_URL` → `ws://surreal-docs:8000` (same docker network, proxy bypassed) | same failure, 67 s |
+| host memory pressure | restarted `surreal-docs` (10.79 GiB → 120 MiB; host free 0 → 11 GB, swap 7/7 → 4/7) | same failure, 66 s |
+| transaction too large | `DOCSTORE_CHUNK_BATCH_ROWS` 64 → 12 | same failure, 68 s |
+| worker ingest timeout | read the env | 14400 s, not it |
+| document too large | a 2,543,430-char document is indexed fine | not it (the big ones are memoized, so they were never re-written) |
+
+### Cause 1 — the SDK closes its own busy socket
+
+The SurrealDB SDK opens its socket as
+`websockets.connect(url, max_size=None, subprotocols=["cbor"])` and passes **no
+ping settings**, so the `websockets` defaults apply. Read off a live connection
+(websockets 17.0.1): `ping_interval=20`, `ping_timeout=20`. The library pings
+every 20 s and **closes the connection itself** when the pong is later than 20 s —
+which is what a server committing a chunk transaction does while NIM embeds at
+~10 s per request. Client-side, which is why every external change above did
+nothing.
+
+Fix (`flow_docs._install_ws_keepalive`): keep pinging, set `ping_timeout=None`.
+No retry, no change to write semantics. Env: `DOCSTORE_WS_PING_INTERVAL_S`,
+`DOCSTORE_WS_PING_TIMEOUT_S`. Asserted by
+`scripts/docstore/test_ws_keepalive.py` (20 → None, interval still 20).
+
+Effect: the wall moved from 65–68 s to **162 s**, and WebSocket closes,
+`NotAllowedError` and `ConnectionUnavailableError` all dropped to **zero**.
+
+### Cause 2 — per-group components contend for ownership
+
+With the socket fixed, the next failure was different and named itself:
+
+```
+Invalid Request: pre_commit gave up after 8 retries waiting for
+concurrent ownership transfer at /"project"/"advocatio"/"…md"/@process_chunk_group/1
+```
+
+Four documents, all on `@process_chunk_group` — the component this document
+introduced. `COCOINDEX_MAX_INFLIGHT_COMPONENTS` was **12** against a code default
+of 4, and `DOCSTORE_CHUNK_BATCH_ROWS=12` multiplied the number of groups per
+document, so more components contended for the same target rows.
+
+Fix: `COCOINDEX_MAX_INFLIGHT_COMPONENTS` 12 → **4**, `DOCSTORE_CHUNK_BATCH_ROWS`
+12 → **64** (this document's own default). Fewer components, fewer groups.
+
+**Result: run `ef60fee3` finished in 53 s — `execution_finished`,
+`cdc_verified: true`, expected 1118 / observed 1118, 0 missing, 0 hash mismatch,
+0 unexpected.** The first verified full run since 2026-09-15.
+
+### Note for whoever tunes this next
+
+Raising `COCOINDEX_MAX_INFLIGHT_COMPONENTS` above 4 or lowering
+`DOCSTORE_CHUNK_BATCH_ROWS` below 64 both increase ownership contention on
+`process_chunk_group`. Bounding transaction size and bounding component count
+pull in opposite directions; 4 × 64 is the combination that has an observed
+clean run behind it.
