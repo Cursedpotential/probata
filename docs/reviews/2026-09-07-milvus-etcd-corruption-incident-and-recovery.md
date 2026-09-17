@@ -1,7 +1,32 @@
 # Milvus embedded-etcd corruption — incident, root cause, recovery
 
 > _Byline: Claude Code · Fable 5.1 · 2026-09-07._
-> _Status: **RESOLVED 2026-09-07 09:27 EDT — memsearch migrated to Zilliz Cloud free tier; the VPS Milvus is retired.**_
+> _Correction: Claude Code · Opus 5 · 2026-09-17 (section below)._
+> _Status: ~~**RESOLVED 2026-09-07 09:27 EDT — memsearch migrated to Zilliz Cloud free tier; the VPS Milvus is retired.**~~ Superseded: memsearch returned to the self-hosted VPS Milvus on 2026-09-10; see the 2026-09-17 correction._
+
+## CORRECTION 2026-09-17 — the root cause below was wrong
+
+The "corruption" was a **startup race**, not damaged metadata, and a separate etcd **does** fix it
+when Milvus waits for etcd to be healthy.
+
+- **Log proof (boot 2026-09-17 04:35:28Z, embedded etcd):** etcd started 28.98; Milvus's first
+  metadata read (`by-dev/meta/session/id`) went out at 28.998 while etcd had **no leader**; etcd
+  elected itself at 29.375; the pending read failed `etcdserver: leader changed` at 29.376 and
+  Milvus panicked (rc=134). With `election-timeout: 10000` the same read failed ~7–10 s after start.
+  Reverting to default timeouts only made it fail faster.
+- **Why it looked like corruption:** a fresh store self-elects at bootstrap, so every rebuild booted;
+  every restart of a store with data hit the race. "Heartbeat/election tuning" and "box load 0.54"
+  were both consistent with this and ruled nothing out.
+- **Why the earlier separate etcd "failed identically":** not reconstructable from the record; the
+  deployment that works starts Milvus only after `etcdctl endpoint health` passes
+  (`depends_on: condition: service_healthy`).
+- **Fix shipped (probata `f934a93`, `d048761`):** app renamed `data-vector` → `memsearch-milvus`;
+  `memsearch-etcd` (etcd v3.5.25) reusing the existing etcd data dir, health-gated; graceful stop
+  240 s/300 s; mmap; JSON shredding stats off (separate nightly local-storage path bug).
+- **Verified live:** two consecutive restarts of the populated store booted with 0 restarts;
+  collection `agent_session_memory_nemotron3` Loaded, 78,301 rows; `memsearch search` returns hits.
+- The recovery plan and options below are retained for the record and are **no longer current**.
+  Full incident log: `Consignatio/docs/URGENT-TODO.md`, 2026-09-17 entries.
 
 ## RESOLUTION (owner decision: Zilliz Cloud, free tier)
 
