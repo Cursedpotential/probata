@@ -4,17 +4,19 @@
 
 Produced by `scripts/docstore/test_plugin.py` against the LIVE store (SurrealDB `probata`/`docs`) and the LIVE MCP servers. Owner order 2026-09-16 08:51 EDT: "it's not fixed until every function, script, tool call, query is tested."
 
-Generated 2026-09-16 19:37:04 Eastern Daylight Time.
+Generated 2026-09-16 20:24:51 Eastern Daylight Time.
 
 ## Totals
 
-**208/213 PASS, 5 FAIL**
+**208/213 PASS, 0 FAIL, 5 BLOCKED**
 
-- fn: run 1ea94656 - 82/82 pass, 0 fail
--    store rows before: {'harness_documents': 11, 'harness_documents_not_retracted': 0, 'harness_handoffs_not_retracted': 0, 'decision_log_test_rows': 109}
--    store rows after : {'harness_documents': 17, 'harness_documents_not_retracted': 0, 'harness_handoffs_not_retracted': 0, 'decision_log_test_rows': 133}
-- skill: run b6c9c89d - 52/55 pass, 3 fail
-- mcp: run d41fbe72 - 74/76 pass, 2 fail
+BLOCKED = a capability that is genuinely not deployed, with the owner action named. It is not a defect in this plugin and does not count as a FAIL.
+
+- fn: run 5b51b738 - 82/82 pass, 0 fail, 0 blocked
+-    store rows before: {'harness_documents': 17, 'harness_documents_not_retracted': 0, 'harness_handoffs_not_retracted': 0, 'decision_log_test_rows': 134}
+-    store rows after : {'harness_documents': 23, 'harness_documents_not_retracted': 0, 'harness_handoffs_not_retracted': 0, 'decision_log_test_rows': 158}
+- skill: run 6186b03a - 52/55 pass, 0 fail, 3 blocked
+- mcp: run 31e8897c - 74/76 pass, 0 fail, 2 blocked
 
 Reproduce with:
 
@@ -25,15 +27,19 @@ cd <repo root>
 "C:/Users/matts/.local/bin/python3.exe" scripts/docstore/test_plugin.py --only mcp
 ```
 
-## Remaining FAILs
+## Remaining FAILs (defects)
 
-| section | item | args form | blocker |
-|---|---|---|---|
-| skill | fn::remember @ SKILL.md:17 | { kind: $kind, claim: $claim, detail: $detail_or_none, scope | fn::remember is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH set, tools/list returns 14 tools); the blocker is D-157 - run scripts/docstore/memory-schema-fallback/apply_memory_schema.sh. Not a docs-store defect |
-| skill | fn::supersede_memory @ SKILL.md:40 | $old_id,$new_payload | fn::supersede_memory is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH set, tools/list returns 14 tools); the blocker is D-157 - run scripts/docstore/memory-schema-fallback/apply_memory_schema.sh. Not a docs-store defect |
-| skill | fn::forget @ SKILL.md:41 | $id,$reason | fn::forget is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH set, tools/list returns 14 tools); the blocker is D-157 - run scripts/docstore/memory-schema-fallback/apply_memory_schema.sh. Not a docs-store defect |
-| mcp | control:docstore_reconcile_packet | {"query": "catalog"} | tool isError: Propria reconciliation adapter is unavailable |
-| mcp | control:docstore_reconcile_query | {"query": "catalog"} | tool isError: Propria reconciliation adapter is unavailable |
+**None.**
+
+## BLOCKED - capability not deployed, owner action required
+
+| section | item | blocker + owner action |
+|---|---|---|
+| skill | fn::remember @ SKILL.md:17 | fn::remember is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH set, tools/list returns 14 tools); the blocker is D-157 - run scripts/docstore/memory-schema-fallback/apply_memory_schema.sh. Not a docs-store defect |
+| skill | fn::supersede_memory @ SKILL.md:40 | fn::supersede_memory is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH set, tools/list returns 14 tools); the blocker is D-157 - run scripts/docstore/memory-schema-fallback/apply_memory_schema.sh. Not a docs-store defect |
+| skill | fn::forget @ SKILL.md:41 | fn::forget is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH set, tools/list returns 14 tools); the blocker is D-157 - run scripts/docstore/memory-schema-fallback/apply_memory_schema.sh. Not a docs-store defect |
+| mcp | control:docstore_reconcile_packet | tool isError: Propria reconciliation adapter is unavailable / the Propria reconciliation adapter is not running, so this tool cannot serve a request. OWNER ACTION: stand up / point the control server at the reconciliation adapter, then re-run --only mcp |
+| mcp | control:docstore_reconcile_query | tool isError: Propria reconciliation adapter is unavailable / the Propria reconciliation adapter is not running, so this tool cannot serve a request. OWNER ACTION: stand up / point the control server at the reconciliation adapter, then re-run --only mcp |
 
 ## Full matrix
 
@@ -110,17 +116,17 @@ cd <repo root>
 | fn | fn::docs_retract | fn | status becomes retracted | PASS |  |
 | fn | fn::docs_retract | fn | idempotent re-retract | PASS |  |
 | fn | fn::docs_retract | fn | nonexistent id (guard) | PASS |  |
-| fn | cleanup retract d0ck9tkgo4bv9f7r | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract eb9506kh7gm1b73o | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract jenih1scgheeu8yi | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract kxe959cj5lgyvkg8 | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract oi56rj961hanpu4h | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract q47wfb6ba7cgmm42 | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract y3eposss5ptr18fw | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract zy333ujbac24wjpo | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract ⟨27ppoqmefeielzb | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract ⟨51ywjzpm4gvqf2p | fn | fn::docs_retract | PASS |  |
-| fn | cleanup retract ⟨7rbbzvbun4mlpsg | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract dlrkgxraaclibgyp | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract e3s9rqbn8ciwytvr | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract f3igs97hqj3961mm | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract g9q15kcei91lu9t5 | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract heb6nyo5mptz7977 | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract or4ottimcvjuacr9 | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract rtsdicyqyb3cy5jh | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract y0t7bo0ctnnchwqx | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract ⟨3ztfsceq30hidc7 | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract ⟨4cxz9dekda3u9sn | fn | fn::docs_retract | PASS |  |
+| fn | cleanup retract ⟨94w1clln5czhc53 | fn | fn::docs_retract | PASS |  |
 | skill | fn::decision_amend @ SKILL.md:17 | mcp-call | $subject_source_path,$banner_text,$closes_doc_ids_or_none | PASS |  |
 | skill | fn::current_decisions @ SKILL.md:30 | mcp-call | $project | PASS |  |
 | skill | fn::docs_search @ SKILL.md:31 | mcp-call | $query,NONE,"decision",NONE,"active",10 | PASS |  |
@@ -155,10 +161,10 @@ cd <repo root>
 | skill | fn::docs_set_tags @ SKILL.md:18 | surql | $id,$tags,$actor | PASS |  |
 | skill | raw @ functions.md:25 | surql | - | PASS |  |
 | skill | fn::handoff_write @ functions.md:41 | mcp-call | "docstore plugin build — 2026-09-09","<full HANDOFF v2 body: | PASS |  |
-| skill | fn::remember @ SKILL.md:17 | mcp-call | { kind: $kind, claim: $claim, detail: $detail_or_none, scope | FAIL | BLOCKER: fn::remember is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH |
+| skill | fn::remember @ SKILL.md:17 | mcp-call | { kind: $kind, claim: $claim, detail: $detail_or_none, scope | BLOCKED | BLOCKER: fn::remember is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH |
 | skill | fn::recall @ SKILL.md:31 | mcp-call | $query,$vec_or_none,$scope,$k | PASS |  |
-| skill | fn::supersede_memory @ SKILL.md:40 | mcp-call | $old_id,$new_payload | FAIL | BLOCKER: fn::supersede_memory is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BA |
-| skill | fn::forget @ SKILL.md:41 | mcp-call | $id,$reason | FAIL | BLOCKER: fn::forget is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH s |
+| skill | fn::supersede_memory @ SKILL.md:40 | mcp-call | $old_id,$new_payload | BLOCKED | BLOCKER: fn::supersede_memory is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BA |
+| skill | fn::forget @ SKILL.md:41 | mcp-call | $id,$reason | BLOCKED | BLOCKER: fn::forget is a MEMORY-database function and is not deployed: the memory instance (100.91.190.107:8471) holds only ns fct/db case, and ns probata_memory does not exist. Auth works (MEMORY_BASIC_AUTH s |
 | skill | raw @ SKILL.md:24 | surql | - | PASS |  |
 | skill | raw @ SKILL.md:25 | surql | - | PASS |  |
 | skill | raw @ SKILL.md:25 | surql | - | PASS |  |
@@ -201,8 +207,8 @@ cd <repo root>
 | mcp | control:docstore_pipeline_identity | tool | {} | PASS |  |
 | mcp | control:docstore_project_source | tool | listed; mutating - not invoked | PASS |  |
 | mcp | control:docstore_project_sources | tool | {} | PASS |  |
-| mcp | control:docstore_reconcile_packet | tool | {"query": "catalog"} | FAIL | tool isError: Propria reconciliation adapter is unavailable |
-| mcp | control:docstore_reconcile_query | tool | {"query": "catalog"} | FAIL | tool isError: Propria reconciliation adapter is unavailable |
+| mcp | control:docstore_reconcile_packet | tool | {"query": "catalog"} | BLOCKED | BLOCKER: tool isError: Propria reconciliation adapter is unavailable / the Propria reconciliation adapter is not running, so this tool cannot serve a request. OWNER ACTION: stand up / point the control server  |
+| mcp | control:docstore_reconcile_query | tool | {"query": "catalog"} | BLOCKED | BLOCKER: tool isError: Propria reconciliation adapter is unavailable / the Propria reconciliation adapter is not running, so this tool cannot serve a request. OWNER ACTION: stand up / point the control server  |
 | mcp | control:docstore_reconcile_repair | tool | listed; mutating - not invoked | PASS |  |
 | mcp | control:docstore_reconcile_validate | tool | listed; mutating - not invoked | PASS |  |
 | mcp | control:docstore_related_updates | tool | {"term": "catalog"} | PASS |  |
