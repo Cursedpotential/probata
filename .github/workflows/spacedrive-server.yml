@@ -232,6 +232,50 @@ jobs:
 
           p.write_text(text)
           PY
+
+          # Run 35097123213 (all of the above held; reached and compiled 700+
+          # crates in 3m48s) failed compiling a WORKSPACE crate, not a
+          # dependency: crates/task-system/src/system.rs:635 calls
+          # `Atomic::<usize>::fetch_update`, which current stable rustc
+          # reports as "will be deprecated in future version 1.99.0: renamed
+          # to `try_update`", and crates/task-system/src/lib.rs:87 carries a
+          # bare `#![forbid(deprecated_in_future)]` -- so the warning is a
+          # hard error. Seven upstream crates carry that same forbid
+          # (task-system, actors, crypto, ffmpeg, fda, images,
+          # media-metadata), so this is not a single-site problem.
+          #
+          # Why the obvious fixes do NOT work here:
+          #   * `RUSTFLAGS=-A deprecated_in_future` -- `allow` from the
+          #     command line cannot lower a `forbid` written in the source;
+          #     forbid is specifically the level that refuses to be
+          #     overridden by -A/-W/-D.
+          #   * `RUSTFLAGS=--cap-lints=warn` -- caps lints for DEPENDENCIES
+          #     only (crates cargo considers non-local). sd-task-system is a
+          #     path member of this workspace, so it is never capped.
+          #   * pinning an older Rust -- upstream's rust-toolchain.toml says
+          #     `channel = "stable"` with no version, so there is no upstream
+          #     pin to honour; guessing a pre-lint stable release is a blind
+          #     search and risks breaking the 700 dependency crates that do
+          #     build on current stable.
+          #
+          # `--force-warn` is the one rustc flag documented to override a
+          # source-level forbid/deny ("overrides the level specified by any
+          # other means, including the `forbid` attribute"), and it applies
+          # to every crate in the graph, so one flag covers all seven. This
+          # changes only the lint LEVEL -- no upstream source is rewritten,
+          # and the emitted code is identical.
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path("apps/server/Dockerfile")
+          text = p.read_text()
+          old = "SD_SKIP_WEB_BUILD=1 cargo build --release"
+          new = 'SD_SKIP_WEB_BUILD=1 RUSTFLAGS="--force-warn=deprecated_in_future --force-warn=deprecated" cargo build --release'
+          assert text.count(old) == 1, f"expected 1 cargo build invocation, found {text.count(old)}"
+          text = text.replace(old, new)
+          p.write_text(text)
+          PY
+          grep -n "force-warn" apps/server/Dockerfile
+
           cat apps/server/Dockerfile
 
       - name: Patch root Cargo.toml — drop workspace members not in the build context
@@ -303,6 +347,12 @@ jobs:
           tags: |
             ghcr.io/cursedpotential/spacedrive-server:main-${{ steps.sd_commit.outputs.short_sha }}
             ghcr.io/cursedpotential/spacedrive-server:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/spacedriveapp/spacedrive
+            org.opencontainers.image.revision=${{ steps.sd_commit.outputs.full_sha }}
+            org.opencontainers.image.version=main-${{ steps.sd_commit.outputs.short_sha }}
+            org.opencontainers.image.description=Spacedrive sd-server built from spacedriveapp/spacedrive main @ ${{ steps.sd_commit.outputs.full_sha }}
+            io.propria.built-by=Cursedpotential/probata .github/workflows/spacedrive-server.yml
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
