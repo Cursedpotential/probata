@@ -13,10 +13,10 @@
 #  - Live store renamed on the host: milvus-memsearch-v2 -> memsearch-milvus.
 #    Retired stores (moved to /data/probata/volumes/_stale/, not deleted):
 #    milvus (08-06..08-10) and milvus-memsearch (08-23..09-07).
-#  - Separate etcd was NOT adopted: owner-confirmed 09-07 that a separate etcd
-#    failed identically (docs/reviews/2026-09-07-milvus-etcd-corruption-incident-and-recovery.md).
-#    The failure class is ungraceful stop during flush, so this revision attacks
-#    the stop path instead (see stop_grace_period + gracefulStopTimeout below).
+#  - ~~Separate etcd was NOT adopted~~ ADOPTED later 2026-09-17: the crash is a
+#    startup race between Milvus and its in-process etcd (see memsearch-etcd below),
+#    not corruption. The 09-07 "separate etcd failed identically" note predates that
+#    evidence. Graceful stop (stop_grace_period + gracefulStopTimeout) is kept too.
 #  - Incident log: Consignatio/docs/URGENT-TODO.md, "2026-09-17 ... Milvus outage".
 # =============================================================================
 # History (retained):
@@ -39,6 +39,48 @@
 # =============================================================================
 
 services:
+  # 2026-09-17 (Opus 5): etcd split OUT of the Milvus process. Captured boot (04:35Z):
+  # embedded etcd started 28.98, Milvus's first metadata read went out at 28.998 with
+  # NO leader yet, etcd elected itself at 29.375, the pending read failed
+  # "etcdserver: leader changed" at 29.376 and Milvus panicked (rc=134). That is a
+  # startup race on EVERY restart of a store with data; no election timeout can win a
+  # ~20 ms race. A separate etcd that is healthy (leader elected) before Milvus starts
+  # removes it. ~~Separate etcd "failed identically" (09-07 note)~~: that attempt had
+  # no health-gated start order; see Consignatio/docs/URGENT-TODO.md 2026-09-17.
+  # Service name is deliberately NOT `etcd`: milvus also sits on the shared `probata`
+  # network, where a bare `etcd` name could resolve to another stack's container.
+  memsearch-etcd:
+    image: quay.io/coreos/etcd:v3.5.25   # official Milvus standalone compose; data dir written by embedded 3.5.23 (patch upgrade)
+    container_name: memsearch-etcd
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    # Reuses the embedded etcd's data dir. On an existing data dir etcd ignores the
+    # --initial-* flags and restores its stored single-member cluster (member
+    # 8e9e05c52164694d, name default, peer http://localhost:2380).
+    command:
+      - etcd
+      - --name=default
+      - --data-dir=/etcd
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://memsearch-etcd:2379
+      - --listen-peer-urls=http://localhost:2380
+      - --initial-advertise-peer-urls=http://localhost:2380
+    volumes:
+      - /data/probata/volumes/memsearch-milvus/etcd:/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 10s
+      start_period: 30s
+      timeout: 20s
+      retries: 6
+    networks:
+      - memsearch               # stack-private; not published, not on `probata`
+
   milvus:
     # Dated nightly. Stable v3.0.1 exists (2026-09-09); move to it only after this
     # store boots healthy and is backed up (nightly->3.0.1 readability unverified).
@@ -59,10 +101,12 @@ services:
     stop_signal: SIGTERM
     security_opt:
       - seccomp:unconfined
+    depends_on:
+      memsearch-etcd:
+        condition: service_healthy   # etcd has a leader before Milvus's first read; compose also stops Milvus BEFORE etcd
     environment:
-      ETCD_USE_EMBED: "true"
-      ETCD_DATA_DIR: /var/lib/milvus/etcd
-      ETCD_CONFIG_PATH: /milvus/configs/embedEtcd.yaml
+      # ~~ETCD_USE_EMBED: "true" / ETCD_DATA_DIR / ETCD_CONFIG_PATH~~ removed 2026-09-17 (external etcd)
+      ETCD_ENDPOINTS: memsearch-etcd:2379
       COMMON_STORAGETYPE: local
       DEPLOY_MODE: STANDALONE
       # FIX: image ships LD_PRELOAD=":/milvus/lib/libjemalloc.so" (leading colon → ld.so SIGSEGV). Clean paths:
@@ -76,9 +120,7 @@ services:
       - /data/probata/volumes/memsearch-milvus:/var/lib/milvus
     configs:
       # LONG FORM required: short `- <name>` mounts at `/<name>`, but Milvus reads
-      # these from /milvus/configs/.
-      - source: embedEtcd_yaml
-        target: /milvus/configs/embedEtcd.yaml
+      # these from /milvus/configs/. (embedEtcd.yaml mount removed 2026-09-17.)
       - source: user_yaml
         target: /milvus/configs/user.yaml
     ports:
@@ -117,24 +159,9 @@ services:
 # Milvus config, embedded as compose configs (no host bind-mount).
 # SOURCE OF TRUTH: deploy/docker/milvus/embedEtcd.yaml + deploy/docker/milvus/user.yaml.
 configs:
-  embedEtcd_yaml:
-    content: |
-      # Embedded etcd config — mounted at /milvus/configs/embedEtcd.yaml (ETCD_CONFIG_PATH).
-      # Byline: Claude Code · Opus 4.8 · 2026-06-13 (drift-fix 2026-08-12: heartbeat/election)
-      listen-client-urls: http://0.0.0.0:2379
-      advertise-client-urls: http://0.0.0.0:2379
-      quota-backend-bytes: 4294967296
-      auto-compaction-mode: revision
-      auto-compaction-retention: "1000"
-      # ~~heartbeat-interval: 1000 / election-timeout: 10000~~ REVERTED to etcd defaults
-      # 2026-09-17 (Opus 5). On RESTART of a store that has data, a single member waits
-      # one election timeout before electing itself; Milvus's first read
-      # (by-dev/meta/session/id) lands in that leaderless gap, fails with
-      # "etcdserver: leader changed" ~7-10 s after etcd start, and Milvus panics (rc=134).
-      # Fresh stores self-elect at bootstrap, which is why every rebuild booted and every
-      # restart "corrupted". Evidence: Consignatio/docs/URGENT-TODO.md 2026-09-17 entry.
-      heartbeat-interval: 100
-      election-timeout: 1000
+  # ~~embedEtcd_yaml~~ removed 2026-09-17: etcd runs as the memsearch-etcd service
+  # (flags + env above). Its old source file is kept for history at
+  # deploy/docker/milvus/embedEtcd.yaml and is no longer mounted anywhere.
   user_yaml:
     content: |
       # Milvus config override — mounted at /milvus/configs/user.yaml

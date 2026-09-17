@@ -1,4 +1,6 @@
-# Embedded etcd config — mounted at /milvus/configs/embedEtcd.yaml (ETCD_CONFIG_PATH).
+# ⚠ NOT MOUNTED SINCE 2026-09-17 (Claude Code · Opus 5): memsearch-milvus now runs etcd
+# as its own `memsearch-etcd` service (deploy/memsearch-milvus.yaml). Kept for history.
+# ~~Embedded etcd config — mounted at /milvus/configs/embedEtcd.yaml (ETCD_CONFIG_PATH).~~
 # Byline: Claude Code · Opus 4.8 · 2026-06-13
 # From the official milvus standalone_embed.sh — lets Milvus run etcd in-process
 # (no separate etcd container).
