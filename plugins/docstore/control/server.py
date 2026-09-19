@@ -657,6 +657,9 @@ def build_server(config: Config, transport=None) -> FastMCP:
     register_run_status(mcp, config, READ)
     register_project_registry(mcp, config, READ)
     register_handoff(mcp, config, READ)
+    # 2026-09-19 (Claude Code · Opus 5): categorized top-level surface (read/write/run/admin).
+    from surface import register as register_surface
+    register_surface(mcp, config, {"get": get, "request": request})
     return mcp
 
 
