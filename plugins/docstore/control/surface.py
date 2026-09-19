@@ -15,6 +15,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -108,7 +109,18 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
         return payload
 
     async def fn(target: Literal["docs", "mem"], name: str, arguments: list) -> Any:
-        return await db_call(target, "run", {"name": "fn::" + name, "arguments": arguments})
+        return await db_call(target, "run", {"function": "fn::" + name, "args": arguments})
+
+    def record(value: str, table: str) -> dict:
+        # Typed record id for functions declared record<table>; validated so nothing else is embedded.
+        if not isinstance(value, str) or not re.fullmatch(table + r":[A-Za-z0-9_]{1,128}", value):
+            raise ToolError(f"expected a {table}:<id> record id")
+        return {"$ql": value}
+
+    def when(value: str) -> dict:
+        if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}(T[0-9:.]+(Z|[+-]\d{2}:\d{2})?)?", value):
+            raise ToolError("expected an ISO date/time, e.g. 2026-09-19 or 2026-09-19T05:00:00Z")
+        return {"$ql": "d'" + value + "'"}
 
     async def control(name: str, arguments: dict) -> Any:
         async with Client(mcp, timeout=300) as client:
@@ -248,10 +260,10 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
             return await fn("mem", "remember", [payload])
         try:
             if action == "correct":
-                return await fn("mem", "supersede_memory", [fields["old"], {"scope": "propria", **fields["new_payload"]}])
+                return await fn("mem", "supersede_memory", [record(fields["old"], "memory"), {"scope": "propria", **fields["new_payload"]}])
             if action == "forget":
-                return await fn("mem", "forget", [fields["id"], fields["reason"]])
-            return await fn("mem", "reflect", [fields.get("scope", "propria"), fields["since"]])
+                return await fn("mem", "forget", [record(fields["id"], "memory"), fields["reason"]])
+            return await fn("mem", "reflect", [fields.get("scope", "propria"), when(fields["since"])])
         except KeyError as missing:
             raise ToolError(f"{action} needs field {missing}") from None
 

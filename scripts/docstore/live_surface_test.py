@@ -115,7 +115,7 @@ def main() -> int:
     check("memory rejects the old probata root", not ok or (isinstance(r, dict) and not r.get("written")), r)
 
     # ---- write: notes and updates on a throwaway document (created through the admin gate)
-    ok, r = admin("docs", "run", {"name": "fn::docs_register", "arguments": [
+    ok, r = admin("docs", "run", {"function": "fn::docs_register", "args": [
         f"propria/test/{MARK}.md", f"{MARK} throwaway", "reference", ["docs"], "unverified", f"{MARK} body v1", None]})
     doc = json.dumps(r)
     check("admin-call two-step gate executes after confirm", ok and "document:" in doc, r)
@@ -150,7 +150,7 @@ def main() -> int:
     # ---- run
     ok, r = call("run-index", {"action": "status"})
     check("run-index status", ok, r if not ok else r.get("sync"))
-    ok, r = call("run-index", {"action": "verify", "paths": ["consignatio/docs/receipts/PIPELINE-HISTORY-2026-09-18.md"]})
+    ok, r = call("run-index", {"action": "verify", "paths": ["docs/consignatio/receipts/PIPELINE-HISTORY-2026-09-18.md"]})
     check("run-index verify (paths)", ok, r)
     ok, r = call("run-call", {"tool": "docstore_health", "args": {}})
     check("run-call refuses a read tool", not ok and "not a run tool" in str(r), r)
@@ -159,7 +159,7 @@ def main() -> int:
     purge = [("mem", "UPDATE memory SET scope = scope WHERE false;"),  # no-op keeps the gate honest
              ("mem", f"DELETE memory WHERE string::contains(claim, '{MARK}');"),
              ("mem", f"DELETE decision_log WHERE string::contains(<string> reason ?? '', '{MARK}') OR string::contains(<string> subject, 'zz_live_test');"),
-             ("docs", f"DELETE todo WHERE string::contains(item, '{MARK}');"),
+             ("docs", f"DELETE todo WHERE string::contains(item ?? '', '{MARK}') OR string::contains(detail ?? '', '{MARK}');"),
              ("docs", f"DELETE decision_log WHERE string::contains(<string> rationale ?? '', '{MARK}') OR string::contains(<string> banner ?? '', '{MARK}');"),
              ("docs", f"DELETE supersedes WHERE string::contains(<string> in.source_path ?? '', '{MARK}') OR string::contains(<string> out.source_path ?? '', '{MARK}');"),
              ("docs", f"DELETE document WHERE string::contains(source_path, '{MARK}');")]
