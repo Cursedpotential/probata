@@ -34,6 +34,8 @@ services:
       DOCSTORE_PROJECT_REGISTRY: /exchange/sources/docstore-source-registry.json
       DOCSTORE_CONTROL_STATE_DIR: /data/state
       DOCSTORE_WORKER_RECEIPTS_DIR: /worker-state/runs
+      MEMORY_MCP_URL: ${MEMORY_MCP_URL:-http://100.91.190.107:8471/mcp}
+      MEMORY_BASIC_AUTH: ${MEMORY_BASIC_AUTH:?set MEMORY_BASIC_AUTH in Coolify env}
     ports:
       - "${BIND_IP:-127.0.0.1}:8172:8084"   # tailnet only; ContextForge on ovh-app is the client
     volumes:
