@@ -120,7 +120,11 @@ def build_server(config: Config, transport=None) -> FastMCP:
                 "semantic_search_tool": "coco_docstore_search",
                 "semantic_search_backend": "SurrealDB vector index with BM25 reciprocal-rank fusion",
                 "semantic_search_presentation": "DuckDB compact columns by default; no second vector store",
-                "transport": "stdio", "control_state": str(config.state_root),
+                # Hosted 2026-09-19 (Claude Code · Opus 5): report the real transport; the reconciliation
+                # adapter is a desktop .cmd launcher and is absent on the VPS host.
+                "transport": os.environ.get("DOCSTORE_MCP_TRANSPORT", "stdio").strip().lower() or "stdio",
+                "reconciliation_adapter_available": config.reconciliation_launcher.is_file(),
+                "control_state": str(config.state_root),
                 "source_root": str(config.source_root), "api": config.api_url,
                 "ambient_COCOINDEX_DB_consumed": False,
                 "pipeline_app": "ProbataDocStore", "pipeline_environment": "probata-docstore",

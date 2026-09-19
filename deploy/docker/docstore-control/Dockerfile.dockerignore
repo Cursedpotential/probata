@@ -1,0 +1,10 @@
+# Allowlist for the docstore-control image only (BuildKit reads <Dockerfile>.dockerignore first).
+*
+!plugins/docstore/control/
+!scripts/docstore/selected_identity.py
+!scripts/docstore/schema/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.pytest_cache/
+plugins/docstore/control/tests/

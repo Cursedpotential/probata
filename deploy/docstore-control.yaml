@@ -1,0 +1,48 @@
+# =============================================================================
+# DOCSTORE-CONTROL - the existing Docstore control MCP server, hosted remotely (HTTP/MCP).
+# Owner order 2026-09-19: plugin 0.7 pointed `ctl` at the raw SurrealDB gateway; the real control
+# server (plugins/docstore/control, FastMCP) was never hosted. This runs it unchanged in HTTP mode.
+#
+# Byline: Claude Code · Opus 5 · 2026-09-19
+#
+# Coolify "Docker Compose" app on ovh-files, like docstore-worker. ContextForge (ovh-app) federates it
+# as a gateway; the plugin's `ctl` points at that virtual server.
+# Coolify env: BIND_IP=100.91.190.107, SURREAL_DOCS_USER, SURREAL_DOCS_PASS, optional DOCSTORE_API_TOKEN.
+# It talks to the worker API (8072) and the dedicated SurrealDB MCP (surreal-docs). It reads the
+# worker's live source projection + registry read-only, so plans and registry reports match the worker.
+# HOST-PREP (once): install -d -m 0750 /data/probata/volumes/docstore-control
+# =============================================================================
+
+services:
+  docstore-control:
+    build:
+      context: .
+      dockerfile: deploy/docker/docstore-control/Dockerfile
+    container_name: docstore-control
+    restart: unless-stopped
+    environment:
+      DOCSTORE_MCP_TRANSPORT: http
+      DOCSTORE_MCP_HOST: 0.0.0.0
+      DOCSTORE_MCP_PORT: "8084"
+      DOCSTORE_API_URL: ${DOCSTORE_API_URL:-http://100.91.190.107:8072}
+      DOCSTORE_API_TOKEN: ${DOCSTORE_API_TOKEN:-}
+      DOCSTORE_MCP_URL: https://surreal-docs.tilapia-skilift.ts.net/mcp
+      SURREAL_DOCS_USER: ${SURREAL_DOCS_USER:?set SURREAL_DOCS_USER in Coolify env}
+      SURREAL_DOCS_PASS: ${SURREAL_DOCS_PASS:?set SURREAL_DOCS_PASS in Coolify env}
+      DOCSTORE_INSTANCE_ID: docstore-probata
+      DOCSTORE_SOURCE_ROOT: /exchange/sources
+      DOCSTORE_PROJECT_REGISTRY: /exchange/sources/docstore-source-registry.json
+      DOCSTORE_CONTROL_STATE_DIR: /data/state
+      DOCSTORE_WORKER_RECEIPTS_DIR: /worker-state/runs
+    ports:
+      - "${BIND_IP:-127.0.0.1}:8172:8084"   # tailnet only; ContextForge on ovh-app is the client
+    volumes:
+      - /data/probata/volumes/docstore-control:/data/state
+      - /data/probata/exchange/docstore-worker/sources:/exchange/sources:ro
+      - /data/probata/volumes/docstore-worker:/worker-state:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8084), 5).close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
