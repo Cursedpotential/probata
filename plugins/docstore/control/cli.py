@@ -79,8 +79,10 @@ def environment() -> dict:
 
 def configuration() -> Config:
     root = Path(__file__).resolve().parents[3]
-    propria_root = root.parents[1]
     values = environment()
+    # Hosted 2026-09-19 (Claude Code · Opus 5): the monorepo layout (Propria two levels above the
+    # repo) exists only on the desktop; derive it only when no explicit registry path is given.
+    registry = values.get("DOCSTORE_PROJECT_REGISTRY") or str(root.parents[1] / "docs/docstore-source-registry.json")
     return Config(values.get("DOCSTORE_API_URL", "https://docstore-api.tilapia-skilift.ts.net"),
                   Path(values.get("DOCSTORE_SOURCE_ROOT", str(root / "docs"))),
                   Path(values.get("DOCSTORE_CONTROL_STATE_DIR", str(root / ".docstore-control"))),
@@ -89,7 +91,7 @@ def configuration() -> Config:
                   values.get("DOCSTORE_MCP_URL", "https://surreal-docs.tilapia-skilift.ts.net/mcp"),
                   values.get("DOCSTORE_BASIC_AUTH", ""),
                   Path(values['DOCSTORE_WORKER_RECEIPTS_DIR']) if values.get('DOCSTORE_WORKER_RECEIPTS_DIR') else None,
-                  Path(values.get("DOCSTORE_PROJECT_REGISTRY", str(propria_root / "docs/docstore-source-registry.json"))))
+                  Path(registry))
 
 
 def mcp_runtime(values: dict[str, str]) -> dict:
