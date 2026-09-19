@@ -125,7 +125,9 @@ def main() -> int:
                                      "parameters": {"p": f"propria/test/{MARK}.md"}})
     test_doc = None
     try:
-        test_doc = str(json.loads(json.dumps(r))["result"]["value"][0]) if ok else None
+        value = r["result"] if ok else None
+        value = value.get("value", value) if isinstance(value, dict) else value
+        test_doc = str(value[0]) if value else None
     except Exception:
         test_doc = next((w.strip('"') for w in json.dumps(r).split() if "document:" in w), None)
     check("throwaway document id resolved", bool(test_doc), test_doc or r)

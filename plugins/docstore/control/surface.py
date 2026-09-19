@@ -106,6 +106,9 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
         payload: Any = result.structured_content if result.structured_content is not None else texts
         if result.is_error:
             raise ToolError("Database call failed: " + " ".join(texts)[:600])
+        # Unwrap the native {status, time_ms, truncated, value} envelope so callers get the value.
+        if isinstance(payload, dict) and payload.get("status") == "ok" and "value" in payload:
+            return payload["value"]
         return payload
 
     async def fn(target: Literal["docs", "mem"], name: str, arguments: list) -> Any:
@@ -205,7 +208,7 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
             return await fn("mem", "memory_stats", [scope])
         if len(query.strip()) < 2:
             raise ToolError("recall needs a query")
-        return await fn("mem", "recall", [query, None, scope, limit])
+        return await fn("mem", "recall", [query, {"$ql": "NONE"}, scope, limit])
 
     # ----------------------------------------------------------------- write
     @mcp.tool(annotations={**WRITE, "title": "Write a note, decision, handoff or todo"})
