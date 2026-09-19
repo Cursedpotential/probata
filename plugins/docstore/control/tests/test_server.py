@@ -53,7 +53,7 @@ async def test_discovery_and_capabilities_have_no_network_or_state_writes(config
                 "docstore_reconcile_validate", "docstore_reconcile_repair"} <= tools.keys()
         assert 'docstore_selected_update_plan' in tools
         assert 'docstore_cdc_runs' in tools
-        writes = {"docstore_set_flags", "docstore_capture_revision", "docstore_approve_revision",
+        writes = {"write_note", "write_update", "write_memory", "write_call", "run_index", "run_call", "admin_call", "docstore_set_flags", "docstore_capture_revision", "docstore_approve_revision",
                   "docstore_index_execute", "docstore_cancel_run", "docstore_index_full",
                   "docstore_index_selected", "docstore_run_cancel"}
         writes.add("docstore_reconcile_packet")
@@ -62,7 +62,7 @@ async def test_discovery_and_capabilities_have_no_network_or_state_writes(config
         assert writes <= tools.keys()
         assert all(not tools[name].annotations.readOnlyHint for name in writes)
         assert all(tool.annotations.readOnlyHint for name, tool in tools.items() if name not in writes)
-        assert all(not tool.annotations.destructiveHint for tool in tools.values())
+        assert all(not tool.annotations.destructiveHint for name, tool in tools.items() if name != "admin_call")  # admin_call is the one gated destructive tool (2026-09-19)
         resources = await client.list_resources()
         assert {"docstore://capabilities", "docstore://health"} <= {str(r.uri) for r in resources}
         templates = await client.list_resource_templates()
