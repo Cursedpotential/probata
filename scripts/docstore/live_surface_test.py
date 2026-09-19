@@ -96,6 +96,20 @@ def main() -> int:
     ok, r = call("read-memory", {"action": "stats"})
     check("read-memory stats (scope propria)", ok, r)
 
+    # ---- governed functions through the category calls
+    ok, r = call("read-call", {"tool": "docs.current_decisions", "args": {"args": ["probata"]}})
+    check("read-call docs.current_decisions (governed fn)", ok, r if not ok else "ok")
+    ok, r = call("read-call", {"tool": "docs.open_work", "args": {"args": ["probata"]}})
+    check("read-call docs.open_work (governed fn)", ok, r if not ok else "ok")
+    ok, r = call("read-call", {"tool": "docs.info", "args": {"target": "db"}})
+    check("read-call docs.info (schema read)", ok, r if not ok else "ok")
+    ok, r = call("read-call", {"tool": "mem.memory_stats", "args": {"args": ["propria"]}})
+    check("read-call mem.memory_stats", ok, r)
+    ok, r = call("read-call", {"tool": "docs.todo_open", "args": {"args": []}})
+    check("read-call refuses a write function", not ok and "not a read tool" in str(r), r)
+    ok, r = call("write-call", {"tool": "docs.todo_open", "args": {"args": [f"{MARK} fn todo", 3, ["docs"], None]}})
+    check("write-call docs.todo_open (governed fn)", ok, r)
+
     # ---- write: memory
     ok, r = call("write-memory", {"action": "remember", "fields": {
         "kind": "observation", "claim": f"{MARK} live surface test memory, safe to purge",

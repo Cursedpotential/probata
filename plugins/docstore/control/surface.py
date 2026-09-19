@@ -59,6 +59,18 @@ CATALOG: dict[str, dict[str, list[str]]] = {
                   "docstore_run_cancel", "docstore_cancel_run"],
     },
 }
+# Governed SurrealDB functions (fn::*), by permission category and database. Called as
+# <category>_call(tool="docs.open_work", args={"args": [...positional...]}); a record-typed argument
+# is passed as {"$ql": "memory:<id>"}. Read-only schema/row reads use tool="docs.info|list|select".
+FUNCTIONS: dict[str, dict[str, list[str]]] = {
+    "read": {"docs": ["docs_search", "docs_get", "docs_tagged", "open_work", "provenance", "current_decisions",
+                      "stale_candidates", "recall", "search_text", "search_vec"],
+             "mem": ["recall", "memory_stats"]},
+    "write": {"docs": ["docs_register", "docs_new_version", "docs_supersede", "docs_retract", "docs_set_tags",
+                       "decision_amend", "todo_open", "todo_close", "handoff_write"],
+              "mem": ["remember", "supersede_memory", "forget", "reflect"]},
+}
+READ_DB_OPS = ["info", "list", "select"]
 RAW_OPS = ["query", "select", "create", "insert", "update", "upsert", "delete", "relate", "run",
            "info", "list", "use", "gql", "graphql"]
 
@@ -136,7 +148,24 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
         for category, areas in CATALOG.items():
             if any(tool in names for names in areas.values()):
                 return category
+        target, _, name = tool.partition(".")
+        for category, dbs in FUNCTIONS.items():
+            if name in dbs.get(target, []):
+                return category
+        if target in ("docs", "mem") and name in READ_DB_OPS:
+            return "read"
         return None
+
+    async def dispatch(tool: str, args: dict) -> Any:
+        target, dot, name = tool.partition(".")
+        if dot and target in ("docs", "mem"):
+            if name in READ_DB_OPS:
+                return await db_call(target, name, args)
+            positional = args.get("args", [])
+            if not isinstance(positional, list):
+                raise ToolError('function arguments go in args={"args": [...]}')
+            return await fn(target, name, positional)
+        return await control(tool, args)
 
     # ------------------------------------------------------------------ read
     @mcp.tool(annotations={**READ, "title": "Search all Propria documentation"})
@@ -186,6 +215,13 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
                     {"tool": t, "description": (schemas[t].description or "").split("\n")[0],
                      "inputs": schemas[t].inputSchema.get("properties", {})}
                     for t in tools if t in schemas]
+        if not area or area == "functions":
+            for category, dbs in FUNCTIONS.items():
+                out.setdefault(category, {})["functions"] = [f"{db}.{name}" for db, names in dbs.items() for name in names]
+            out.setdefault("read", {})["database_reads"] = [f"{db}.{op}" for db in ("docs", "mem") for op in READ_DB_OPS]
+            out["functions_usage"] = ('<category>_call(tool="docs.open_work", args={"args": ["propria"]}); '
+                                      'record ids as {"$ql": "memory:<id>"}; schema reads: '
+                                      'read_call(tool="docs.info", args={"target": "db"})')
         if not area or area == "raw":
             out["admin"] = {"raw": {"disclaimer": DISCLAIMER, "targets": ["docs", "mem"], "operations": RAW_OPS,
                                     "usage": "admin_call(target='docs'|'mem', operation=<op>, args={...})"}}
@@ -196,7 +232,7 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
         """Run any READ tool listed by read_discover."""
         if category_of(tool) != "read":
             raise ToolError(f"{tool} is not a read tool; see read_discover for its category")
-        return await control(tool, args or {})
+        return await dispatch(tool, args or {})
 
     @mcp.tool(annotations={**READ, "title": "Recall shared memory"})
     async def read_memory(action: Literal["recall", "stats"] = "recall", query: str = "",
@@ -275,7 +311,7 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
         """Run any WRITE tool listed by read_discover."""
         if category_of(tool) != "write":
             raise ToolError(f"{tool} is not a write tool; see read_discover for its category")
-        return await control(tool, args or {})
+        return await dispatch(tool, args or {})
 
     # ------------------------------------------------------------------- run
     @mcp.tool(annotations={**RUN, "title": "Index management"})
@@ -304,7 +340,7 @@ def register(mcp: FastMCP, config, helpers: dict[str, Any]) -> None:
         """Run any RUN tool listed by read_discover."""
         if category_of(tool) != "run":
             raise ToolError(f"{tool} is not a run tool; see read_discover for its category")
-        return await control(tool, args or {})
+        return await dispatch(tool, args or {})
 
     # ----------------------------------------------------------------- admin
     def confirm_code(target: str, operation: str, args: dict, window: int) -> str:
