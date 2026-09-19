@@ -45,7 +45,7 @@ def main() -> int:
     async def rows():
         db = await sq.connect("docs", "probata", "docs")
         try:
-            r = await db.query("SELECT source_path, project, status, content_hash, doc_type FROM document;")
+            r = await db.query("SELECT record::id(id) AS rid, source_path, project, status, content_hash, doc_type FROM document;")
         finally:
             await db.close()
         while isinstance(r, list) and len(r) == 1 and isinstance(r[0], list):
