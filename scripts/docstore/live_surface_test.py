@@ -160,6 +160,8 @@ def main() -> int:
     # ---- purge every row this test created
     purge = [("mem", "UPDATE memory SET scope = scope WHERE false;"),  # no-op keeps the gate honest
              ("mem", f"DELETE memory WHERE string::contains(claim, '{MARK}');"),
+             # status-change audit rows of the purged test memories (real memories are never deleted)
+             ("mem", "DELETE decision_log WHERE action = 'memory_status_changed' AND record::exists(subject) = false;"),
              ("mem", f"DELETE decision_log WHERE string::contains(<string> reason ?? '', '{MARK}') OR string::contains(<string> subject, 'zz_live_test');"),
              ("docs", f"DELETE todo WHERE string::contains(item ?? '', '{MARK}') OR string::contains(detail ?? '', '{MARK}');"),
              ("docs", f"DELETE decision_log WHERE string::contains(<string> rationale ?? '', '{MARK}') OR string::contains(<string> banner ?? '', '{MARK}');"),
