@@ -92,7 +92,7 @@ def main() -> int:
     ok, r = call("read-call", {"tool": "docstore_set_flags", "args": {}})
     check("read-call refuses a write tool", not ok and "not a read tool" in str(r), r)
     ok, r = call("read-memory", {"action": "recall", "query": "Propria is the project"})
-    check("read-memory recall (scope propria)", ok and "propria" in json.dumps(r), r)
+    check("read-memory recall (scope propria)", ok and "propria" in json.dumps(r).lower(), r)
     ok, r = call("read-memory", {"action": "stats"})
     check("read-memory stats (scope propria)", ok, r)
 
